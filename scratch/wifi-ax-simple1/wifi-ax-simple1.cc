@@ -181,7 +181,17 @@ int main (int argc, char *argv[])
   cmd.Parse (argc, argv);
 
   /* Change dir. */
-  mkdir (logDir.c_str (), 0777);
+  //mkdir (logDir.c_str (), 0777);
+  std::string mkdir {"mkdir -p " + logDir};
+  if ( system(mkdir.c_str()) == -1 ) {
+     NS_FATAL_ERROR("mkdir: " << strerror (errno));
+  }
+  if (chdir (logDir.c_str ()) == -1)
+    {
+      perror ("chdir");
+      NS_FATAL_ERROR ("chdir: " << strerror (errno));
+    }
+
   if (chdir (logDir.c_str ()) == -1)
     {
       perror ("chdir");
@@ -541,7 +551,7 @@ int main (int argc, char *argv[])
 
   std::ofstream perStaOutStream;
   perStaOutStream.open ("per_sta_stats.out", std::ios::out);
-  perStaOutStream << "MAC addr\tSINR, dB\tRX bytes\tAvg delay, ms" << std::endl;
+  perStaOutStream << "MAC-addr\tSINR_dB\tRX_bytes\tTX_bytes\tAvg_delay_ms" << std::endl;
   for (auto &staStats : g_statsMap)
     {
       staStats.second.sinr /= staStats.second.totalBeacons;
