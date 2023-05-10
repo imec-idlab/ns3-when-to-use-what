@@ -1,6 +1,6 @@
 /* -*-  Mode: C++; c-file-style: "gnu"; indent-tabs-mode:nil; -*- */
 /*
- * Copyright (c) 2022 
+ * Copyright (c) 2022
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -18,6 +18,8 @@
  * Author: Andrey Belogaev <andrei.belogaev@uantwerpen.be>
  */
 
+#include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <ns3/wifi-module.h>
 #include "ns3/command-line.h"
@@ -50,6 +52,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <vector>
 
 using namespace ns3;
 
@@ -58,7 +61,9 @@ struct stats_t
   double sinr;
   uint64_t totalBeacons;
   uint64_t rxBytes;
-  std::vector<double> pktDelays; 
+  std::vector<double> pktDelays;
+  std::vector<double> pktID;
+  std::vector<double> pktTime;
 };
 std::map<Mac48Address, stats_t> g_statsMap; //!< map for statistics for each station
 std::map<Ipv4Address, Mac48Address> g_Ip2Mac; //!< map for mapping IPv4 to MAC address
@@ -74,16 +79,23 @@ void RxTrace (bool downlink, Ptr<const Packet> p, const Address &src, const Addr
   Ptr<Packet> pkt = p->Copy ();
   SeqTsHeader seqTs;
   pkt->RemoveHeader(seqTs);
+  if ((Simulator::Now() >= Time(1.030e+9) ) && (p->GetUid() >= 1000) )
+  {
   if (downlink)
     {
       g_statsMap[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (dst).GetIpv4 ())].rxBytes += p->GetSize ();
       g_statsMap[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (dst).GetIpv4 ())].pktDelays.push_back ((Simulator::Now() - seqTs.GetTs ()).GetSeconds ());
+      g_statsMap[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (dst).GetIpv4 ())].pktID.push_back(p->GetUid());
+      g_statsMap[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (dst).GetIpv4 ())].pktTime.push_back(Simulator::Now().GetSeconds());
+
     }
   else
     {
       g_statsMap[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (src).GetIpv4 ())].rxBytes += p->GetSize ();
       g_statsMap[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (src).GetIpv4 ())].pktDelays.push_back ((Simulator::Now() - seqTs.GetTs ()).GetSeconds ());
+      //g_statsMap[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (src).GetIpv4 ())].pktID.push_back(p->GetUid());
     }
+}
 }
 
 uint8_t GetTosFromAccessCategory (std::string ac)
@@ -112,7 +124,6 @@ uint8_t GetTosFromAccessCategory (std::string ac)
 
 int main (int argc, char *argv[])
 {
-  //LogComponentEnable ("ApWifiMac", LOG_LEVEL_ALL);
   double simulationTime {10}; //seconds
   std::string logDir {"output"};
   double minDistance {0.0}; //meters
@@ -120,7 +131,7 @@ int main (int argc, char *argv[])
   std::size_t nStations {1};
   double apHeight {3}; //meters
   double staHeight {1}; //meters
-  
+
   std::string frequency {"5"}; //whether 2.4, 5 or 6 GHz
   uint32_t channelWidth {40}; //for 2.4 <= 40 MHz, for 5 <= 160 MHz
   uint32_t guardInterval {800}; //in ns
@@ -152,7 +163,7 @@ int main (int argc, char *argv[])
   cmd.AddValue ("nStations", "Number of non-AP HE stations", nStations);
   cmd.AddValue ("apHeight", "Height of AP [m]", apHeight);
   cmd.AddValue ("staHeight", "Height of STA [m]", staHeight);
-  
+
   //PHY params
   cmd.AddValue ("frequency", "Whether working in the 2.4, 5 or 6 GHz band (other values gets rejected)", frequency);
   cmd.AddValue ("channelWidth", "Channel width used for transmissions (20, 40, 80, 80+80, 160 MHz)", channelWidth);
@@ -177,7 +188,7 @@ int main (int argc, char *argv[])
   cmd.AddValue ("trafficType", "Poisson / CBR", trafficType);
   cmd.AddValue ("interval", "Average inter-packet interval [s]", interval);
   cmd.AddValue ("accessCategory", "Access category for traffic: AC_BE, AC_BK, AC_VO, AC_VI", accessCategory);
-  
+
   cmd.Parse (argc, argv);
 
   /* Change dir. */
@@ -201,10 +212,12 @@ int main (int argc, char *argv[])
   if (useRts)
     {
       Config::SetDefault ("ns3::WifiRemoteStationManager::RtsCtsThreshold", StringValue ("0"));
+      Config::SetDefault("ns3::WifiDefaultProtectionManager::EnableMuRts", BooleanValue(true));
     }
   else
     {
       Config::SetDefault ("ns3::WifiRemoteStationManager::RtsCtsThreshold", StringValue ("2200"));
+      Config::SetDefault("ns3::WifiDefaultProtectionManager::EnableMuRts", BooleanValue(false));
     }
 
   if (dlAckSeqType == "ACK-SU-FORMAT")
@@ -242,7 +255,7 @@ int main (int argc, char *argv[])
       Config::SetDefault ("ns3::TcpSocket::SegmentSize", UintegerValue (payloadSize));
     }
 
-  Config::SetDefault ("ns3::RrMultiUserScheduler::UseCentral26TonesRus", BooleanValue (true));
+  //Config::SetDefault ("ns3::RrMultiUserScheduler::UseCentral26TonesRus", BooleanValue (true));
 
   NodeContainer wifiStaNodes;
   wifiStaNodes.Create (nStations);
@@ -290,7 +303,7 @@ int main (int argc, char *argv[])
       Config::SetDefault ("ns3::WifiRemoteStationManager::MaxSsrc", UintegerValue (32));
       Config::SetDefault ("ns3::WifiRemoteStationManager::MaxSlrc", UintegerValue (32));
     }
-
+  simulationTime += 0.030; // extend simulation time
   NetDeviceContainer apDevice, staDevices;
   WifiMacHelper mac;
   WifiHelper wifi;
@@ -327,7 +340,7 @@ int main (int argc, char *argv[])
 
   Ptr<ConstantSpeedPropagationDelayModel> delayModel = CreateObject<ConstantSpeedPropagationDelayModel> ();
   Ptr<IeeeIndoorPropagationLossModel> propModel = CreateObject<IeeeIndoorPropagationLossModel> ();
-  if (enableShadowing) 
+  if (enableShadowing)
     {
       propModel->SetAttribute ("EnableShadowing", BooleanValue (true));
     }
@@ -358,13 +371,16 @@ int main (int argc, char *argv[])
                                       "EnableUlOfdma", BooleanValue (enableUlOfdma),
                                       "EnableBsrp", BooleanValue (enableBsrp),
                                       "AccessReqInterval", TimeValue (accessReqInterval),
-                                      "UseCentral26TonesRus", BooleanValue (true),
+                                      "UseCentral26TonesRus", BooleanValue (false),
                                       "NStations", UintegerValue (74));
         }
       mac.SetType ("ns3::ApWifiMac",
                   "EnableBeaconJitter", BooleanValue (false),
                   "Ssid", SsidValue (ssid));
       apDevice = wifi.Install (phy, mac, wifiApNode);
+
+      phy.EnablePcap("wifi-ax-simple-bsrp-false_AP", apDevice); // enable pcap tracing
+      phy.EnablePcap("wifi-ax-simple-bsrp-false", staDevices);
     }
   else
     {
@@ -373,19 +389,19 @@ int main (int argc, char *argv[])
       channel->SetPropagationLossModel (propModel);
       channel->SetPropagationDelayModel (delayModel);
 
-      YansWifiPhyHelper phy;
-      phy.SetPcapDataLinkType (WifiPhyHelper::DLT_IEEE802_11_RADIO);
-      phy.SetChannel (channel); //channel.Create ()
+      YansWifiPhyHelper YansPhy;
+      YansPhy.SetPcapDataLinkType (WifiPhyHelper::DLT_IEEE802_11_RADIO);
+      YansPhy.SetChannel (channel); //channel.Create ()
 
       mac.SetType ("ns3::StaWifiMac",
                   "Ssid", SsidValue (ssid));
-      phy.Set ("ChannelSettings", StringValue (channelStr));
-      staDevices = wifi.Install (phy, mac, wifiStaNodes);
+      YansPhy.Set ("ChannelSettings", StringValue (channelStr));
+      staDevices = wifi.Install (YansPhy, mac, wifiStaNodes);
 
       mac.SetType ("ns3::ApWifiMac",
                   "EnableBeaconJitter", BooleanValue (false),
                   "Ssid", SsidValue (ssid));
-      apDevice = wifi.Install (phy, mac, wifiApNode);
+      apDevice = wifi.Install (YansPhy, mac, wifiApNode);
     }
 
   //overwrite slot, sifs, ack and rts/cts duration
@@ -436,30 +452,36 @@ int main (int argc, char *argv[])
       g_Ip2Mac[ip] = mac;
     }
 
-  //std::cout << "AP IP = " << apNodeInterface.Get (0).first->GetAddress (1, 0).GetAddress () << " MAC = " << Mac48Address::ConvertFrom (apDevice.Get (0)->GetAddress ()) << std::endl;
 
-  /* Setting applications */
+  /* Setting applications  to send packets from AP to STAs*/
   ApplicationContainer serverApp;
+  /* STAs becomes servers to receive packet from AP in downlink SIM */
   auto serverNodes = downlink ? std::ref (wifiStaNodes) : std::ref (wifiApNode);
   Ipv4InterfaceContainer serverInterfaces;
   NodeContainer clientNodes;
   for (std::size_t i = 0; i < nStations; i++)
     {
+      /*We get the net interface from here for the STAs */
       serverInterfaces.Add (downlink ? staNodeInterfaces.Get (i) : apNodeInterface.Get (0));
+      /* AP is the client in this case to send packet to STAs */
       clientNodes.Add (downlink ? wifiApNode.Get (0) : wifiStaNodes.Get (i));
     }
 
   if (udp)
     {
       //UDP flow
+      //Install Packet Sink on the STAs
       uint16_t port = 9;
       InetSocketAddress localAddress = InetSocketAddress (Ipv4Address::GetAny (), port);
       localAddress.SetTos (GetTosFromAccessCategory (accessCategory));
       PacketSinkHelper packetSinkHelper ("ns3::UdpSocketFactory", localAddress);
+      /*for downlink, this receives the packets in the STAs*/
       serverApp = packetSinkHelper.Install (serverNodes.get ());
-      serverApp.Start (Seconds (0.0));
+      serverApp.Start (Seconds (0));
       serverApp.Stop (Seconds (simulationTime + 1));
-
+      /*
+       * Install numerous intances of UDP client on AP and assign remote address
+       * to various STAs*/
       for (std::size_t i = 0; i < nStations; i++)
         {
           InetSocketAddress remoteAddress = InetSocketAddress (serverInterfaces.GetAddress (i), port);
@@ -478,7 +500,7 @@ int main (int argc, char *argv[])
               intervalDistr << "ns3::ExponentialRandomVariable[Mean=" << interval << "|Bound=0]";
               client.SetAttribute ("IntervalRandomVariable", StringValue (intervalDistr.str()));
             }
-          
+
           client.SetAttribute ("PacketSize", UintegerValue (payloadSize));
           ApplicationContainer clientApp = client.Install (clientNodes.Get (i));
           clientApp.Start (Seconds (1.0));
@@ -529,8 +551,8 @@ int main (int argc, char *argv[])
       DynamicCast<PacketSink> (serverApp.Get (i))->TraceConnectWithoutContext ("RxWithAddresses", MakeBoundCallback (&RxTrace, downlink));
     }
 
-  ProgressBar pg (Seconds(simulationTime + 1));
-  Simulator::Stop (Seconds (simulationTime + 1));
+  ProgressBar pg (Seconds(simulationTime + 1 ));
+  Simulator::Stop (Seconds (simulationTime + 1 ));
   Simulator::Run ();
 
   // Statistics
@@ -545,13 +567,13 @@ int main (int argc, char *argv[])
 
   std::ofstream totalStatsOutStream;
   totalStatsOutStream.open ("throughput.out", std::ios::out);
-  totalStatsOutStream << "MCS\tBandwidth, MHz\tGuard interval, ns\tThroughput, Mbps" << std::endl;
+  totalStatsOutStream << "MCS\tBandwidth_MHz\tGuard_interval_ns\tThroughput_Mbps" << std::endl;
   totalStatsOutStream << mcs << "\t" << channelWidth << "\t" << guardInterval << "\t" << throughput << std::endl;
   totalStatsOutStream.close ();
 
   std::ofstream perStaOutStream;
   perStaOutStream.open ("per_sta_stats.out", std::ios::out);
-  perStaOutStream << "MAC-addr\tSINR_dB\tRX_bytes\tTX_bytes\tAvg_delay_ms" << std::endl;
+  perStaOutStream << "MAC-addr\tSINR_dB\tRX_bytes\tAvg_delay_ms" << std::endl;
   for (auto &staStats : g_statsMap)
     {
       staStats.second.sinr /= staStats.second.totalBeacons;
@@ -560,10 +582,23 @@ int main (int argc, char *argv[])
         {
           sumDelay += delay * 1000.; //in ms
         }
-      perStaOutStream << staStats.first << "\t" << staStats.second.sinr << "\t" << staStats.second.rxBytes 
+      perStaOutStream << staStats.first << "\t" << staStats.second.sinr << "\t" << staStats.second.rxBytes
         << "\t" << sumDelay / staStats.second.pktDelays.size () << std::endl;
     }
   perStaOutStream.close ();
+
+  std::ofstream pktDistOutStream;
+
+  for (auto &staStats : g_statsMap) {
+    std::ostringstream mac_str;
+    mac_str << staStats.first;
+    pktDistOutStream.open (mac_str.str(), std::ios::out);
+    pktDistOutStream << "Time_s\tPacket_ID\tDelay_ms" << std::endl;
+    for (size_t i = 0;  i < staStats.second.pktDelays.size(); i++) {
+      pktDistOutStream <<staStats.second.pktTime[i] <<"\t"<<staStats.second.pktID[i] <<"\t"<< staStats.second.pktDelays[i] * 1000 << std::endl;
+    }
+    pktDistOutStream.close();
+  }
 
   Simulator::Destroy ();
 
