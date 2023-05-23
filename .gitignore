@@ -37,6 +37,7 @@ build/
 /.project
 
 version.cache
+compile_commands.json
 
 .gitlab-ci-local/
 .idea/

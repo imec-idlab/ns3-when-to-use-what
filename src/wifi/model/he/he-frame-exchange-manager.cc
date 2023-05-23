@@ -173,6 +173,8 @@ HeFrameExchangeManager::StartFrameExchange(Ptr<QosTxop> edca, Time availableTime
 
     if (txFormat == MultiUserScheduler::SU_TX)
     {
+      std::cout <<Simulator::Now().As(Time::S) <<":\tSU_TXheFrameExchangeManager::StartFrameExchange\t"<< "\t"<<std::endl;
+
         return VhtFrameExchangeManager::StartFrameExchange(edca, availableTime, initialFrame);
     }
 
@@ -180,11 +182,16 @@ HeFrameExchangeManager::StartFrameExchange(Ptr<QosTxop> edca, Time availableTime
     {
         if (m_muScheduler->GetDlMuInfo(m_linkId).psduMap.empty())
         {
+
             NS_LOG_DEBUG(
                 "The Multi-user Scheduler returned DL_MU_TX with empty psduMap, do not transmit");
             return false;
         }
-
+        std::cout <<Simulator::Now().As(Time::S) << ":\tDL_MU_TXHeFrameExchangeManager::StartFrameExchange:\t" <<std::endl; 
+        for (auto it = m_muScheduler->GetDlMuInfo(m_linkId).psduMap.cbegin(); it != m_muScheduler->GetDlMuInfo(m_linkId).psduMap.cend(); ++it ) {
+          std::cout <<"StaID:\t" << it->first <<"\tPSDU ID:\t" <<it->second->GetPacket() ->GetUid() <<":\tRuType:\t"<<m_muScheduler->GetDlMuInfo(m_linkId).txParams.m_txVector.GetRu(it->first).GetRuType();
+          std::cout<<std::endl;
+        }
         SendPsduMapWithProtection(m_muScheduler->GetDlMuInfo(m_linkId).psduMap,
                                   m_muScheduler->GetDlMuInfo(m_linkId).txParams);
         return true;
@@ -882,6 +889,7 @@ HeFrameExchangeManager::ForwardPsduMapDown(WifiConstPsduMap psduMap, WifiTxVecto
         txVector.SetAggregation(true);
     }
 
+    //std::cout <<Simulator::Now().As(Time::S) << ":\tHeFrameExchangeManager::ForwardPsduMapDown:\tTXVECTOR:\t" <<txVector <<std::endl; 
     m_phy->Send(psduMap, txVector);
 }
 

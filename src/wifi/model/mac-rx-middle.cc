@@ -24,6 +24,7 @@
 #include "ns3/log.h"
 #include "ns3/packet.h"
 #include "ns3/sequence-number.h"
+#include "ns3/simulator.h"
 
 namespace ns3
 {
@@ -336,6 +337,8 @@ MacRxMiddle::Receive(Ptr<const WifiMpdu> mpdu, uint8_t linkId)
     }
     NS_LOG_DEBUG("forwarding data from=" << hdr->GetAddr2() << ", seq=" << hdr->GetSequenceNumber()
                                          << ", frag=" << +hdr->GetFragmentNumber());
+    //std::cout << Simulator::Now().As(Time::S) <<":\tMacRxMiddle::Receive(Ptr<const WifiMpdu> mpdu, uint8_t linkId)\t\t" << "Packet ID:\t"<< mpdu->GetPacket()->GetUid()<<std::endl;
+
     if (!hdr->GetAddr1().IsGroup())
     {
         originator->SetSequenceControl(hdr->GetSequenceControl());

@@ -275,7 +275,6 @@ FrameExchangeManager::RxStartIndication(WifiTxVector txVector, Time psduDuration
 
     NS_ASSERT_MSG(!m_txTimer.IsRunning() || !m_navResetEvent.IsRunning(),
                   "The TX timer and the NAV reset event cannot be both running");
-
     // No need to reschedule timeouts if PSDU duration is null. In this case,
     // PHY-RXEND immediately follows PHY-RXSTART (e.g. when PPDU has been filtered)
     // and CCA will take over
@@ -489,7 +488,6 @@ FrameExchangeManager::SendMpdu()
         NS_ABORT_MSG("Unable to handle the selected acknowledgment method ("
                      << m_txParams.m_acknowledgment.get() << ")");
     }
-
     // transmit the MPDU
     ForwardMpduDown(m_mpdu, m_txParams.m_txVector);
 }
@@ -498,7 +496,6 @@ void
 FrameExchangeManager::ForwardMpduDown(Ptr<WifiMpdu> mpdu, WifiTxVector& txVector)
 {
     NS_LOG_FUNCTION(this << *mpdu << txVector);
-
     m_phy->Send(Create<WifiPsdu>(mpdu, false), txVector);
 }
 

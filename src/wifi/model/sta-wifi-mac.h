@@ -27,6 +27,7 @@
 
 #include <set>
 #include <variant>
+#include <cstdint>
 
 class TwoLevelAggregationTest;
 class AmpduAggregationTest;
