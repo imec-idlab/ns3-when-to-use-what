@@ -205,7 +205,6 @@ set yrange [0.0001:1]\n";
 
     plotExtra << "set style increment user";
     plot.SetExtra(plotExtra.str());
-
     plot.GenerateOutput(errormodelfile);
     errormodelfile.close();
 
