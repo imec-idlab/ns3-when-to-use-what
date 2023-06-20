@@ -377,6 +377,7 @@ int main (int argc, char *argv[])
                                       "EnableUlOfdma", BooleanValue (enableUlOfdma),
                                       "EnableBsrp", BooleanValue (enableBsrp),
                                       "AccessReqInterval", TimeValue (accessReqInterval),
+                                      "DelayAccessReqUponAccess", BooleanValue (true),
                                       "UseCentral26TonesRus", BooleanValue (false),
                                       "NStations", UintegerValue (74));
         }
