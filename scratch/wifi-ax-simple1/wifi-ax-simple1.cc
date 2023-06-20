@@ -145,7 +145,7 @@ int main (int argc, char *argv[])
   Time accessReqInterval {0};
   bool useRts {true};
   bool useExtendedBlockAck {false};
-  bool useSpecificEdcaParams {true};
+  bool disableStaEdca {false};
 
   uint32_t payloadSize = 740; // must fit in the max TX duration when transmitting at MCS 0 over an RU of 26 tones
   bool udp {true};
@@ -179,7 +179,7 @@ int main (int argc, char *argv[])
   cmd.AddValue ("enableUlOfdma", "Enable UL OFDMA (useful if DL OFDMA is enabled and TCP is used)", enableUlOfdma);
   cmd.AddValue ("enableBsrp", "Enable BSRP (useful if DL and UL OFDMA are enabled and TCP is used)", enableBsrp);
   cmd.AddValue ("muSchedAccessReqInterval", "Duration of the interval between two requests for channel access made by the MU scheduler", accessReqInterval);
-  cmd.AddValue ("useSpecificEdcaParams", "Enable/disable Specific EDCA parameters set", useSpecificEdcaParams);
+  cmd.AddValue ("disableStaEdca", "Enable/disable EDCA at STAs", disableStaEdca);
 
   //Traffic params
   cmd.AddValue ("payloadSize", "The application payload size in bytes", payloadSize);
@@ -279,25 +279,31 @@ int main (int argc, char *argv[])
   wifiApNode.Get (0)->AggregateObject (apMobility);
 
   // WI-FI PHY & MAC
-  if (useSpecificEdcaParams)
+  if (disableStaEdca)
     {
       //STA AIFSN
-      Config::SetDefault ("ns3::HeConfiguration::MuBkAifsn", UintegerValue (7));
-      Config::SetDefault ("ns3::HeConfiguration::MuBeAifsn", UintegerValue (3));
-      Config::SetDefault ("ns3::HeConfiguration::MuViAifsn", UintegerValue (2));
-      Config::SetDefault ("ns3::HeConfiguration::MuVoAifsn", UintegerValue (2));
+      Config::SetDefault ("ns3::HeConfiguration::MuBkAifsn", UintegerValue (0));
+      Config::SetDefault ("ns3::HeConfiguration::MuBeAifsn", UintegerValue (0));
+      Config::SetDefault ("ns3::HeConfiguration::MuViAifsn", UintegerValue (0));
+      Config::SetDefault ("ns3::HeConfiguration::MuVoAifsn", UintegerValue (0));
 
       //STA CW min
-      Config::SetDefault ("ns3::HeConfiguration::MuBkCwMin", UintegerValue (15));
-      Config::SetDefault ("ns3::HeConfiguration::MuBeCwMin", UintegerValue (15));
-      Config::SetDefault ("ns3::HeConfiguration::MuViCwMin", UintegerValue (7));
-      Config::SetDefault ("ns3::HeConfiguration::MuVoCwMin", UintegerValue (3));
+      Config::SetDefault ("ns3::HeConfiguration::MuBkCwMin", UintegerValue (32767));
+      Config::SetDefault ("ns3::HeConfiguration::MuBeCwMin", UintegerValue (32767));
+      Config::SetDefault ("ns3::HeConfiguration::MuViCwMin", UintegerValue (32767));
+      Config::SetDefault ("ns3::HeConfiguration::MuVoCwMin", UintegerValue (32767));
 
       //STA CW max
-      Config::SetDefault ("ns3::HeConfiguration::MuBkCwMax", UintegerValue (1023));
-      Config::SetDefault ("ns3::HeConfiguration::MuBeCwMax", UintegerValue (1023));
-      Config::SetDefault ("ns3::HeConfiguration::MuViCwMax", UintegerValue (15));
-      Config::SetDefault ("ns3::HeConfiguration::MuVoCwMax", UintegerValue (7));
+      Config::SetDefault ("ns3::HeConfiguration::MuBkCwMax", UintegerValue (32767));
+      Config::SetDefault ("ns3::HeConfiguration::MuBeCwMax", UintegerValue (32767));
+      Config::SetDefault ("ns3::HeConfiguration::MuViCwMax", UintegerValue (32767));
+      Config::SetDefault ("ns3::HeConfiguration::MuVoCwMax", UintegerValue (32767));
+
+      //STA timer (validity of set)
+      Config::SetDefault ("ns3::HeConfiguration::BkMuEdcaTimer", TimeValue (MicroSeconds (2088960)));
+      Config::SetDefault ("ns3::HeConfiguration::BeMuEdcaTimer", TimeValue (MicroSeconds (2088960)));
+      Config::SetDefault ("ns3::HeConfiguration::ViMuEdcaTimer", TimeValue (MicroSeconds (2088960)));
+      Config::SetDefault ("ns3::HeConfiguration::VoMuEdcaTimer", TimeValue (MicroSeconds (2088960)));
 
       //Retry limit
       Config::SetDefault ("ns3::WifiRemoteStationManager::MaxSsrc", UintegerValue (32));
@@ -404,6 +410,7 @@ int main (int argc, char *argv[])
       apDevice = wifi.Install (YansPhy, mac, wifiApNode);
     }
 
+#if 0
   //overwrite slot, sifs, ack and rts/cts duration
   if (useSpecificEdcaParams)
     {
@@ -424,6 +431,7 @@ int main (int argc, char *argv[])
       //Current values: Block ACK = 32 us, RTS = 57 us, CTS = 28 us
       //!NB RTS is sent in HE mode with OFDM symbol (12.8 + GI) us, CTS is sent in legacy mode in 20 MHz with OFDM symbol (3.2 + GI) us
     }
+#endif
 
   /* Internet stack*/
   InternetStackHelper stack;
