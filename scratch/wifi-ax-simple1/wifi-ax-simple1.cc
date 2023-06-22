@@ -153,6 +153,7 @@ int main (int argc, char *argv[])
   bool udp {true};
   bool downlink {true};
   std::string trafficType {"CBR"};
+  bool randomStart {true};
   double interval {0.005}; //seconds
   std::string accessCategory {"AC_VO"};
 
@@ -190,6 +191,7 @@ int main (int argc, char *argv[])
   cmd.AddValue ("udp", "UDP if set to 1, TCP otherwise", udp);
   cmd.AddValue ("downlink", "Generate downlink flows if set to 1, uplink flows otherwise", downlink);
   cmd.AddValue ("trafficType", "Poisson / CBR", trafficType);
+  cmd.AddValue ("randomStart", "Start client applications non-simultaneously", randomStart);
   cmd.AddValue ("interval", "Average inter-packet interval [s]", interval);
   cmd.AddValue ("accessCategory", "Access category for traffic: AC_BE, AC_BK, AC_VO, AC_VI", accessCategory);
 
@@ -516,7 +518,16 @@ int main (int argc, char *argv[])
 
           client.SetAttribute ("PacketSize", UintegerValue (payloadSize));
           ApplicationContainer clientApp = client.Install (clientNodes.Get (i));
-          clientApp.Start (Seconds (1.0));
+          if (randomStart)
+            {
+              Ptr<RandomVariableStream> rv = CreateObject<UniformRandomVariable> ();
+              rv->SetAttribute("Max", DoubleValue(interval));
+              clientApp.StartWithJitter (Seconds (1.0), rv);
+            }
+          else
+            {
+              clientApp.Start (Seconds (1.0));
+            }
           clientApp.Stop (Seconds (simulationTime + 1));
         }
     }
