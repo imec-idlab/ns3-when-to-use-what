@@ -79,8 +79,8 @@ void RxTrace (bool downlink, double startLogTime, Ptr<const Packet> p, const Add
   Ptr<Packet> pkt = p->Copy ();
   SeqTsHeader seqTs;
   pkt->RemoveHeader(seqTs);
-  startLogTime *= 1e-9;
-  if ((Simulator::Now() >= Time(startLogTime))
+  startLogTime *= 1e+9;
+  if (Simulator::Now().GetNanoSeconds() >= startLogTime)
   {
   if (downlink)
     {
