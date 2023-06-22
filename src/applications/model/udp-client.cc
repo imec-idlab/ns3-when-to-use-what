@@ -199,10 +199,10 @@ UdpClient::StartApplication (void)
     }
   else
     {
-//      Ptr<UniformRandomVariable> rand = CreateObject <UniformRandomVariable> ();
-//      double delay = rand->GetValue (0, m_interval.GetSeconds ());
-//      std::cout << "Initial TX after delay = " << delay << "s" << std::endl;
-      m_sendEvent = Simulator::Schedule (Seconds (0.102543), &UdpClient::Send, this);
+      Ptr<UniformRandomVariable> rand = CreateObject <UniformRandomVariable> ();
+      double delay = rand->GetValue (0, m_interval.GetSeconds ());
+      std::cout << "Initial TX after delay = " << delay << "s" << std::endl;
+      m_sendEvent = Simulator::Schedule (Seconds (delay), &UdpClient::Send, this);
     }
 
 }
@@ -224,7 +224,6 @@ UdpClient::Send (void)
   Ptr<Packet> p = Create<Packet> (m_size-(8+4)); // 8+4 : the size of the seqTs header
   p->AddHeader (seqTs);
 
-  std::cout << Simulator::Now().As(Time::S) <<":\tPacket sent with ID:\t" << p->GetUid() <<std::endl;
   if ((m_socket->Send (p)) >= 0)
     {
       ++m_sent;

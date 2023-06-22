@@ -74,12 +74,13 @@ void SinrTrace (Mac48Address addr, double sinr)
   g_statsMap[addr].totalBeacons++;
 }
 
-void RxTrace (bool downlink, Ptr<const Packet> p, const Address &src, const Address &dst)
+void RxTrace (bool downlink, double startLogTime, Ptr<const Packet> p, const Address &src, const Address &dst)
 {
   Ptr<Packet> pkt = p->Copy ();
   SeqTsHeader seqTs;
   pkt->RemoveHeader(seqTs);
-  if ((Simulator::Now() >= Time(1.030e+9) ) && (p->GetUid() >= 1000) )
+  startLogTime *= 1e-9;
+  if ((Simulator::Now() >= Time(startLogTime))
   {
   if (downlink)
     {
@@ -131,6 +132,7 @@ int main (int argc, char *argv[])
   std::size_t nStations {1};
   double apHeight {3}; //meters
   double staHeight {1}; //meters
+  double startLogTime = {1.030};
 
   std::string frequency {"5"}; //whether 2.4, 5 or 6 GHz
   uint32_t channelWidth {40}; //for 2.4 <= 40 MHz, for 5 <= 160 MHz
@@ -145,6 +147,7 @@ int main (int argc, char *argv[])
   Time accessReqInterval {0};
   bool useRts {true};
   bool useExtendedBlockAck {false};
+  bool UseCentral26TonesRus ={false};
   bool disableStaEdca {false};
 
   uint32_t payloadSize = 740; // must fit in the max TX duration when transmitting at MCS 0 over an RU of 26 tones
@@ -163,6 +166,7 @@ int main (int argc, char *argv[])
   cmd.AddValue ("nStations", "Number of non-AP HE stations", nStations);
   cmd.AddValue ("apHeight", "Height of AP [m]", apHeight);
   cmd.AddValue ("staHeight", "Height of STA [m]", staHeight);
+  cmd.AddValue("startLogTime","Time to begin logging [seconds]",startLogTime);
 
   //PHY params
   cmd.AddValue ("frequency", "Whether working in the 2.4, 5 or 6 GHz band (other values gets rejected)", frequency);
@@ -171,6 +175,7 @@ int main (int argc, char *argv[])
   cmd.AddValue ("mcs", "if set, limit testing to a specific MCS (0-11)", mcs);
   cmd.AddValue ("phyModel", "PHY model to use when OFDMA is disabled (Yans or Spectrum). If OFDMA is enabled then Spectrum is automatically selected", phyModel);
   cmd.AddValue ("enableShadowing", "Enable/disable gaussian shadowing", enableShadowing);
+  cmd.AddValue("UseCentral26TonesRus","Enable/Disable the use of Cenral 26 tone RUs", UseCentral26TonesRus);
 
   //MAC params
   cmd.AddValue ("useRts", "Enable/disable RTS/CTS", useRts);
@@ -309,7 +314,7 @@ int main (int argc, char *argv[])
       Config::SetDefault ("ns3::WifiRemoteStationManager::MaxSsrc", UintegerValue (32));
       Config::SetDefault ("ns3::WifiRemoteStationManager::MaxSlrc", UintegerValue (32));
     }
-  simulationTime += 0.030; // extend simulation time
+  simulationTime += startLogTime; // extend simulation time
   NetDeviceContainer apDevice, staDevices;
   WifiMacHelper mac;
   WifiHelper wifi;
@@ -378,7 +383,7 @@ int main (int argc, char *argv[])
                                       "EnableBsrp", BooleanValue (enableBsrp),
                                       "AccessReqInterval", TimeValue (accessReqInterval),
                                       "DelayAccessReqUponAccess", BooleanValue (true),
-                                      "UseCentral26TonesRus", BooleanValue (false),
+                                      "UseCentral26TonesRus", BooleanValue (UseCentral26TonesRus),
                                       "NStations", UintegerValue (74));
         }
       mac.SetType ("ns3::ApWifiMac",
@@ -557,7 +562,7 @@ int main (int argc, char *argv[])
 
   for (uint32_t i = 0; i < serverApp.GetN (); i++)
     {
-      DynamicCast<PacketSink> (serverApp.Get (i))->TraceConnectWithoutContext ("RxWithAddresses", MakeBoundCallback (&RxTrace, downlink));
+      DynamicCast<PacketSink> (serverApp.Get (i))->TraceConnectWithoutContext ("RxWithAddresses", MakeBoundCallback (&RxTrace, downlink, startLogTime));
     }
 
   ProgressBar pg (Seconds(simulationTime + 1 ));

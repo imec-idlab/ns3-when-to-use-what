@@ -205,7 +205,6 @@ PacketSink::HandleRead(Ptr<Socket> socket)
             break;
         }
         m_totalRx += packet->GetSize();
-        std::cout <<Simulator::Now().As(Time::S) << ":\tPacket ID:\t" <<packet->GetUid()<< "\tRecevied at Packet sink" <<std::endl;
         if (InetSocketAddress::IsMatchingType(from))
         {
             NS_LOG_INFO("At time " << Simulator::Now().As(Time::S) << " packet sink received "

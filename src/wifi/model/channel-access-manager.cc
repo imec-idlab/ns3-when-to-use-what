@@ -398,7 +398,6 @@ ChannelAccessManager::DoGrantDcfAccess()
                      * has expired and which needed access to the medium
                      * must be notified that we did get an internal collision.
                      */
-                    std::cout << Simulator::Now().As(Time::S)<<":\tinternalCollisionTxops.push_back(otherTxop)\t"<<std::endl;
                     internalCollisionTxops.push_back(otherTxop);
                 }
             }

@@ -525,7 +525,6 @@ Txop::Queue(Ptr<WifiMpdu> mpdu)
             GenerateBackoff(linkId);
         }
     }
-    //std::cout << Simulator::Now().As(Time::S) <<":\tTxop::Queue(Ptr<WifiMpdu> mpdu)\t\t" << "Packet ID:\t"<< mpdu->GetPacket()->GetUid()<<std::endl;
     m_queue->Enqueue(mpdu);
     for (const auto linkId : linkIds)
     {
@@ -572,7 +571,6 @@ void
 Txop::NotifyAccessRequested(uint8_t linkId)
 {
     NS_LOG_FUNCTION(this << +linkId);
-    std::cout << Simulator::Now().As(Time::S)<<":\tTxop::NotifyAccessRequested:\t" << std::endl;
     GetLink(linkId).access = REQUESTED;
 }
 
