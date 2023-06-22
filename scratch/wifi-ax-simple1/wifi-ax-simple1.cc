@@ -165,7 +165,7 @@ int main (int argc, char *argv[])
   cmd.AddValue ("nStations", "Number of non-AP HE stations", nStations);
   cmd.AddValue ("apHeight", "Height of AP [m]", apHeight);
   cmd.AddValue ("staHeight", "Height of STA [m]", staHeight);
-  cmd.AddValue("startLogTime","Time to begin logging [seconds]",startLogTime);
+  cmd.AddValue ("startLogTime","Time to begin logging [seconds]",startLogTime);
 
   //PHY params
   cmd.AddValue ("frequency", "Whether working in the 2.4, 5 or 6 GHz band (other values gets rejected)", frequency);
@@ -174,7 +174,7 @@ int main (int argc, char *argv[])
   cmd.AddValue ("mcs", "if set, limit testing to a specific MCS (0-11)", mcs);
   cmd.AddValue ("phyModel", "PHY model to use when OFDMA is disabled (Yans or Spectrum). If OFDMA is enabled then Spectrum is automatically selected", phyModel);
   cmd.AddValue ("enableShadowing", "Enable/disable gaussian shadowing", enableShadowing);
-  cmd.AddValue("UseCentral26TonesRus","Enable/Disable the use of Cenral 26 tone RUs", UseCentral26TonesRus);
+  cmd.AddValue ("UseCentral26TonesRus","Enable/Disable the use of Cenral 26 tone RUs", UseCentral26TonesRus);
 
   //MAC params
   cmd.AddValue ("useRts", "Enable/disable RTS/CTS", useRts);
