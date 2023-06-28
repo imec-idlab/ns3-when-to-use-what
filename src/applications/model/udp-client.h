@@ -29,6 +29,7 @@
 #include "ns3/ipv4-address.h"
 
 #include "ns3/random-variable-stream.h"
+#include <cstdint>
 
 namespace ns3 {
 
@@ -71,6 +72,7 @@ public:
    * \return the total bytes sent by this app
    */
   uint64_t GetTotalTx () const;
+  
 
 protected:
   virtual void DoDispose (void);
@@ -101,6 +103,7 @@ private:
 #ifdef NS3_LOG_ENABLE
   std::string m_peerAddressString; //!< Remote peer address string
 #endif // NS3_LOG_ENABLE
+  uint64_t m_tagValue; //!< packet tags
 };
 
 } // namespace ns3

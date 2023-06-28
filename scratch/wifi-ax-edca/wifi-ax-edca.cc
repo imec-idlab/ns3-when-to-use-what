@@ -42,7 +42,7 @@
 #include "ns3/progress-bar.h"
 #include "ns3/seq-ts-header.h"
 #include "ns3/packet-sink.h"
-
+#include "ns3/packet-tag.h"
 
 using namespace ns3;
 
@@ -52,6 +52,7 @@ struct stats_t
   uint64_t totalBeacons;
   uint64_t rxBytes;
   std::vector<double> pktDelays;
+  std::vector<uint64_t> pktTag;
 };
 
 std::map<Mac48Address, stats_t> g_statsMap; //!< map for statistics for each station
@@ -68,10 +69,13 @@ void RxTrace ( Ptr<const Packet> p, const Address &src, const Address &dst)
 {
   Ptr<Packet> pkt = p->Copy ();
   SeqTsHeader seqTs;
+  PacketTag tag;
+  pkt->RemovePacketTag(tag);
   pkt->RemoveHeader(seqTs);
 
   g_statsMap[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (src).GetIpv4 ())].rxBytes += p->GetSize ();
   g_statsMap[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (src).GetIpv4 ())].pktDelays.push_back ((Simulator::Now() - seqTs.GetTs ()).GetSeconds ());
+  g_statsMap[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (src).GetIpv4 ())].pktTag.push_back (tag.GetValue());
 
 }
 int  main(int argc, char *argv[])
@@ -101,7 +105,8 @@ int  main(int argc, char *argv[])
   bool useExtendedBlockAck {false};
   bool useSpecificEdcaParams {true};
 
-  uint32_t ulPayloadSize = 93;// must fit in the max TX duration when transmitting at MCS 0 over an RU of 26 tones
+  uint32_t ulPayloadSize = 93; // must fit in the max TX duration when transmitting at MCS 0 over an RU of 26 tones
+  uint32_t dlPayloadSize = 500;
   std::string trafficType {"CBR"};
   double interval {0.005}; //seconds
   std::string accessCategory {"AC_VO"};
@@ -136,7 +141,8 @@ int  main(int argc, char *argv[])
   cmd.AddValue ("useSpecificEdcaParams", "Enable/disable Specific EDCA parameters set", useSpecificEdcaParams);
 
   //Traffic params
-  cmd.AddValue ("ulPayloadSize", "The application payload size in bytes for DL traffic", ulPayloadSize);
+  cmd.AddValue ("ulPayloadSize", "the application payload size in bytes for ul traffic", ulPayloadSize);
+  cmd.AddValue ("dlPayloadSize", "the application payload size in bytes for dl traffic", dlPayloadSize);
   cmd.AddValue ("interval", "Average inter-packet interval [s]", interval);
   cmd.AddValue ("accessCategory", "Access category for traffic: AC_BE, AC_BK, AC_VO, AC_VI", accessCategory);
 
@@ -352,6 +358,8 @@ int  main(int argc, char *argv[])
                   "EnableBeaconJitter", BooleanValue (false),
                   "Ssid", SsidValue (ssid));
       apNetDevice = wifi.Install (YansPhy, wifimac, wifiApNode);
+      YansPhy.EnablePcap("wifi-ax-edca-ap", apNetDevice); // enable pcap tracing
+      YansPhy.EnablePcap("wifi-ax-edca-sta", staNetDevices);
     }
 
   /* Internet Stack on*/
@@ -381,50 +389,47 @@ int  main(int argc, char *argv[])
   PacketSinkHelper packetSinkHelper ("ns3::UdpSocketFactory", localAddress);
 
   //packet sink
-  ApplicationContainer apServerApp,staServerApp;
-  apServerApp = packetSinkHelper.Install(wifiApNode);
-  apServerApp.Start(Seconds(0));
-  apServerApp.Stop(Seconds(simulationTime + .01 ));
-
+  ApplicationContainer staServerApp;
+  
   //Udp AP
   InetSocketAddress broadcastAddress = InetSocketAddress(Ipv4Address::GetBroadcast(), port);
   broadcastAddress.SetTos(0xc0);
-  UdpClientHelper apUpdClient(broadcastAddress);
-  apUpdClient.SetAttribute("PacketSize", UintegerValue (nStations > 8 ? ulPayloadSize * 8 : ulPayloadSize * nStations));
-  apUpdClient.SetAttribute("Interval",TimeValue (Seconds (interval)));
-  apUpdClient.SetAttribute ("EnableRandom", BooleanValue (false));
+  UdpServerHelper apUpdServer(port);
+  apUpdServer.SetAttribute("PacketSize", UintegerValue (dlPayloadSize));
+  apUpdServer.SetAttribute("RemoteAddress", AddressValue (broadcastAddress));
+  apUpdServer.SetAttribute("NStations", UintegerValue(nStations));
 
-  ApplicationContainer apUdpclientApp = apUpdClient.Install (wifiApNode);
+  ApplicationContainer apUdpServerApp = apUpdServer.Install (wifiApNode);
 
-  apUdpclientApp.StartWithJitter (Seconds (0.001) , uv);
-  apUdpclientApp.Stop (Seconds (simulationTime + 1));
+  apUdpServerApp.Start(Seconds (0));
+  apUdpServerApp.Stop (Seconds (simulationTime + 1));
 
-    staServerApp = packetSinkHelper.Install(wifiStaNodes);
-    staServerApp.Start(Seconds(0));
-    staServerApp.Stop(Seconds(simulationTime + 1 ));
+  staServerApp = packetSinkHelper.Install(wifiStaNodes);
+  staServerApp.Start(Seconds(0));
+  staServerApp.Stop(Seconds(simulationTime + 1 ));
 
     //Udp Sta
 
-    InetSocketAddress remoteAddress = InetSocketAddress (apNodeInterface.GetAddress(0), port);
-    remoteAddress.SetTos(0xc0);
-    UdpClientHelper staUdpClient (remoteAddress);
-    staUdpClient.SetAttribute ("MaxPackets", UintegerValue (4294967295u));
-    if (trafficType == "CBR") /*CBR traffic*/
-    {
-      staUdpClient.SetAttribute ("EnableRandom", BooleanValue (false));
-      staUdpClient.SetAttribute ("Interval", TimeValue (Seconds (interval)));
-    }
-    else //Poisson traffic
-    {
-      staUdpClient.SetAttribute ("EnableRandom", BooleanValue (true));
-      std::ostringstream intervalDistr;
-      intervalDistr << "ns3::ExponentialRandomVariable[Mean=" << interval << "|Bound=0]";
-      staUdpClient.SetAttribute ("IntervalRandomVariable", StringValue (intervalDistr.str()));
-    }
-    staUdpClient.SetAttribute ("PacketSize", UintegerValue (ulPayloadSize));
-    ApplicationContainer staUdpclientApp = staUdpClient.Install (wifiStaNodes);
-    staUdpclientApp.StartWithJitter (Seconds (0.001), uv);
-    staUdpclientApp.Stop (Seconds (simulationTime + 1));
+  InetSocketAddress remoteAddress = InetSocketAddress (apNodeInterface.GetAddress(0), port);
+  remoteAddress.SetTos(0xc0);
+  UdpClientHelper staUdpClient (remoteAddress);
+  staUdpClient.SetAttribute ("MaxPackets", UintegerValue (4294967295u));
+  if (trafficType == "CBR") /*CBR traffic*/
+  {
+    staUdpClient.SetAttribute ("EnableRandom", BooleanValue (false));
+    staUdpClient.SetAttribute ("Interval", TimeValue (Seconds (interval)));
+  }
+  else //Poisson traffic
+  {
+    staUdpClient.SetAttribute ("EnableRandom", BooleanValue (true));
+    std::ostringstream intervalDistr;
+    intervalDistr << "ns3::ExponentialRandomVariable[Mean=" << interval << "|Bound=0]";
+    staUdpClient.SetAttribute ("IntervalRandomVariable", StringValue (intervalDistr.str()));
+  }
+  staUdpClient.SetAttribute ("PacketSize", UintegerValue (ulPayloadSize));
+  ApplicationContainer staUdpclientApp = staUdpClient.Install (wifiStaNodes);
+  staUdpclientApp.StartWithJitter (Seconds (0.0031), uv);
+  staUdpclientApp.Stop (Seconds (simulationTime + 1));
 
   Simulator::Schedule (Seconds (0), &Ipv4GlobalRoutingHelper::PopulateRoutingTables);
 
@@ -447,9 +452,9 @@ int  main(int argc, char *argv[])
       apNetDevice.Get(i)->GetObject<WifiNetDevice>()->GetPhy()->GetPhyEntity(WIFI_MOD_CLASS_HE)->TraceConnectWithoutContext("SinrTrace", MakeBoundCallback (&SinrTrace, Mac48Address::ConvertFrom (apNetDevice.Get (i)->GetAddress ())));
     }
 
-   for (uint32_t i = 0; i < apServerApp.GetN (); i++)
+   for (uint32_t i = 0; i < apUdpServerApp.GetN (); i++)
     {
-      DynamicCast<PacketSink> (apServerApp.Get (i))->TraceConnectWithoutContext ("RxWithAddresses", MakeBoundCallback (&RxTrace ));
+      DynamicCast<UdpServer> (apUdpServerApp.Get (i))->TraceConnectWithoutContext ("RxWithAddresses", MakeBoundCallback (&RxTrace ));
     }
     for (uint32_t i = 0; i < staServerApp.GetN (); i++)
     {
@@ -463,9 +468,9 @@ int  main(int argc, char *argv[])
   // Statistics
   uint64_t rxBytes = 0;
 
-  for (uint32_t i = 0; i < apServerApp.GetN (); i++)
+  for (uint32_t i = 0; i < apUdpServerApp.GetN (); i++)
     {
-      rxBytes += DynamicCast<PacketSink> (apServerApp.Get (i))->GetTotalRx ();
+      rxBytes += DynamicCast<UdpServer> (apUdpServerApp.Get (i))->GetTotalRx ();
     }
   for (uint32_t i = 0; i < staServerApp.GetN (); i++)
     {
@@ -496,6 +501,20 @@ int  main(int argc, char *argv[])
         << "\t" << sumDelay / staStats.second.pktDelays.size () << std::endl;
     }
   perStaOutStream.close ();
+
+  std::ofstream pktDistOutStream;
+
+  for (auto &staStats : g_statsMap) {
+    std::ostringstream mac_str;
+    mac_str << staStats.first;
+    pktDistOutStream.open (mac_str.str(), std::ios::out);
+    pktDistOutStream << "Packet_Tag\tDelay_ms" << std::endl;
+    for (size_t i = 0;  i < staStats.second.pktDelays.size(); i++) {
+      pktDistOutStream <<staStats.second.pktTag[i] <<"\t"<< staStats.second.pktDelays[i] * 1000 << std::endl;
+    }
+    pktDistOutStream.close();
+  }
+
 
   Simulator::Destroy ();
 

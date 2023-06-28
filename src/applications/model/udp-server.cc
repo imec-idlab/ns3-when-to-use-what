@@ -35,6 +35,9 @@
 #include "packet-loss-counter.h"
 #include "seq-ts-header.h"
 #include "udp-server.h"
+#include "udp-client.h"
+#include "ns3/packet-tag.h"
+#include <cstdint>
 
 namespace ns3 {
 
@@ -50,11 +53,21 @@ UdpServer::GetTypeId (void)
     .SetParent<Application> ()
     .SetGroupName("Applications")
     .AddConstructor<UdpServer> ()
+    .AddAttribute ("RemoteAddress",
+                   "The destination Address of the outbound packets",
+                   AddressValue (),
+                   MakeAddressAccessor (&UdpServer::m_peerAddress),
+                   MakeAddressChecker ())
     .AddAttribute ("Port",
                    "Port on which we listen for incoming packets.",
                    UintegerValue (100),
                    MakeUintegerAccessor (&UdpServer::m_port),
                    MakeUintegerChecker<uint16_t> ())
+    .AddAttribute ("PacketSize",
+                   "Size of packets generated. The minimum packet size is 12 bytes which is the size of the header carrying the sequence number and the time stamp.",
+                   UintegerValue (1024),
+                   MakeUintegerAccessor (&UdpServer::m_size),
+                   MakeUintegerChecker<uint32_t> (12,65507))
     .AddAttribute ("PacketWindowSize",
                    "The size of the window used to compute the packet loss. This value should be a multiple of 8.",
                    UintegerValue (32),
@@ -66,6 +79,11 @@ UdpServer::GetTypeId (void)
                    UintegerValue (0),
                    MakeUintegerAccessor (&UdpServer::m_tos),
                    MakeUintegerChecker<uint8_t> ())
+    .AddAttribute ("NStations",
+                   "Number of Stations",
+                   UintegerValue (0),
+                   MakeUintegerAccessor (&UdpServer::m_nStations),
+                   MakeUintegerChecker<std::size_t> ())
     .AddTraceSource ("Rx", "A packet has been received",
                      MakeTraceSourceAccessor (&UdpServer::m_rxTrace),
                      "ns3::Packet::TracedCallback")
@@ -81,6 +99,10 @@ UdpServer::UdpServer ()
 {
   NS_LOG_FUNCTION (this);
   m_received=0;
+  m_sendEvent = EventId();
+  m_sent = 0;
+  m_tagValue = 0;
+  m_totalRx = 0;
 }
 
 UdpServer::~UdpServer ()
@@ -116,6 +138,13 @@ UdpServer::GetReceived (void) const
   return m_received;
 }
 
+uint64_t
+UdpServer::GetTotalRx() const
+{
+    NS_LOG_FUNCTION(this);
+    return m_totalRx;
+}
+
 void
 UdpServer::DoDispose (void)
 {
@@ -127,6 +156,7 @@ void
 UdpServer::StartApplication (void)
 {
   NS_LOG_FUNCTION (this);
+
 
   if (m_socket == 0)
     {
@@ -142,6 +172,9 @@ UdpServer::StartApplication (void)
     }
 
   m_socket->SetRecvCallback (MakeCallback (&UdpServer::HandleRead, this));
+  m_socket->SetAllowBroadcast(true);
+  m_vecTagValue.resize(m_nStations);
+  m_initTime.resize(m_nStations);
 
   if (m_socket6 == 0)
     {
@@ -177,6 +210,7 @@ UdpServer::HandleRead (Ptr<Socket> socket)
   Ptr<Packet> packet;
   Address from;
   Address localAddress;
+  uint64_t tagid = {0};
   while ((packet = socket->RecvFrom (from)))
     {
       socket->GetSockName (localAddress);
@@ -185,6 +219,9 @@ UdpServer::HandleRead (Ptr<Socket> socket)
       if (packet->GetSize () > 0)
         {
           uint32_t receivedSize = packet->GetSize ();
+          m_totalRx += receivedSize;
+          PacketTag tag;
+          packet->RemovePacketTag(tag);
           SeqTsHeader seqTs;
           packet->RemoveHeader (seqTs);
           uint32_t currentSequenceNumber = seqTs.GetSeq ();
@@ -211,8 +248,90 @@ UdpServer::HandleRead (Ptr<Socket> socket)
 
           m_lossCounter.NotifyReceived (currentSequenceNumber);
           m_received++;
+          m_tagValue = tag.GetValue();
+
+          for (size_t i = 0; i < m_vecTagValue.size(); i++) {
+            if (!m_vecTagValue[i].empty() && m_vecTagValue[i].at(0) == m_tagValue) {
+
+              m_vecTagValue[i].push_back( m_tagValue);
+              if (m_vecTagValue[i].size() == m_nStations || 
+                  (Simulator::Now().GetMilliSeconds() - m_initTime[i].at(0) ) >= 5 ) {
+                tagid = m_vecTagValue[i].at(0);
+                m_vecTagValue[i].clear();
+                m_initTime[i].clear();
+                m_sendEvent = Simulator::Schedule (Seconds(0.0), &UdpServer::SendTo, this, tagid);
+                goto out;
+              }
+              else {
+                for (size_t i = 0; i<m_initTime.size(); i++ ) {
+                  if ( !m_initTime[i].empty() && ( m_vecTagValue[i].size() == m_nStations ||
+                      ( Simulator::Now().GetMilliSeconds() - m_initTime[i].at(0)) >= 5 ) ) {
+                    tagid = m_vecTagValue[i].at(0);
+                    m_vecTagValue[i].clear();
+                    m_initTime[i].clear();
+                    m_sendEvent = Simulator::Schedule (Seconds(0), &UdpServer::SendTo, this, tagid);
+                    goto out;
+                  }
+                }
+              }
+              goto out;
+            }
+          } //end for
+          for (size_t i = 0; i < m_vecTagValue.size(); i++) {
+            if (m_vecTagValue[i].empty()) {
+              m_vecTagValue[i].push_back(m_tagValue);
+              m_initTime[i].push_back(Simulator::Now().GetMilliSeconds());
+              if (m_vecTagValue[i].size() == m_nStations || 
+                  (Simulator::Now().GetMilliSeconds() - m_initTime[i].at(0) ) >= 5 ) {
+                tagid = m_vecTagValue[i].at(0);
+                m_vecTagValue[i].clear();
+                m_initTime[i].clear();
+                m_sendEvent = Simulator::Schedule (Seconds(0.0), &UdpServer::SendTo, this, tagid);
+                break;
+              }
+              else {
+                for (size_t i = 0; i<m_initTime.size(); i++ ) {
+                  if ( !m_initTime[i].empty() && ( m_vecTagValue[i].size() == m_nStations ||
+                      ( Simulator::Now().GetMilliSeconds() - m_initTime[i].at(0)) >= 5 )) {
+                    tagid = m_vecTagValue[i].at(0);
+                    m_vecTagValue[i].clear();
+                    m_initTime[i].clear();
+                    m_sendEvent = Simulator::Schedule (Seconds(0), &UdpServer::SendTo, this, tagid);
+                    break;
+                  }
+                }
+              }
+              break;
+
+            }
+          } //end for
+          out:
+          ;
         }
     }
+}
+
+void
+UdpServer::SendTo (uint64_t tagValue)
+{
+  NS_LOG_FUNCTION(this);
+  NS_ASSERT(m_sendEvent.IsExpired());
+  SeqTsHeader seqTs;
+  PacketTag tag;
+  seqTs.SetSeq(m_sent);
+  Ptr<Packet> p = Create<Packet> (m_size-(8+4));// 8+4 : the size of the seqTs
+                                                 // header
+  p->AddHeader (seqTs);
+  tag.SetValue(tagValue);
+  p->AddPacketTag(tag);
+  if ( (m_socket->SendTo(p, 0, m_peerAddress)) >= 0 )
+  {
+    ++m_sent;
+  }
+  else 
+  {
+    NS_LOG_INFO ("Error while sending " << m_size);
+  }
 }
 
 } // Namespace ns3

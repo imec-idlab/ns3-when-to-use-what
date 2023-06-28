@@ -36,6 +36,7 @@
 #include "ns3/pointer.h"
 #include "ns3/string.h"
 #include "ns3/boolean.h"
+#include "ns3/packet-tag.h"
 
 namespace ns3 {
 
@@ -94,6 +95,7 @@ UdpClient::UdpClient ()
   m_totalTx = 0;
   m_socket = 0;
   m_sendEvent = EventId ();
+  m_tagValue = 0;
 }
 
 UdpClient::~UdpClient ()
@@ -193,7 +195,21 @@ UdpClient::StartApplication (void)
   m_socket->SetRecvCallback (MakeNullCallback<void, Ptr<Socket> > ());
   m_socket->SetAllowBroadcast (true);
 
+<<<<<<< Updated upstream
   m_sendEvent = Simulator::Schedule (Seconds(0), &UdpClient::Send, this);
+=======
+  if (m_enableRandom)
+  {
+    m_sendEvent = Simulator::Schedule (Seconds(m_intervalRandomVariable->GetValue()), &UdpClient::Send, this);
+  }
+  else
+  {
+    Ptr<UniformRandomVariable> rand = CreateObject <UniformRandomVariable> ();
+    double delay = rand->GetValue (0, m_interval.GetSeconds ());
+    std::cout << "Initial TX after delay = " << delay << "s" << std::endl;
+    m_sendEvent = Simulator::Schedule (Seconds (delay), &UdpClient::Send, this);
+  }
+>>>>>>> Stashed changes
 }
 
 void
@@ -209,9 +225,12 @@ UdpClient::Send (void)
   NS_LOG_FUNCTION (this);
   NS_ASSERT (m_sendEvent.IsExpired ());
   SeqTsHeader seqTs;
+  PacketTag tag;
   seqTs.SetSeq (m_sent);
   Ptr<Packet> p = Create<Packet> (m_size-(8+4)); // 8+4 : the size of the seqTs header
   p->AddHeader (seqTs);
+  tag.SetValue(++m_tagValue);
+  p->AddPacketTag(tag);
 
   if ((m_socket->Send (p)) >= 0)
     {

@@ -29,6 +29,9 @@
 #include "ns3/address.h"
 #include "ns3/traced-callback.h"
 #include "packet-loss-counter.h"
+#include <cstddef>
+#include <cstdint>
+#include <vector>
 
 namespace ns3 {
 /**
@@ -60,6 +63,11 @@ public:
    * \return the number of lost packets
    */
   uint32_t GetLost (void) const;
+
+  /**
+     * \return the total bytes received in this sink app
+     */
+    uint64_t GetTotalRx() const;
 
   /**
    * \brief Returns the number of received packets
@@ -97,12 +105,24 @@ private:
    */
   void HandleRead (Ptr<Socket> socket);
 
+  void SendTo(uint64_t tagValue);
+
   uint16_t m_port; //!< Port on which we listen for incoming packets.
   Ptr<Socket> m_socket; //!< IPv4 Socket
   Ptr<Socket> m_socket6; //!< IPv6 Socket
   uint64_t m_received; //!< Number of received packets
   PacketLossCounter m_lossCounter; //!< Lost packet counter
   uint8_t m_tos;
+  uint16_t m_size;
+  Address m_peerAddress; //!< Remote peer address
+  EventId m_sendEvent; //!< Event to send the next packet
+  uint32_t m_sent; //!< Counter for sent packets
+  uint64_t m_tagValue; //!< packet tags
+  std::vector<std::vector<  uint64_t>> m_vecTagValue;
+  uint64_t m_totalRx;   //!< Total bytes received
+  std::size_t m_nStations;
+  std::vector <std::vector <int64_t> > m_initTime;
+
 
   /// Callbacks for tracing the packet Rx events
   TracedCallback<Ptr<const Packet> > m_rxTrace;
