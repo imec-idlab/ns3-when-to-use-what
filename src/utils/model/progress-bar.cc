@@ -22,7 +22,7 @@ namespace ns3 {
 
       if (isatty (2))
         {
-          std::cerr << '\r' << s.str() << " seconds passed.";
+          std::cerr << '\r' << s.str() << " seconds passed.\n";
         }
 #ifdef __linux__
       prctl (PR_SET_NAME, s.str ().c_str ());
