@@ -311,10 +311,41 @@ int main (int argc, char *argv[])
       Config::SetDefault ("ns3::HeConfiguration::ViMuEdcaTimer", TimeValue (MicroSeconds (2088960)));
       Config::SetDefault ("ns3::HeConfiguration::VoMuEdcaTimer", TimeValue (MicroSeconds (2088960)));
 
-      //Retry limit
-      Config::SetDefault ("ns3::WifiRemoteStationManager::MaxSsrc", UintegerValue (32));
-      Config::SetDefault ("ns3::WifiRemoteStationManager::MaxSlrc", UintegerValue (32));
     }
+  else 
+  {
+    //STA AIFSN
+      Config::SetDefault ("ns3::HeConfiguration::MuBkAifsn", UintegerValue (7));
+      Config::SetDefault ("ns3::HeConfiguration::MuBeAifsn", UintegerValue (3));
+      Config::SetDefault ("ns3::HeConfiguration::MuViAifsn", UintegerValue (2));
+      Config::SetDefault ("ns3::HeConfiguration::MuVoAifsn", UintegerValue (2));
+
+      //STA CW min
+      Config::SetDefault ("ns3::HeConfiguration::MuBkCwMin", UintegerValue (15));
+      Config::SetDefault ("ns3::HeConfiguration::MuBeCwMin", UintegerValue (15));
+      Config::SetDefault ("ns3::HeConfiguration::MuViCwMin", UintegerValue (7));
+      Config::SetDefault ("ns3::HeConfiguration::MuVoCwMin", UintegerValue (3));
+
+      //STA CW max
+      Config::SetDefault ("ns3::HeConfiguration::MuBkCwMax", UintegerValue (1023));
+      Config::SetDefault ("ns3::HeConfiguration::MuBeCwMax", UintegerValue (1023));
+      Config::SetDefault ("ns3::HeConfiguration::MuViCwMax", UintegerValue (15));
+      Config::SetDefault ("ns3::HeConfiguration::MuVoCwMax", UintegerValue (7));
+
+      //STA timer (validity of set)
+      Config::SetDefault ("ns3::HeConfiguration::BkMuEdcaTimer", TimeValue (MicroSeconds (8192)));
+      Config::SetDefault ("ns3::HeConfiguration::BeMuEdcaTimer", TimeValue (MicroSeconds (8192)));
+      Config::SetDefault ("ns3::HeConfiguration::ViMuEdcaTimer", TimeValue (MicroSeconds (8192)));
+      Config::SetDefault ("ns3::HeConfiguration::VoMuEdcaTimer", TimeValue (MicroSeconds (8192)));
+
+      //sifs and slot time
+      Config::SetDefault("ns3::WifiPhy::Sifs", TimeValue(MicroSeconds(16)));
+      Config::SetDefault("ns3::WifiPhy::Slot", TimeValue(MicroSeconds(9)));
+  }
+   //Retry limit
+  Config::SetDefault ("ns3::WifiRemoteStationManager::MaxSsrc", UintegerValue (32));
+  Config::SetDefault ("ns3::WifiRemoteStationManager::MaxSlrc", UintegerValue (32));
+
   simulationTime += startLogTime; // extend simulation time
   NetDeviceContainer apDevice, staDevices;
   WifiMacHelper mac;
@@ -488,7 +519,8 @@ int main (int argc, char *argv[])
       //Install Packet Sink on the STAs
       uint16_t port = 9;
       InetSocketAddress localAddress = InetSocketAddress (Ipv4Address::GetAny (), port);
-      localAddress.SetTos (GetTosFromAccessCategory (accessCategory));
+      if (!disableStaEdca)
+        localAddress.SetTos (GetTosFromAccessCategory (accessCategory));
       PacketSinkHelper packetSinkHelper ("ns3::UdpSocketFactory", localAddress);
       /*for downlink, this receives the packets in the STAs*/
       serverApp = packetSinkHelper.Install (serverNodes.get ());
@@ -500,7 +532,8 @@ int main (int argc, char *argv[])
       for (std::size_t i = 0; i < nStations; i++)
         {
           InetSocketAddress remoteAddress = InetSocketAddress (serverInterfaces.GetAddress (i), port);
-          remoteAddress.SetTos (GetTosFromAccessCategory (accessCategory));
+          if (!disableStaEdca)
+            remoteAddress.SetTos (GetTosFromAccessCategory (accessCategory));
           UdpClientHelper client (remoteAddress);
           client.SetAttribute ("MaxPackets", UintegerValue (4294967295u));
           if (trafficType == "CBR") //CBR traffic
@@ -537,7 +570,8 @@ int main (int argc, char *argv[])
       uint16_t port = 50000;
 
       InetSocketAddress localAddress = InetSocketAddress (Ipv4Address::GetAny (), port);
-      localAddress.SetTos (GetTosFromAccessCategory (accessCategory));
+      if (!disableStaEdca)
+        localAddress.SetTos (GetTosFromAccessCategory (accessCategory));
       PacketSinkHelper packetSinkHelper ("ns3::TcpSocketFactory", localAddress);
       serverApp = packetSinkHelper.Install (serverNodes.get ());
       serverApp.Start (Seconds (0.0));
@@ -611,6 +645,7 @@ int main (int argc, char *argv[])
     }
   perStaOutStream.close ();
 
+#if 0
   std::ofstream pktDistOutStream;
 
   for (auto &staStats : g_statsMap) {
@@ -623,7 +658,7 @@ int main (int argc, char *argv[])
     }
     pktDistOutStream.close();
   }
-
+#endif
   Simulator::Destroy ();
 
   return 0;
