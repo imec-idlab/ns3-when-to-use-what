@@ -203,7 +203,7 @@ StaClient::StartApplication (void)
   {
     Ptr<UniformRandomVariable> rand = CreateObject <UniformRandomVariable> ();
     double delay = rand->GetValue (0, m_interval.GetSeconds ());
-    std::cout << "\nInitial TX after delay = " << delay << "s" << std::endl;
+    std::cout << "Initial TX after delay = " << delay << "s" << std::endl;
     m_sendEvent = Simulator::Schedule (Seconds (delay), &StaClient::Send, this);
   }
 }

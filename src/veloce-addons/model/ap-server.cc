@@ -91,6 +91,11 @@ ApServer::GetTypeId (void)
                    UintegerValue (0),
                    MakeUintegerAccessor (&ApServer::m_nStations),
                    MakeUintegerChecker<std::size_t> ())
+    .AddAttribute ("Interval",
+                   "Time interval between successive packet sending",
+                   TimeValue( MilliSeconds(5) ),
+                   MakeTimeAccessor (&ApServer::m_interval),
+                   MakeTimeChecker ())
     .AddTraceSource ("Rx", "A packet has been received",
                      MakeTraceSourceAccessor (&ApServer::m_rxTrace),
                      "ns3::Packet::TracedCallback")
@@ -266,7 +271,7 @@ ApServer::HandleRead (Ptr<Socket> socket)
             if (!m_vecTagValue[i].empty() && m_vecTagValue[i].at(0) == m_tagValue) {
               m_vecTagValue[i].push_back( m_tagValue);
               if (m_vecTagValue[i].size() == m_nStations || 
-                  (Simulator::Now().GetMilliSeconds() - m_initTime[i].at(0) ) >= 5 ) {
+                  (Simulator::Now().GetMilliSeconds() - m_initTime[i].at(0) ) >= m_interval.GetMilliSeconds() ) {
                 m_listTagid.push_back( m_vecTagValue[i].at(0));
                 m_vecTagValue[i].clear();
                 m_initTime[i].clear();
@@ -276,7 +281,7 @@ ApServer::HandleRead (Ptr<Socket> socket)
               else {
                 for (size_t i = 0; i<m_initTime.size(); i++ ) {
                   if ( !m_initTime[i].empty() && ( m_vecTagValue[i].size() == m_nStations ||
-                      ( Simulator::Now().GetMilliSeconds() - m_initTime[i].at(0)) >= 5 ) ) {
+                      ( Simulator::Now().GetMilliSeconds() - m_initTime[i].at(0)) >= m_interval.GetMilliSeconds() ) ) {
                     m_listTagid.push_back( m_vecTagValue[i].at(0));
                     m_vecTagValue[i].clear();
                     m_initTime[i].clear();
@@ -293,7 +298,7 @@ ApServer::HandleRead (Ptr<Socket> socket)
               m_vecTagValue[i].push_back(m_tagValue);
               m_initTime[i].push_back(Simulator::Now().GetMilliSeconds());
               if (m_vecTagValue[i].size() == m_nStations || 
-                  (Simulator::Now().GetMilliSeconds() - m_initTime[i].at(0) ) >= 5 ) {
+                  (Simulator::Now().GetMilliSeconds() - m_initTime[i].at(0) ) >= m_interval.GetMilliSeconds() ) {
                 m_listTagid.push_back(  m_vecTagValue[i].at(0));
                 m_vecTagValue[i].clear();
                 m_initTime[i].clear();
@@ -303,7 +308,7 @@ ApServer::HandleRead (Ptr<Socket> socket)
               else {
                 for (size_t i = 0; i<m_initTime.size(); i++ ) {
                   if ( !m_initTime[i].empty() && ( m_vecTagValue[i].size() == m_nStations ||
-                      ( Simulator::Now().GetMilliSeconds() - m_initTime[i].at(0)) >= 5 )) {
+                      ( Simulator::Now().GetMilliSeconds() - m_initTime[i].at(0)) >= m_interval.GetMilliSeconds() )) {
                     m_listTagid.push_back( m_vecTagValue[i].at(0));
                     m_vecTagValue[i].clear();
                     m_initTime[i].clear();
