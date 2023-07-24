@@ -519,8 +519,7 @@ int main (int argc, char *argv[])
       //Install Packet Sink on the STAs
       uint16_t port = 9;
       InetSocketAddress localAddress = InetSocketAddress (Ipv4Address::GetAny (), port);
-      if (!disableStaEdca)
-        localAddress.SetTos (GetTosFromAccessCategory (accessCategory));
+      localAddress.SetTos (GetTosFromAccessCategory (accessCategory));
       PacketSinkHelper packetSinkHelper ("ns3::UdpSocketFactory", localAddress);
       /*for downlink, this receives the packets in the STAs*/
       serverApp = packetSinkHelper.Install (serverNodes.get ());
@@ -532,8 +531,7 @@ int main (int argc, char *argv[])
       for (std::size_t i = 0; i < nStations; i++)
         {
           InetSocketAddress remoteAddress = InetSocketAddress (serverInterfaces.GetAddress (i), port);
-          if (!disableStaEdca)
-            remoteAddress.SetTos (GetTosFromAccessCategory (accessCategory));
+          remoteAddress.SetTos (GetTosFromAccessCategory (accessCategory));
           UdpClientHelper client (remoteAddress);
           client.SetAttribute ("MaxPackets", UintegerValue (4294967295u));
           if (trafficType == "CBR") //CBR traffic
@@ -570,8 +568,7 @@ int main (int argc, char *argv[])
       uint16_t port = 50000;
 
       InetSocketAddress localAddress = InetSocketAddress (Ipv4Address::GetAny (), port);
-      if (!disableStaEdca)
-        localAddress.SetTos (GetTosFromAccessCategory (accessCategory));
+      localAddress.SetTos (GetTosFromAccessCategory (accessCategory));
       PacketSinkHelper packetSinkHelper ("ns3::TcpSocketFactory", localAddress);
       serverApp = packetSinkHelper.Install (serverNodes.get ());
       serverApp.Start (Seconds (0.0));
