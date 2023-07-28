@@ -109,7 +109,7 @@ int  main(int argc, char *argv[])
   Time accessReqInterval {0.000005};
   bool useRts {true};
   bool useExtendedBlockAck {false};
-  bool useEdca {true};
+  bool useMuEdca {true};
 
   uint32_t ulPayloadSize = 93; // must fit in the max TX duration when transmitting at MCS 0 over an RU of 26 tones
   uint32_t dlPayloadSize = 500;
@@ -144,7 +144,7 @@ int  main(int argc, char *argv[])
   cmd.AddValue ("enableUlOfdma", "Enable UL OFDMA (useful if DL OFDMA is enabled and TCP is used)", enableUlOfdma);
   cmd.AddValue ("enableBsrp", "Enable BSRP (useful if DL and UL OFDMA are enabled and TCP is used)", enableBsrp);
   cmd.AddValue ("muSchedAccessReqInterval", "Duration of the interval between two requests for channel access made by the MU scheduler", accessReqInterval);
-  cmd.AddValue ("useEdca", "Enable/disable Specific EDCA parameters set", useEdca);
+  cmd.AddValue ("useMuEdca", "Enable/disable Specific EDCA parameters set", useMuEdca);
 
   //Traffic params
   cmd.AddValue ("ulPayloadSize", "the application payload size in bytes for ul traffic", ulPayloadSize);
@@ -230,44 +230,10 @@ int  main(int argc, char *argv[])
   wifiApNode.Get (0)->AggregateObject (apMobility);
 
   /*
-   * To use specific EDCA parameters for various AC
+   * To use specific MU-EDCA parameters for various AC
    * */
-  if (useEdca)
+  if (useMuEdca)
     {
-      //STA AIFSN
-      Config::SetDefault ("ns3::HeConfiguration::MuBkAifsn", UintegerValue (7));
-      Config::SetDefault ("ns3::HeConfiguration::MuBeAifsn", UintegerValue (3));
-      Config::SetDefault ("ns3::HeConfiguration::MuViAifsn", UintegerValue (2));
-      Config::SetDefault ("ns3::HeConfiguration::MuVoAifsn", UintegerValue (2));
-
-      //STA CW min
-      Config::SetDefault ("ns3::HeConfiguration::MuBkCwMin", UintegerValue (15));
-      Config::SetDefault ("ns3::HeConfiguration::MuBeCwMin", UintegerValue (15));
-      Config::SetDefault ("ns3::HeConfiguration::MuViCwMin", UintegerValue (7));
-      Config::SetDefault ("ns3::HeConfiguration::MuVoCwMin", UintegerValue (3));
-
-      //STA CW max
-      Config::SetDefault ("ns3::HeConfiguration::MuBkCwMax", UintegerValue (1023));
-      Config::SetDefault ("ns3::HeConfiguration::MuBeCwMax", UintegerValue (1023));
-      Config::SetDefault ("ns3::HeConfiguration::MuViCwMax", UintegerValue (15));
-      Config::SetDefault ("ns3::HeConfiguration::MuVoCwMax", UintegerValue (7));
-
-      //Retry limit
-      Config::SetDefault ("ns3::WifiRemoteStationManager::MaxSsrc", UintegerValue (32));
-      Config::SetDefault ("ns3::WifiRemoteStationManager::MaxSlrc", UintegerValue (32));
-
-      //STA timer (validity of set)
-      Config::SetDefault ("ns3::HeConfiguration::BkMuEdcaTimer", TimeValue (MicroSeconds (8192)));
-      Config::SetDefault ("ns3::HeConfiguration::BeMuEdcaTimer", TimeValue (MicroSeconds (8192)));
-      Config::SetDefault ("ns3::HeConfiguration::ViMuEdcaTimer", TimeValue (MicroSeconds (8192)));
-      Config::SetDefault ("ns3::HeConfiguration::VoMuEdcaTimer", TimeValue (MicroSeconds (8192)));
-
-      //sifs and slot time
-      Config::SetDefault("ns3::WifiPhy::Sifs", TimeValue(MicroSeconds(16)));
-      Config::SetDefault("ns3::WifiPhy::Slot", TimeValue(MicroSeconds(9)));
-    }
-  else
-  {
     //STA AIFSN
       Config::SetDefault ("ns3::HeConfiguration::MuBkAifsn", UintegerValue (0));
       Config::SetDefault ("ns3::HeConfiguration::MuBeAifsn", UintegerValue (0));
@@ -287,11 +253,15 @@ int  main(int argc, char *argv[])
       Config::SetDefault ("ns3::HeConfiguration::MuVoCwMax", UintegerValue (32767));
 
       //STA timer (validity of set)
-      Config::SetDefault ("ns3::HeConfiguration::BkMuEdcaTimer", TimeValue (MicroSeconds (0)));
-      Config::SetDefault ("ns3::HeConfiguration::BeMuEdcaTimer", TimeValue (MicroSeconds (0)));
-      Config::SetDefault ("ns3::HeConfiguration::ViMuEdcaTimer", TimeValue (MicroSeconds (0)));
-      Config::SetDefault ("ns3::HeConfiguration::VoMuEdcaTimer", TimeValue (MicroSeconds (0)));
+      Config::SetDefault ("ns3::HeConfiguration::BkMuEdcaTimer", TimeValue (MicroSeconds (8192)));
+      Config::SetDefault ("ns3::HeConfiguration::BeMuEdcaTimer", TimeValue (MicroSeconds (8192)));
+      Config::SetDefault ("ns3::HeConfiguration::ViMuEdcaTimer", TimeValue (MicroSeconds (8192)));
+      Config::SetDefault ("ns3::HeConfiguration::VoMuEdcaTimer", TimeValue (MicroSeconds (8192)));
   }
+
+  //sifs and slot time
+  Config::SetDefault("ns3::WifiPhy::Sifs", TimeValue(MicroSeconds(16)));
+  Config::SetDefault("ns3::WifiPhy::Slot", TimeValue(MicroSeconds(9)));
 
   //Retry limit
   Config::SetDefault ("ns3::WifiRemoteStationManager::MaxSsrc", UintegerValue (32));
@@ -431,10 +401,8 @@ int  main(int argc, char *argv[])
   // AP server
   InetSocketAddress broadcastAddress = InetSocketAddress(Ipv4Address::GetBroadcast(), port);
   InetSocketAddress apLocalAddress = InetSocketAddress (apNodeInterface.Get (0).first->GetAddress (1, 0).GetAddress (), port);
-  if (useEdca) {
-    broadcastAddress.SetTos(0xc0);
-    apLocalAddress.SetTos(0xc0);
-  }
+  broadcastAddress.SetTos(0xc0);
+  apLocalAddress.SetTos(0xc0);
   ApServerHelper apServer(port);
   apServer.SetAttribute("PacketSize", UintegerValue (dlPayloadSize));
   apServer.SetAttribute("RemoteAddress", AddressValue (broadcastAddress));
@@ -451,8 +419,7 @@ int  main(int argc, char *argv[])
   for (size_t i = 0; i < nStations; i++) {
     ApServerHelper staServer(port);
     InetSocketAddress staLocalAddress = InetSocketAddress (staNodeInterfaces.Get (i).first->GetAddress (1, 0).GetAddress () );
-    if (useEdca)
-      staLocalAddress.SetTos(0xc0);
+    staLocalAddress.SetTos(0xc0);
     staServer.SetAttribute("LocalAddress", AddressValue(staLocalAddress));
     staServer.SetAttribute("StaApFlag", BooleanValue(true));
     ApplicationContainer staServerApp = staServer.Install(wifiStaNodes.Get(i));
@@ -556,7 +523,7 @@ int  main(int argc, char *argv[])
         << "\t" << sumDelay / staStats.second.pktDelays.size () << std::endl;
     }
   perStaOutStream.close ();
-  
+
   std::ofstream pktDistOutStream;
 
   for (auto &staStats : g_statsMap) {
