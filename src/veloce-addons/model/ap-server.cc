@@ -186,11 +186,9 @@ ApServer::StartApplication (void)
   m_socket->SetRecvCallback (MakeCallback (&ApServer::HandleRead, this));
   m_socket->SetAllowBroadcast(true);
 
-  if (!m_staApFlag) {
-    m_vecTagValue.resize(m_nStations);
-    m_initTime.resize(m_nStations);
+  if (!m_staApFlag)
     m_sendEvent = Simulator::Schedule(MilliSeconds(5), &ApServer::SendTo, this);
-  }
+ 
   if (m_socket6 == nullptr)
     {
       TypeId tid = TypeId::LookupByName ("ns3::UdpSocketFactory");
@@ -267,62 +265,32 @@ ApServer::HandleRead (Ptr<Socket> socket)
           m_tagValue = tag.GetValue();
           if (m_staApFlag)
             break;
-          for (size_t i = 0; i < m_vecTagValue.size(); i++) {
-            if (!m_vecTagValue[i].empty() && m_vecTagValue[i].at(0) == m_tagValue) {
-              m_vecTagValue[i].push_back( m_tagValue);
-              if (m_vecTagValue[i].size() == m_nStations || 
-                  (Simulator::Now().GetMilliSeconds() - m_initTime[i].at(0) ) >= m_interval.GetMilliSeconds() ) {
-                m_listTagid.push_back( m_vecTagValue[i].at(0));
-                m_vecTagValue[i].clear();
-                m_initTime[i].clear();
-                //m_sendEvent = Simulator::ScheduleNow( &ApServer::SendTo, this, tagid);
-                  goto out;
-              }
-              else {
-                for (size_t i = 0; i<m_initTime.size(); i++ ) {
-                  if ( !m_initTime[i].empty() && ( m_vecTagValue[i].size() == m_nStations ||
-                      ( Simulator::Now().GetMilliSeconds() - m_initTime[i].at(0)) >= m_interval.GetMilliSeconds() ) ) {
-                    m_listTagid.push_back( m_vecTagValue[i].at(0));
-                    m_vecTagValue[i].clear();
-                    m_initTime[i].clear();
-                    //m_sendEvent = Simulator::ScheduleNow ( &ApServer::SendTo, this, tagid);
-                    goto out;
-                  }
-                }
-              }
-              goto out;
-            }
-          } //end for
-          for (size_t i = 0; i < m_vecTagValue.size(); i++) {
-            if (m_vecTagValue[i].empty()) {
-              m_vecTagValue[i].push_back(m_tagValue);
-              m_initTime[i].push_back(Simulator::Now().GetMilliSeconds());
-              if (m_vecTagValue[i].size() == m_nStations || 
-                  (Simulator::Now().GetMilliSeconds() - m_initTime[i].at(0) ) >= m_interval.GetMilliSeconds() ) {
-                m_listTagid.push_back(  m_vecTagValue[i].at(0));
-                m_vecTagValue[i].clear();
-                m_initTime[i].clear();
-                //m_sendEvent = Simulator::ScheduleNow ( &ApServer::SendTo, this, tagid);
-                break;
-              }
-              else {
-                for (size_t i = 0; i<m_initTime.size(); i++ ) {
-                  if ( !m_initTime[i].empty() && ( m_vecTagValue[i].size() == m_nStations ||
-                      ( Simulator::Now().GetMilliSeconds() - m_initTime[i].at(0)) >= m_interval.GetMilliSeconds() )) {
-                    m_listTagid.push_back( m_vecTagValue[i].at(0));
-                    m_vecTagValue[i].clear();
-                    m_initTime[i].clear();
-                   //m_sendEvent = Simulator::ScheduleNow (&ApServer::SendTo, this, tagid);
-                   break;
-                  }
-                }
-              }
-              break;
 
+          //check if first time seeing the tag
+          if (m_tag2TagVec.find(m_tagValue) == m_tag2TagVec.end() ) {
+            // first time
+            m_tag2TagVec[m_tagValue].push_back(m_tagValue);
+            m_tag2Time[m_tagValue] = Simulator::Now().GetMilliSeconds();
+          }
+          else{
+            m_tag2TagVec[m_tagValue].push_back(m_tagValue);
+          }
+
+          for (auto tagVal = m_tag2TagVec.cbegin(); tagVal != m_tag2TagVec.cend(); ) {
+            auto key = tagVal->first;
+
+            if ( tagVal->second.size() == m_nStations || 
+                ( Simulator::Now().GetMilliSeconds() - m_tag2Time.at(key) ) 
+                >= m_interval.GetMilliSeconds() )
+            {
+            m_listTagid.push_back(key);
+            tagVal = m_tag2TagVec.erase(tagVal);
+            m_tag2Time.erase(key);
             }
-          } //end for
-          out:
-          ;
+            else
+              ++tagVal;
+
+          } //end for 1
         }
     }
 }
@@ -332,17 +300,12 @@ ApServer::SendTo (void)
 {
   NS_LOG_FUNCTION(this); 
   NS_ASSERT(m_sendEvent.IsExpired());
-  /*SeqTsHeader seqTs;
-  PacketTag tag;
-  seqTs.SetSeq(m_sent);
-  Ptr<Packet> p = Create<Packet> (m_size-(8+4));// 8+4 : the size of the seqTs
-                                                 // header
-  p->AddHeader (seqTs);*/
+
   if (m_listTagid.empty()) {
     m_sendEvent = Simulator::Schedule(MilliSeconds(5), &ApServer::SendTo, this);
   }
   else {
-    //while (!m_listTagid.empty()) {
+
       SeqTsHeader seqTs;
       PacketTag tag;
       seqTs.SetSeq(m_sent);
@@ -357,14 +320,12 @@ ApServer::SendTo (void)
       if ( (m_socket->SendTo(p, 0, m_peerAddress)) >= 0 )
       {
         ++m_sent;
-        m_sendEvent = Simulator::Schedule(MilliSeconds(1), &ApServer::SendTo, this);
+        m_sendEvent = Simulator::Schedule(MilliSeconds(5), &ApServer::SendTo, this);
       }
       else 
       {
         NS_LOG_INFO ("Error while sending " << m_size);
       }
-    //}
-    //m_sendEvent = Simulator::Schedule(MilliSeconds(5), &ApServer::SendTo, this);
   }
 }
 

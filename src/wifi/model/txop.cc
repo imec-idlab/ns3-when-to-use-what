@@ -307,7 +307,6 @@ Txop::UpdateFailedCw(uint8_t linkId)
     link.cw = std::max(link.cw, GetMinCw(linkId));
     m_cwTrace(link.cw, linkId);
 }
-
 uint32_t
 Txop::GetBackoffSlots(uint8_t linkId) const
 {

@@ -28,6 +28,7 @@
 #include <cstdint>
 #include <list>
 #include <vector>
+#include <map>
 
 namespace ns3 {
 /**
@@ -116,10 +117,10 @@ private:
   EventId m_sendEvent; //!< Event to send the next packet
   uint32_t m_sent; //!< Counter for sent packets
   uint64_t m_tagValue; //!< packet tags
-  std::vector<std::vector<  uint64_t>> m_vecTagValue;
+  std::map<uint64_t, std::vector<uint64_t> > m_tag2TagVec;
+  std::map<uint64_t, int64_t > m_tag2Time;
   uint64_t m_totalRx;   //!< Total bytes received
   std::size_t m_nStations;
-  std::vector <std::vector <int64_t> > m_initTime;
   std::list<uint64_t> m_listTagid;
 
 

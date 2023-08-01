@@ -106,7 +106,7 @@ int  main(int argc, char *argv[])
   std::string dlAckSeqType {"NO-OFDMA"};
   bool enableUlOfdma {false};
   bool enableBsrp {false};
-  Time accessReqInterval {0.000005};
+  Time accessReqInterval {0};
   bool useRts {true};
   bool useExtendedBlockAck {false};
   bool useMuEdca {true};
@@ -444,7 +444,7 @@ int  main(int argc, char *argv[])
   }
   staUdpClient.SetAttribute ("PacketSize", UintegerValue (ulPayloadSize));
   ApplicationContainer staUdpclientApp = staUdpClient.Install (wifiStaNodes);
-  staUdpclientApp.StartWithJitter (Seconds (0.0031), uv);
+  staUdpclientApp.StartWithJitter (Seconds (0), uv);
   staUdpclientApp.Stop (Seconds (simulationTime + 1));
 
   Simulator::Schedule (Seconds (0), &Ipv4GlobalRoutingHelper::PopulateRoutingTables);
