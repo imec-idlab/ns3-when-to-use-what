@@ -346,6 +346,9 @@ int main (int argc, char *argv[])
   Config::SetDefault ("ns3::WifiRemoteStationManager::MaxSsrc", UintegerValue (32));
   Config::SetDefault ("ns3::WifiRemoteStationManager::MaxSlrc", UintegerValue (32));
 
+  //Send retx (instead of BAR) in case of missed BA
+  Config::SetDefault ("ns3::QosTxop::UseExplicitBarAfterMissedBlockAck", BooleanValue (false));
+
   simulationTime += startLogTime; // extend simulation time
   NetDeviceContainer apDevice, staDevices;
   WifiMacHelper mac;
