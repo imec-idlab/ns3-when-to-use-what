@@ -419,7 +419,8 @@ int main (int argc, char *argv[])
                                       "AccessReqInterval", TimeValue (accessReqInterval),
                                       "DelayAccessReqUponAccess", BooleanValue (true),
                                       "UseCentral26TonesRus", BooleanValue (UseCentral26TonesRus),
-                                      "NStations", UintegerValue (74));
+                                      "NStations", UintegerValue (74),
+                                      "UlPsduSize", UintegerValue(1500));
         }
       mac.SetType ("ns3::ApWifiMac",
                   "EnableBeaconJitter", BooleanValue (false),
