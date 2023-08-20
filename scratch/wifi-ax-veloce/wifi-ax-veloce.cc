@@ -253,10 +253,10 @@ int  main(int argc, char *argv[])
       Config::SetDefault ("ns3::HeConfiguration::MuVoCwMax", UintegerValue (32767));
 
       //STA timer (validity of set)
-      Config::SetDefault ("ns3::HeConfiguration::BkMuEdcaTimer", TimeValue (MicroSeconds (8192)));
-      Config::SetDefault ("ns3::HeConfiguration::BeMuEdcaTimer", TimeValue (MicroSeconds (8192)));
-      Config::SetDefault ("ns3::HeConfiguration::ViMuEdcaTimer", TimeValue (MicroSeconds (8192)));
-      Config::SetDefault ("ns3::HeConfiguration::VoMuEdcaTimer", TimeValue (MicroSeconds (8192)));
+      Config::SetDefault ("ns3::HeConfiguration::BkMuEdcaTimer", TimeValue (MicroSeconds (2088960)));
+      Config::SetDefault ("ns3::HeConfiguration::BeMuEdcaTimer", TimeValue (MicroSeconds (2088960)));
+      Config::SetDefault ("ns3::HeConfiguration::ViMuEdcaTimer", TimeValue (MicroSeconds (2088960)));
+      Config::SetDefault ("ns3::HeConfiguration::VoMuEdcaTimer", TimeValue (MicroSeconds (2088960)));
   }
 
   //sifs and slot time
@@ -339,9 +339,10 @@ int  main(int argc, char *argv[])
                                       "EnableUlOfdma", BooleanValue (enableUlOfdma),
                                       "EnableBsrp", BooleanValue (enableBsrp),
                                       "AccessReqInterval", TimeValue (accessReqInterval),
-                                      "DelayAccessReqUponAccess", BooleanValue (true),
+                                      "DelayAccessReqUponAccess", BooleanValue (false),
                                       "UseCentral26TonesRus", BooleanValue (false),
-                                      "NStations", UintegerValue (74));
+                                      "NStations", UintegerValue (74),
+                                      "AccessReqAc",EnumValue(AcIndex::AC_VI));
         }
       wifimac.SetType ("ns3::ApWifiMac",
                   "EnableBeaconJitter", BooleanValue (false),
@@ -393,8 +394,8 @@ int  main(int argc, char *argv[])
    * jitter for random start time
    * */
 
-  Ptr<UniformRandomVariable> uv = CreateObject<UniformRandomVariable>();
-  uv->SetAttribute("Max", DoubleValue(0.005));
+  Ptr<UniformRandomVariable> rv = CreateObject<UniformRandomVariable>();
+  rv->SetAttribute("Max", DoubleValue(0.002));
 
   uint16_t port = {9};
 
@@ -434,6 +435,7 @@ int  main(int argc, char *argv[])
   {
     staUdpClient.SetAttribute ("EnableRandom", BooleanValue (false));
     staUdpClient.SetAttribute ("Interval", TimeValue (Seconds (interval)));
+    staUdpClient.SetAttribute ("StartSendInterval", TimeValue (Seconds (interval - 0.002)));
   }
   else //Poisson traffic
   {
@@ -444,7 +446,7 @@ int  main(int argc, char *argv[])
   }
   staUdpClient.SetAttribute ("PacketSize", UintegerValue (ulPayloadSize));
   ApplicationContainer staUdpclientApp = staUdpClient.Install (wifiStaNodes);
-  staUdpclientApp.StartWithJitter (Seconds (0), uv);
+  staUdpclientApp.StartWithJitter (Seconds (0), rv );
   staUdpclientApp.Stop (Seconds (simulationTime + 1));
 
   Simulator::Schedule (Seconds (0), &Ipv4GlobalRoutingHelper::PopulateRoutingTables);

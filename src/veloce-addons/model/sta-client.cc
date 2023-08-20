@@ -60,6 +60,10 @@ StaClient::GetTypeId (void)
                    "The time to wait between packets", TimeValue (Seconds (1.0)),
                    MakeTimeAccessor (&StaClient::m_interval),
                    MakeTimeChecker ())
+    .AddAttribute ("StartSendInterval",
+                   "Interval within which packets are randomly sent", TimeValue (Seconds (1.0)),
+                   MakeTimeAccessor (&StaClient::m_startSendIntval),
+                   MakeTimeChecker ())
     .AddAttribute ("RemoteAddress",
                    "The destination Address of the outbound packets",
                    AddressValue (),
@@ -202,7 +206,7 @@ StaClient::StartApplication (void)
   else
   {
     Ptr<UniformRandomVariable> rand = CreateObject <UniformRandomVariable> ();
-    double delay = rand->GetValue (0, m_interval.GetSeconds ());
+    double delay = rand->GetValue (0, m_startSendIntval.GetSeconds ());
     std::cout << "Initial TX after delay = " << delay << "s" << std::endl;
     m_sendEvent = Simulator::Schedule (Seconds (delay), &StaClient::Send, this);
   }

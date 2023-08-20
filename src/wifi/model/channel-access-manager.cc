@@ -372,8 +372,8 @@ ChannelAccessManager::DoGrantDcfAccess()
     {
         Ptr<Txop> txop = *i;
         if (txop->GetAccessStatus(m_linkId) == Txop::REQUESTED &&
-            (!txop->IsQosTxop() || !StaticCast<QosTxop>(txop)->EdcaDisabled(m_linkId)) &&
-            GetBackoffEndFor(txop) <= now)
+            (!StaticCast<QosTxop>(txop)->EdcaDisabled(m_linkId) ||
+             !txop->IsQosTxop()) && GetBackoffEndFor(txop) <= now)
         {
             /**
              * This is the first Txop we find with an expired backoff and which
@@ -387,8 +387,9 @@ ChannelAccessManager::DoGrantDcfAccess()
             for (Txops::iterator j = i; j != m_txops.end(); j++, k++)
             {
                 Ptr<Txop> otherTxop = *j;
-                if (otherTxop->GetAccessStatus(m_linkId) == Txop::REQUESTED &&
-                    GetBackoffEndFor(otherTxop) <= now)
+                if ( otherTxop->GetAccessStatus(m_linkId) == Txop::REQUESTED &&
+                     !StaticCast<QosTxop>(otherTxop)->EdcaDisabled(m_linkId) && 
+                     GetBackoffEndFor(otherTxop) <= now )
                 {
                     NS_LOG_DEBUG(
                         "dcf " << k << " needs access. backoff expired. internal collision. slots="
