@@ -188,7 +188,7 @@ ApServer::StartApplication (void)
 
   if (!m_staApFlag)
     m_sendEvent = Simulator::Schedule(MilliSeconds(5), &ApServer::SendTo, this);
- 
+
   if (m_socket6 == nullptr)
     {
       TypeId tid = TypeId::LookupByName ("ns3::UdpSocketFactory");
@@ -279,13 +279,20 @@ ApServer::HandleRead (Ptr<Socket> socket)
           for (auto tagVal = m_tag2TagVec.cbegin(); tagVal != m_tag2TagVec.cend(); ) {
             auto key = tagVal->first;
 
-            if ( tagVal->second.size() == m_nStations || 
-                ( Simulator::Now().GetMilliSeconds() - m_tag2Time.at(key) ) 
+            if ( tagVal->second.size() == m_nStations ||
+                ( Simulator::Now().GetMilliSeconds() - m_tag2Time.at(key) )
                 >= m_interval.GetMilliSeconds() )
             {
-            m_listTagid.push_back(key);
-            tagVal = m_tag2TagVec.erase(tagVal);
-            m_tag2Time.erase(key);
+              SeqTsHeader seqTs;
+              PacketTag tag;
+              seqTs.SetSeq(m_sent);
+              Ptr<Packet> p = Create<Packet> (m_size-(8+4));
+              p->AddHeader (seqTs);
+              tag.SetValue(key);
+              p->AddPacketTag(tag);
+              m_listTagid.push_back(p);
+              tagVal = m_tag2TagVec.erase(tagVal);
+              m_tag2Time.erase(key);
             }
             else
               ++tagVal;
@@ -298,34 +305,31 @@ ApServer::HandleRead (Ptr<Socket> socket)
 void
 ApServer::SendTo (void)
 {
-  NS_LOG_FUNCTION(this); 
+  NS_LOG_FUNCTION(this);
   NS_ASSERT(m_sendEvent.IsExpired());
 
-  if (m_listTagid.empty()) {
+  if (m_listTagid.empty())
+  {
     m_sendEvent = Simulator::Schedule(MilliSeconds(5), &ApServer::SendTo, this);
   }
-  else {
-
-      SeqTsHeader seqTs;
-      PacketTag tag;
-      seqTs.SetSeq(m_sent);
-      Ptr<Packet> p = Create<Packet> (m_size-(8+4));
-      p->AddHeader (seqTs);
-
-      uint64_t tagValue = m_listTagid.front();
+  else
+  {
+    while (!m_listTagid.empty())
+    {
+      Ptr<Packet> p = m_listTagid.front();
       m_listTagid.pop_front();
-      tag.SetValue(tagValue);
-      p->AddPacketTag(tag);
-      
+
       if ( (m_socket->SendTo(p, 0, m_peerAddress)) >= 0 )
       {
         ++m_sent;
-        m_sendEvent = Simulator::Schedule(MilliSeconds(5), &ApServer::SendTo, this);
+        //m_sendEvent = Simulator::Schedule(MilliSeconds(5), &ApServer::SendTo, this);
       }
-      else 
+      else
       {
         NS_LOG_INFO ("Error while sending " << m_size);
       }
+    }
+    m_sendEvent = Simulator::Schedule(MilliSeconds(5), &ApServer::SendTo, this);
   }
 }
 

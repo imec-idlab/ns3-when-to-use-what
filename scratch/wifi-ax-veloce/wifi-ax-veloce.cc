@@ -68,20 +68,24 @@ void SinrTrace (Mac48Address addr, double sinr)
 }
 
 
-void RxTrace ( Ptr<const Packet> p, const Address &src, const Address &dst)
+void RxTrace ( double startLogTime, Ptr<const Packet> p, const Address &src, const Address &dst)
 {
   Ptr<Packet> pkt = p->Copy ();
   SeqTsHeader seqTs;
   PacketTag tag;
   pkt->RemovePacketTag(tag);
   pkt->RemoveHeader(seqTs);
+  startLogTime *= 1e+9;
 
-  g_statsMap[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (dst).GetIpv4 ())].rxBytes += p->GetSize ();
-  g_statsMap[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (dst).GetIpv4 ())].pktDelays.push_back ((Simulator::Now() - seqTs.GetTs ()).GetSeconds ());
-  g_statsMap[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (dst).GetIpv4 ())].pktTag.push_back (tag.GetValue());
-  g_statsMap[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (dst).GetIpv4 ())].genTime.push_back(seqTs.GetTs().GetSeconds() );
-  g_statsMap[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (dst).GetIpv4 ())].rxTime.push_back(Simulator::Now().GetSeconds());
-  g_statsMap[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (dst).GetIpv4 ())].src.push_back( g_Ip2Mac.at (InetSocketAddress::ConvertFrom (src).GetIpv4 ()));
+  if (Simulator::Now().GetNanoSeconds () >= startLogTime) {
+
+    g_statsMap[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (dst).GetIpv4 ())].rxBytes += p->GetSize ();
+    g_statsMap[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (dst).GetIpv4 ())].pktDelays.push_back ((Simulator::Now() - seqTs.GetTs ()).GetSeconds ());
+    g_statsMap[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (dst).GetIpv4 ())].pktTag.push_back (tag.GetValue());
+    g_statsMap[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (dst).GetIpv4 ())].genTime.push_back(seqTs.GetTs().GetSeconds() );
+    g_statsMap[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (dst).GetIpv4 ())].rxTime.push_back(Simulator::Now().GetSeconds());
+    g_statsMap[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (dst).GetIpv4 ())].src.push_back( g_Ip2Mac.at (InetSocketAddress::ConvertFrom (src).GetIpv4 ()));
+  }
 }
 
 int  main(int argc, char *argv[])
@@ -93,6 +97,7 @@ int  main(int argc, char *argv[])
   std::size_t nStations {1};
   double apHeight {3}; //meters
   double staHeight {1}; //meters
+  double startLogTime = {1.030};
 
   std::string frequency {"5"}; //whether 2.4, 5 or 6 GHz
   uint32_t channelWidth {40}; //for 2.4 <= 40 MHz, for 5 <= 160 MHz
@@ -102,6 +107,7 @@ int  main(int argc, char *argv[])
   bool enableShadowing = false;
   double txPowerStart = {16.0206};
   double txPowerEnd = {16.0206};
+  uint32_t nMsdus = 1;
 
   std::string dlAckSeqType {"NO-OFDMA"};
   bool enableUlOfdma {false};
@@ -110,12 +116,15 @@ int  main(int argc, char *argv[])
   bool useRts {true};
   bool useExtendedBlockAck {false};
   bool useMuEdca {true};
+  uint32_t nMpdus = 1;
+  bool UseCentral26TonesRus = {false};
 
   uint32_t ulPayloadSize = 93; // must fit in the max TX duration when transmitting at MCS 0 over an RU of 26 tones
   uint32_t dlPayloadSize = 500;
   std::string trafficType {"CBR"};
   double interval {0.005}; //seconds
   std::string accessCategory {"AC_VO"};
+  bool enableAggregation {false};
 
   CommandLine cmd (__FILE__);
   //Experiment set-up
@@ -126,6 +135,7 @@ int  main(int argc, char *argv[])
   cmd.AddValue ("nStations", "Number of non-AP HE stations", nStations);
   cmd.AddValue ("apHeight", "Height of AP [m]", apHeight);
   cmd.AddValue ("staHeight", "Height of STA [m]", staHeight);
+  cmd.AddValue ("startLogTime","Time to begin logging [seconds]",startLogTime);
 
   //PHY params
   cmd.AddValue ("frequency", "Whether working in the 2.4, 5 or 6 GHz band (other values gets rejected)", frequency);
@@ -136,6 +146,8 @@ int  main(int argc, char *argv[])
   cmd.AddValue ("enableShadowing", "Enable/disable gaussian shadowing", enableShadowing);
   cmd.AddValue ("txPowerStart", "Minimum available transmissions level (dBm)", txPowerStart);
   cmd.AddValue ("txPowerEnd", "Maximum available transmissions level (dBm)", txPowerEnd);
+  cmd.AddValue ("nMsdus", "Number of aggregated MSDUs (=< 11398/740 for VHT/HE/EHT PPDUs)", nMsdus);
+  cmd.AddValue ("UseCentral26TonesRus","Enable/Disable the use of Cenral 26 tone RUs", UseCentral26TonesRus);
 
   //MAC params
   cmd.AddValue ("useRts", "Enable/disable RTS/CTS", useRts);
@@ -145,12 +157,14 @@ int  main(int argc, char *argv[])
   cmd.AddValue ("enableBsrp", "Enable BSRP (useful if DL and UL OFDMA are enabled and TCP is used)", enableBsrp);
   cmd.AddValue ("muSchedAccessReqInterval", "Duration of the interval between two requests for channel access made by the MU scheduler", accessReqInterval);
   cmd.AddValue ("useMuEdca", "Enable/disable Specific EDCA parameters set", useMuEdca);
+  cmd.AddValue ("nMpdus", "Number of aggregated MPDUs (=< 6500631/740 for HE PPDUs)", nMpdus);
 
   //Traffic params
   cmd.AddValue ("ulPayloadSize", "the application payload size in bytes for ul traffic", ulPayloadSize);
   cmd.AddValue ("dlPayloadSize", "the application payload size in bytes for dl traffic", dlPayloadSize);
   cmd.AddValue ("interval", "Average inter-packet interval [s]", interval);
   cmd.AddValue ("accessCategory", "Access category for traffic: AC_BE, AC_BK, AC_VO, AC_VI", accessCategory);
+  cmd.AddValue ("enableAggregation", "Enable/disable mpdu/msdu aggregation", enableAggregation);
 
   cmd.Parse (argc, argv);
 
@@ -269,6 +283,9 @@ int  main(int argc, char *argv[])
 
   Config::SetDefault("ns3::QosFrameExchangeManager::SetQueueSize", BooleanValue(true));
 
+  if (enableAggregation)
+    Config::SetDefault ("ns3::WifiRemoteStationManager::FragmentationThreshold", StringValue ("990000"));
+
   NetDeviceContainer apNetDevice, staNetDevices;
   WifiMacHelper wifimac;
   WifiHelper wifi;
@@ -325,12 +342,20 @@ int  main(int argc, char *argv[])
       SpectrumWifiPhyHelper phy;
       phy.SetPcapDataLinkType (WifiPhyHelper::DLT_IEEE802_11_RADIO);
       phy.SetChannel (spectrumChannel);
-
-      wifimac.SetType ("ns3::StaWifiMac",
-                  "Ssid", SsidValue (ssid));
       phy.Set ("ChannelSettings", StringValue (channelStr));
       phy.Set("TxPowerStart", DoubleValue(txPowerStart ));
       phy.Set("TxPowerEnd", DoubleValue(txPowerEnd ));
+
+      if (enableAggregation){
+        wifimac.SetType ("ns3::StaWifiMac",
+                  "Ssid", SsidValue (ssid),
+                  "VI_MaxAmsduSize", UintegerValue (nMsdus * ulPayloadSize ),
+                  "VI_MaxAmpduSize", UintegerValue (nMpdus * ulPayloadSize ));
+      } else {
+        wifimac.SetType ("ns3::StaWifiMac",
+                  "Ssid", SsidValue (ssid));
+      }
+
       staNetDevices = wifi.Install (phy, wifimac, wifiStaNodes);
 
       if (dlAckSeqType != "NO-OFDMA")
@@ -340,13 +365,24 @@ int  main(int argc, char *argv[])
                                       "EnableBsrp", BooleanValue (enableBsrp),
                                       "AccessReqInterval", TimeValue (accessReqInterval),
                                       "DelayAccessReqUponAccess", BooleanValue (false),
-                                      "UseCentral26TonesRus", BooleanValue (false),
+                                      "UseCentral26TonesRus", BooleanValue (UseCentral26TonesRus),
                                       "NStations", UintegerValue (74),
-                                      "AccessReqAc",EnumValue(AcIndex::AC_VI));
+                                      "AccessReqAc",EnumValue(AcIndex::AC_VO));
         }
-      wifimac.SetType ("ns3::ApWifiMac",
+      if (enableAggregation) {
+        wifimac.SetType ("ns3::ApWifiMac",
+                  "EnableBeaconJitter", BooleanValue (false),
+                  "Ssid", SsidValue (ssid),
+                  "VI_MaxAmsduSize", UintegerValue (nMsdus * dlPayloadSize ),
+                  "VI_MaxAmpduSize", UintegerValue (nMpdus * dlPayloadSize ));
+
+      }
+      else{
+        wifimac.SetType ("ns3::ApWifiMac",
                   "EnableBeaconJitter", BooleanValue (false),
                   "Ssid", SsidValue (ssid));
+      }
+
       apNetDevice = wifi.Install (phy, wifimac, wifiApNode);
 
       phy.EnablePcap("wifi-ax-ofdma-ap", apNetDevice); // enable pcap tracing
@@ -361,17 +397,33 @@ int  main(int argc, char *argv[])
       YansWifiPhyHelper YansPhy;
       YansPhy.SetPcapDataLinkType (WifiPhyHelper::DLT_IEEE802_11_RADIO);
       YansPhy.SetChannel (channel); //channel.Create ()
-
-      wifimac.SetType ("ns3::StaWifiMac",
+      if (enableAggregation){
+        wifimac.SetType ("ns3::StaWifiMac",
+                  "Ssid", SsidValue (ssid),
+                  "VI_MaxAmsduSize", UintegerValue (nMsdus * ulPayloadSize),
+                  "VI_MaxAmpduSize", UintegerValue (nMpdus * ulPayloadSize ));
+      }
+      else {
+        wifimac.SetType ("ns3::StaWifiMac",
                   "Ssid", SsidValue (ssid));
+      }
       YansPhy.Set ("ChannelSettings", StringValue (channelStr));
       YansPhy.Set("TxPowerStart", DoubleValue(txPowerStart ));
       YansPhy.Set("TxPowerEnd", DoubleValue(txPowerEnd ));
       staNetDevices = wifi.Install (YansPhy, wifimac, wifiStaNodes);
 
-      wifimac.SetType ("ns3::ApWifiMac",
+      if (enableAggregation){
+        wifimac.SetType ("ns3::ApWifiMac",
+                  "EnableBeaconJitter", BooleanValue (false),
+                  "Ssid", SsidValue (ssid),
+                  "VI_MaxAmsduSize", UintegerValue (nMsdus * dlPayloadSize),
+                  "VI_MaxAmpduSize", UintegerValue (nMpdus * dlPayloadSize));
+      }
+      else {
+         wifimac.SetType ("ns3::ApWifiMac",
                   "EnableBeaconJitter", BooleanValue (false),
                   "Ssid", SsidValue (ssid));
+      }
       apNetDevice = wifi.Install (YansPhy, wifimac, wifiApNode);
       YansPhy.EnablePcap("wifi-ax-edca-ap", apNetDevice); // enable pcap tracing
       YansPhy.EnablePcap("wifi-ax-edca-sta", staNetDevices);
@@ -395,7 +447,7 @@ int  main(int argc, char *argv[])
    * */
 
   Ptr<UniformRandomVariable> rv = CreateObject<UniformRandomVariable>();
-  rv->SetAttribute("Max", DoubleValue(0.002));
+  rv->SetAttribute("Max", DoubleValue(interval));
 
   uint16_t port = {9};
 
@@ -414,7 +466,7 @@ int  main(int argc, char *argv[])
   ApplicationContainer apServerApp = apServer.Install (wifiApNode);
 
   apServerApp.Start(Seconds (0));
-  apServerApp.Stop (Seconds (simulationTime + 1));
+  apServerApp.Stop (Seconds (simulationTime + startLogTime));
 
   // Sta Server
   for (size_t i = 0; i < nStations; i++) {
@@ -425,7 +477,7 @@ int  main(int argc, char *argv[])
     staServer.SetAttribute("StaApFlag", BooleanValue(true));
     ApplicationContainer staServerApp = staServer.Install(wifiStaNodes.Get(i));
     staServerApp.Start(Seconds(0));
-    staServerApp.Stop(Seconds(simulationTime + 1 ));
+    staServerApp.Stop(Seconds(simulationTime + startLogTime ));
   }
 
     //Udp Sta
@@ -435,7 +487,7 @@ int  main(int argc, char *argv[])
   {
     staUdpClient.SetAttribute ("EnableRandom", BooleanValue (false));
     staUdpClient.SetAttribute ("Interval", TimeValue (Seconds (interval)));
-    staUdpClient.SetAttribute ("StartSendInterval", TimeValue (Seconds (interval - 0.002)));
+    staUdpClient.SetAttribute ("StartSendInterval", TimeValue (Seconds (interval)));
   }
   else //Poisson traffic
   {
@@ -446,8 +498,8 @@ int  main(int argc, char *argv[])
   }
   staUdpClient.SetAttribute ("PacketSize", UintegerValue (ulPayloadSize));
   ApplicationContainer staUdpclientApp = staUdpClient.Install (wifiStaNodes);
-  staUdpclientApp.StartWithJitter (Seconds (0), rv );
-  staUdpclientApp.Stop (Seconds (simulationTime + 1));
+  staUdpclientApp.Start (Seconds (0) );
+  staUdpclientApp.Stop (Seconds (simulationTime + startLogTime));
 
   Simulator::Schedule (Seconds (0), &Ipv4GlobalRoutingHelper::PopulateRoutingTables);
 
@@ -481,10 +533,10 @@ int  main(int argc, char *argv[])
     }
 */
 
-    Config::ConnectWithoutContext("/NodeList/*/ApplicationList/*/$ns3::ApServer/RxWithAddresses", MakeCallback(&RxTrace));
+  Config::ConnectWithoutContext("/NodeList/*/ApplicationList/*/$ns3::ApServer/RxWithAddresses", MakeBoundCallback(&RxTrace,startLogTime));
 
-  ProgressBar pg (Seconds(simulationTime + 1 ));
-  Simulator::Stop (Seconds (simulationTime + 1 ));
+  ProgressBar pg (Seconds(simulationTime + startLogTime ));
+  Simulator::Stop (Seconds (simulationTime + startLogTime ));
   Simulator::Run ();
 
   // Statistics

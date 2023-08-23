@@ -121,7 +121,7 @@ private:
   std::map<uint64_t, int64_t > m_tag2Time;
   uint64_t m_totalRx;   //!< Total bytes received
   std::size_t m_nStations;
-  std::list<uint64_t> m_listTagid;
+  std::list<Ptr<Packet> > m_listTagid;
 
 
   /// Callbacks for tracing the packet Rx events
