@@ -121,11 +121,12 @@ private:
   std::map<uint64_t, int64_t > m_tag2Time;
   uint64_t m_totalRx;   //!< Total bytes received
   std::size_t m_nStations;
-  std::list<Ptr<Packet> > m_listTagid;
+  std::list< Ptr<Packet> > m_listTagid;
+  std::vector<uint64_t> m_sentTags;
 
 
   /// Callbacks for tracing the packet Rx events
-  TracedCallback<Ptr<const Packet> > m_rxTrace;
+  TracedCallback<Ptr<const Packet>, const Address &, const Address &, bool > m_rxTrace;
 
   /// Callbacks for tracing the packet Rx events, includes source and destination addresses
   TracedCallback<Ptr<const Packet>, const Address &, const Address &> m_rxTraceWithAddresses;

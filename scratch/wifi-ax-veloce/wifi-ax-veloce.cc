@@ -53,9 +53,14 @@ struct stats_t
   double sinr;
   uint64_t totalBeacons;
   uint64_t rxBytes;
-  std::vector<double> pktDelays,genTime, rxTime;
+  std::vector<double> pktDelays, genTime, rxTime;
   std::vector<uint64_t> pktTag;
   std::vector<Mac48Address> src;
+  //late packet parameters
+  uint64_t rxBytesLate;
+  std::vector<double> pktDelaysLate, genTimeLate, rxTimeLate;
+  std::vector<uint64_t> pktTagLate;
+  std::vector<Mac48Address> srcLate;
 };
 
 std::map<Mac48Address, stats_t> g_statsMap; //!< map for statistics for each station
@@ -68,9 +73,10 @@ void SinrTrace (Mac48Address addr, double sinr)
 }
 
 
-void RxTrace ( double startLogTime, Ptr<const Packet> p, const Address &src, const Address &dst)
+void RxTraceWithAddress ( double startLogTime, Ptr<const Packet> p, const Address &src, const Address &dst)
 {
   Ptr<Packet> pkt = p->Copy ();
+
   SeqTsHeader seqTs;
   PacketTag tag;
   pkt->RemovePacketTag(tag);
@@ -85,6 +91,28 @@ void RxTrace ( double startLogTime, Ptr<const Packet> p, const Address &src, con
     g_statsMap[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (dst).GetIpv4 ())].genTime.push_back(seqTs.GetTs().GetSeconds() );
     g_statsMap[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (dst).GetIpv4 ())].rxTime.push_back(Simulator::Now().GetSeconds());
     g_statsMap[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (dst).GetIpv4 ())].src.push_back( g_Ip2Mac.at (InetSocketAddress::ConvertFrom (src).GetIpv4 ()));
+  }
+}
+
+void RxTrace ( double startLogTime, Ptr< const Packet> p, const Address &src, const Address &dst,bool k)
+{
+  Ptr<Packet> pkt = p->Copy ();
+
+  SeqTsHeader seqTs;
+  PacketTag tag;
+  pkt->RemovePacketTag(tag);
+  pkt->RemoveHeader(seqTs);
+  startLogTime *= 1e+9;
+
+
+  if (Simulator::Now().GetNanoSeconds () >= startLogTime) 
+  {
+    g_statsMap[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (dst).GetIpv4 ())].rxBytesLate += p->GetSize ();
+    g_statsMap[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (dst).GetIpv4 ())].pktDelaysLate.push_back ((Simulator::Now() - seqTs.GetTs ()).GetSeconds ());
+    g_statsMap[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (dst).GetIpv4 ())].pktTagLate.push_back (tag.GetValue());
+    g_statsMap[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (dst).GetIpv4 ())].genTimeLate.push_back(seqTs.GetTs().GetSeconds() );
+    g_statsMap[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (dst).GetIpv4 ())].rxTimeLate.push_back(Simulator::Now().GetSeconds());
+    g_statsMap[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (dst).GetIpv4 ())].srcLate.push_back( g_Ip2Mac.at (InetSocketAddress::ConvertFrom (src).GetIpv4 ()));
   }
 }
 
@@ -125,6 +153,7 @@ int  main(int argc, char *argv[])
   double interval {0.005}; //seconds
   std::string accessCategory {"AC_VO"};
   bool enableAggregation {false};
+  double StartSendInterval {0.001}; //seconds
 
   CommandLine cmd (__FILE__);
   //Experiment set-up
@@ -165,6 +194,7 @@ int  main(int argc, char *argv[])
   cmd.AddValue ("interval", "Average inter-packet interval [s]", interval);
   cmd.AddValue ("accessCategory", "Access category for traffic: AC_BE, AC_BK, AC_VO, AC_VI", accessCategory);
   cmd.AddValue ("enableAggregation", "Enable/disable mpdu/msdu aggregation", enableAggregation);
+  cmd.AddValue ("StartSendInterval", "Time interval within which stations randomly send initial packet [Seconds]", StartSendInterval);
 
   cmd.Parse (argc, argv);
 
@@ -487,7 +517,7 @@ int  main(int argc, char *argv[])
   {
     staUdpClient.SetAttribute ("EnableRandom", BooleanValue (false));
     staUdpClient.SetAttribute ("Interval", TimeValue (Seconds (interval)));
-    staUdpClient.SetAttribute ("StartSendInterval", TimeValue (Seconds (interval)));
+    staUdpClient.SetAttribute ("StartSendInterval", TimeValue (Seconds(StartSendInterval)));
   }
   else //Poisson traffic
   {
@@ -522,18 +552,18 @@ int  main(int argc, char *argv[])
       apNetDevice.Get(i)->GetObject<WifiNetDevice>()->GetPhy()->GetPhyEntity(WIFI_MOD_CLASS_HE)->TraceConnectWithoutContext("SinrTrace", MakeBoundCallback (&SinrTrace, Mac48Address::ConvertFrom (apNetDevice.Get (i)->GetAddress ())));
     }
 
-/*
+
    for (uint32_t i = 0; i < apServerApp.GetN (); i++)
     {
-     // DynamicCast<ApServer> (apServerApp.Get (i))->TraceConnectWithoutContext ("RxWithAddresses", MakeBoundCallback (&RxTrace ));
+      DynamicCast<ApServer> (apServerApp.Get (i))->TraceConnectWithoutContext ("Rx", MakeBoundCallback (&RxTrace,startLogTime ));
     }
-    for (uint32_t i = 0; i < staServerApp.GetN (); i++)
+/*    for (uint32_t i = 0; i < staServerApp.GetN (); i++)
     {
       DynamicCast<ApServer> (staServerApp.Get (i))->TraceConnectWithoutContext ("RxWithAddresses", MakeBoundCallback (&RxTrace ));
     }
 */
 
-  Config::ConnectWithoutContext("/NodeList/*/ApplicationList/*/$ns3::ApServer/RxWithAddresses", MakeBoundCallback(&RxTrace,startLogTime));
+  Config::ConnectWithoutContext("/NodeList/*/ApplicationList/*/$ns3::ApServer/RxWithAddresses", MakeBoundCallback(&RxTraceWithAddress, startLogTime));
 
   ProgressBar pg (Seconds(simulationTime + startLogTime ));
   Simulator::Stop (Seconds (simulationTime + startLogTime ));
@@ -587,6 +617,18 @@ int  main(int argc, char *argv[])
     pktDistOutStream << "Packet_Tag\tReceived_from\tGeneration_time\tReception_time\tDelay_ms" << std::endl;
     for (size_t i = 0;  i < staStats.second.pktDelays.size(); i++) {
       pktDistOutStream << staStats.second.pktTag[i] <<"\t"<< staStats.second.src[i] <<"\t"<<staStats.second.genTime[i] * 1000 <<"\t"<<staStats.second.rxTime[i]* 1000<< "\t"<< staStats.second.pktDelays[i] * 1000 << std::endl;
+    }
+    pktDistOutStream.close();
+  }
+
+
+  for (auto &staStats : g_statsMap) {
+    std::ostringstream mac_str;
+    mac_str << staStats.first;
+    pktDistOutStream.open ("delayed_packet_" + mac_str.str(), std::ios::out);
+    pktDistOutStream << "Packet_Tag\tReceived_from\tGeneration_time\tReception_time\tDelay_ms" << std::endl;
+    for (size_t i = 0;  i < staStats.second.pktDelaysLate.size(); i++) {
+      pktDistOutStream << staStats.second.pktTagLate[i] <<"\t"<< staStats.second.srcLate[i] <<"\t"<<staStats.second.genTimeLate[i] * 1000 <<"\t"<<staStats.second.rxTimeLate[i]* 1000<< "\t"<< staStats.second.pktDelaysLate[i] * 1000 << std::endl;
     }
     pktDistOutStream.close();
   }

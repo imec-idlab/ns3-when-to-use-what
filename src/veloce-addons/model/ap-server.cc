@@ -35,7 +35,10 @@
 #include "ap-server.h"
 #include "ns3/packet-tag.h"
 #include "ns3/boolean.h"
+#include <algorithm>
 #include <cstdint>
+#include <utility>
+#include <vector>
 namespace ns3 {
 
 NS_LOG_COMPONENT_DEFINE ("ApServer");
@@ -115,6 +118,7 @@ ApServer::ApServer ()
   m_sent = 0;
   m_tagValue = 0;
   m_totalRx = 0;
+  m_sentTags = {};
 }
 
 ApServer::~ApServer ()
@@ -218,6 +222,7 @@ ApServer::StopApplication ()
     }
 }
 
+
 void
 ApServer::HandleRead (Ptr<Socket> socket)
 {
@@ -228,76 +233,75 @@ ApServer::HandleRead (Ptr<Socket> socket)
   while ((packet = socket->RecvFrom (from)))
     {
       socket->GetSockName (localAddress);
-      m_rxTrace (packet);
-      m_rxTraceWithAddresses (packet, from, m_localAddress);
       if (packet->GetSize () > 0)
         {
+          bool latePacket = false;
           uint32_t receivedSize = packet->GetSize ();
           m_totalRx += receivedSize;
+          Ptr<Packet> packet_copy = packet->Copy();
           PacketTag tag;
           packet->RemovePacketTag(tag);
           SeqTsHeader seqTs;
           packet->RemoveHeader (seqTs);
           uint32_t currentSequenceNumber = seqTs.GetSeq ();
-          if (InetSocketAddress::IsMatchingType (from))
-            {
-              NS_LOG_INFO ("TraceDelay: RX " << receivedSize <<
-                           " bytes from "<< InetSocketAddress::ConvertFrom (from).GetIpv4 () <<
-                           " Sequence Number: " << currentSequenceNumber <<
-                           " Uid: " << packet->GetUid () <<
-                           " TXtime: " << seqTs.GetTs () <<
-                           " RXtime: " << Simulator::Now () <<
-                           " Delay: " << Simulator::Now () - seqTs.GetTs ());
-            }
-          else if (Inet6SocketAddress::IsMatchingType (from))
-            {
-              NS_LOG_INFO ("TraceDelay: RX " << receivedSize <<
-                           " bytes from "<< Inet6SocketAddress::ConvertFrom (from).GetIpv6 () <<
-                           " Sequence Number: " << currentSequenceNumber <<
-                           " Uid: " << packet->GetUid () <<
-                           " TXtime: " << seqTs.GetTs () <<
-                           " RXtime: " << Simulator::Now () <<
-                           " Delay: " << Simulator::Now () - seqTs.GetTs ());
-            }
+          m_tagValue = tag.GetValue();
 
           m_lossCounter.NotifyReceived (currentSequenceNumber);
           m_received++;
-          m_tagValue = tag.GetValue();
-          if (m_staApFlag)
-            break;
 
+          // check for delayed packet
+          if (!m_sentTags.empty() && std::find(m_sentTags.begin(), m_sentTags.end(),
+                  m_tagValue ) !=  m_sentTags.end() )
+          {
+            latePacket = true;
+          }
+
+          if (!m_staApFlag && !latePacket ) { //AP not late
+            m_rxTraceWithAddresses (packet_copy, from, m_localAddress);
+          }
+          else if (!m_staApFlag && latePacket ) { //AP late
+            m_rxTrace (packet_copy, from, m_localAddress, true);
+            break;
+          }
+          else if (m_staApFlag) { //STA
+            m_rxTraceWithAddresses (packet_copy, from, m_localAddress);
+            break;
+          }
           //check if first time seeing the tag
           if (m_tag2TagVec.find(m_tagValue) == m_tag2TagVec.end() ) {
             // first time
-            m_tag2TagVec[m_tagValue].push_back(m_tagValue);
-            m_tag2Time[m_tagValue] = Simulator::Now().GetMilliSeconds();
+            std::vector<uint64_t> vec {m_tagValue};
+            m_tag2TagVec.insert(std::make_pair (m_tagValue, vec ));
+            m_tag2Time.insert(std::make_pair (m_tagValue, Simulator::Now().GetTimeStep()));
           }
           else{
-            m_tag2TagVec[m_tagValue].push_back(m_tagValue);
+            m_tag2TagVec.at(m_tagValue).push_back(m_tagValue);
           }
 
-          for (auto tagVal = m_tag2TagVec.cbegin(); tagVal != m_tag2TagVec.cend(); ) {
+          for (auto tagVal = m_tag2TagVec.cbegin(), next_tagVal = tagVal; tagVal != m_tag2TagVec.cend();
+              tagVal = next_tagVal) {
             auto key = tagVal->first;
+            ++next_tagVal;
 
             if ( tagVal->second.size() == m_nStations ||
-                ( Simulator::Now().GetMilliSeconds() - m_tag2Time.at(key) )
-                >= m_interval.GetMilliSeconds() )
+                ( Simulator::Now().GetMilliSeconds() - TimeStep( m_tag2Time.at(key)).GetMilliSeconds() )
+                >= m_interval.GetMilliSeconds())
             {
-              SeqTsHeader seqTs;
-              PacketTag tag;
+              seqTs.SetTs(m_tag2Time.at(key));
               seqTs.SetSeq(m_sent);
+              tag.SetValue(key);
+
               Ptr<Packet> p = Create<Packet> (m_size-(8+4));
               p->AddHeader (seqTs);
-              tag.SetValue(key);
               p->AddPacketTag(tag);
+
               m_listTagid.push_back(p);
-              tagVal = m_tag2TagVec.erase(tagVal);
+              m_sentTags.push_back(key);
+              
+              m_tag2TagVec.erase(tagVal);
               m_tag2Time.erase(key);
             }
-            else
-              ++tagVal;
-
-          } //end for 1
+          } //end for 
         }
     }
 }
@@ -314,22 +318,18 @@ ApServer::SendTo (void)
   }
   else
   {
-    while (!m_listTagid.empty())
-    {
-      Ptr<Packet> p = m_listTagid.front();
-      m_listTagid.pop_front();
+    Ptr<Packet> p = m_listTagid.front();
+    m_listTagid.pop_front();
 
-      if ( (m_socket->SendTo(p, 0, m_peerAddress)) >= 0 )
-      {
-        ++m_sent;
-        //m_sendEvent = Simulator::Schedule(MilliSeconds(5), &ApServer::SendTo, this);
-      }
-      else
-      {
-        NS_LOG_INFO ("Error while sending " << m_size);
-      }
+    if ( (m_socket->SendTo(p, 0, m_peerAddress)) >= 0 )
+    {
+      ++m_sent;
+      m_sendEvent = Simulator::Schedule(MilliSeconds(5), &ApServer::SendTo, this);
     }
-    m_sendEvent = Simulator::Schedule(MilliSeconds(5), &ApServer::SendTo, this);
+    else
+    {
+      NS_LOG_INFO ("Error while sending " << m_size);
+    }
   }
 }
 

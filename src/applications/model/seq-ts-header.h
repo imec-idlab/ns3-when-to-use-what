@@ -55,6 +55,11 @@ class SeqTsHeader : public Header
      */
     uint32_t GetSeq() const;
     /**
+     * \set the time stamp
+     */
+    void SetTs(uint64_t ts);
+
+    /**
      * \return the time stamp
      */
     Time GetTs() const;

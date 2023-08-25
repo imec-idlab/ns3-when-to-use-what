@@ -52,6 +52,13 @@ SeqTsHeader::GetSeq() const
     return m_seq;
 }
 
+void
+SeqTsHeader::SetTs(uint64_t ts)
+{
+  NS_LOG_FUNCTION(this);
+  m_ts = ts;
+}
+
 Time
 SeqTsHeader::GetTs() const
 {
