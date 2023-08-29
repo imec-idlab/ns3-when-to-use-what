@@ -1,0 +1,13 @@
+TO RUN ON CLUSTER:
+------------------------
+Make necessary parametric changes to the file 'Edca.slurm'
+Run the file 'run.sh' making sure the file 'edca.csv' is the same directory
+Move the 'results data' to your local computer.
+
+TO PLOT
+-----------
+Fire-up jupyter notebook in the same directory as results.
+Navigate to the appropriate plotting script
+    View --> Left Sidebar --> Show Table of Contents
+Change the folder names accordingly
+Run to plot.
