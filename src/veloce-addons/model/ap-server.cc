@@ -287,12 +287,13 @@ ApServer::HandleRead (Ptr<Socket> socket)
                 ( Simulator::Now().GetMilliSeconds() - TimeStep( m_tag2Time.at(key)).GetMilliSeconds() )
                 >= m_interval.GetMilliSeconds())
             {
-              seqTs.SetTs(m_tag2Time.at(key));
-              seqTs.SetSeq(m_sent);
+              //seqTs.SetTs(m_tag2Time.at(key));
+              SeqTsHeader seqTs1;
+              seqTs1.SetSeq(m_sent);
               tag.SetValue(key);
 
               Ptr<Packet> p = Create<Packet> (m_size-(8+4));
-              p->AddHeader (seqTs);
+              p->AddHeader (seqTs1);
               p->AddPacketTag(tag);
 
               m_listTagid.push_back(p);
