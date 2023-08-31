@@ -126,6 +126,8 @@ int  main(int argc, char *argv[])
   double apHeight {3}; //meters
   double staHeight {1}; //meters
   double startLogTime = {1.030};
+  bool downlinkOnly = {false};
+
 
   std::string frequency {"5"}; //whether 2.4, 5 or 6 GHz
   uint32_t channelWidth {40}; //for 2.4 <= 40 MHz, for 5 <= 160 MHz
@@ -137,6 +139,7 @@ int  main(int argc, char *argv[])
   double txPowerEnd = {16.0206};
   uint32_t nMsdus = 1;
 
+
   std::string dlAckSeqType {"NO-OFDMA"};
   bool enableUlOfdma {false};
   bool enableBsrp {false};
@@ -147,6 +150,7 @@ int  main(int argc, char *argv[])
   uint32_t nMpdus = 1;
   bool UseCentral26TonesRus = {false};
 
+
   uint32_t ulPayloadSize = 93; // must fit in the max TX duration when transmitting at MCS 0 over an RU of 26 tones
   uint32_t dlPayloadSize = 500;
   std::string trafficType {"CBR"};
@@ -154,6 +158,7 @@ int  main(int argc, char *argv[])
   std::string accessCategory {"AC_VO"};
   bool enableAggregation {false};
   double StartSendInterval {0.001}; //seconds
+
 
   CommandLine cmd (__FILE__);
   //Experiment set-up
@@ -165,6 +170,8 @@ int  main(int argc, char *argv[])
   cmd.AddValue ("apHeight", "Height of AP [m]", apHeight);
   cmd.AddValue ("staHeight", "Height of STA [m]", staHeight);
   cmd.AddValue ("startLogTime","Time to begin logging [seconds]",startLogTime);
+  cmd.AddValue ("downlinkOnly","Tells AP not to include application delay", downlinkOnly);
+
 
   //PHY params
   cmd.AddValue ("frequency", "Whether working in the 2.4, 5 or 6 GHz band (other values gets rejected)", frequency);
@@ -492,6 +499,7 @@ int  main(int argc, char *argv[])
   apServer.SetAttribute("NStations", UintegerValue(nStations));
   apServer.SetAttribute("LocalAddress", AddressValue(apLocalAddress) );
   apServer.SetAttribute ("Interval", TimeValue (Seconds (interval)));
+  apServer.SetAttribute("DownlinkOnly", BooleanValue(downlinkOnly));
 
   ApplicationContainer apServerApp = apServer.Install (wifiApNode);
 

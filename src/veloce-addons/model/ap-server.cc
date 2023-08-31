@@ -68,6 +68,12 @@ ApServer::GetTypeId (void)
                    BooleanValue (false),
                    MakeBooleanAccessor (&ApServer::m_staApFlag),
                    MakeBooleanChecker ())
+    .AddAttribute ("DownlinkOnly",
+                   "To Enable/Disable inclussion of application delay",
+                   BooleanValue (false),
+                   MakeBooleanAccessor (&ApServer::m_downlinkOnly),
+                   MakeBooleanChecker ())
+
     .AddAttribute ("Port",
                    "Port on which we listen for incoming packets.",
                    UintegerValue (100),
@@ -119,6 +125,7 @@ ApServer::ApServer ()
   m_tagValue = 0;
   m_totalRx = 0;
   m_sentTags = {};
+  m_downlinkOnly = false;
 }
 
 ApServer::~ApServer ()
@@ -287,16 +294,10 @@ ApServer::HandleRead (Ptr<Socket> socket)
                 ( Simulator::Now().GetMilliSeconds() - TimeStep( m_tag2Time.at(key)).GetMilliSeconds() )
                 >= m_interval.GetMilliSeconds())
             {
-              //seqTs.SetTs(m_tag2Time.at(key));
-              SeqTsHeader seqTs1;
-              seqTs1.SetSeq(m_sent);
-              tag.SetValue(key);
+              if (!m_downlinkOnly)
+                m_listSeqTs.push_back( m_tag2Time.at(key) );
 
-              Ptr<Packet> p = Create<Packet> (m_size-(8+4));
-              p->AddHeader (seqTs1);
-              p->AddPacketTag(tag);
-
-              m_listTagid.push_back(p);
+              m_listTagid.push_back(key);
               m_sentTags.push_back(key);
               
               m_tag2TagVec.erase(tagVal);
@@ -319,7 +320,18 @@ ApServer::SendTo (void)
   }
   else
   {
-    Ptr<Packet> p = m_listTagid.front();
+    SeqTsHeader seqTs;
+    if (!m_downlinkOnly) {
+      seqTs.SetTs( m_listSeqTs.front() );
+      m_listSeqTs.pop_front();
+    }
+    PacketTag tag;
+    tag.SetValue( m_listTagid.front() );
+
+    Ptr<Packet> p = Create<Packet> (m_size-(8+4));
+    p->AddHeader (seqTs);
+    p->AddPacketTag(tag);
+
     m_listTagid.pop_front();
 
     if ( (m_socket->SendTo(p, 0, m_peerAddress)) >= 0 )
