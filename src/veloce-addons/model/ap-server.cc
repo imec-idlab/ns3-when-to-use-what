@@ -73,7 +73,6 @@ ApServer::GetTypeId (void)
                    BooleanValue (false),
                    MakeBooleanAccessor (&ApServer::m_downlinkOnly),
                    MakeBooleanChecker ())
-
     .AddAttribute ("Port",
                    "Port on which we listen for incoming packets.",
                    UintegerValue (100),
@@ -197,9 +196,6 @@ ApServer::StartApplication (void)
   m_socket->SetRecvCallback (MakeCallback (&ApServer::HandleRead, this));
   m_socket->SetAllowBroadcast(true);
 
-  if (!m_staApFlag)
-    m_sendEvent = Simulator::Schedule(MilliSeconds(5), &ApServer::SendTo, this);
-
   if (m_socket6 == nullptr)
     {
       TypeId tid = TypeId::LookupByName ("ns3::UdpSocketFactory");
@@ -215,8 +211,8 @@ ApServer::StartApplication (void)
   m_socket6->SetRecvCallback (MakeCallback (&ApServer::HandleRead, this));
   m_socket6->SetAllowBroadcast(true);
 
-
 }
+
 
 void
 ApServer::StopApplication ()
@@ -294,11 +290,10 @@ ApServer::HandleRead (Ptr<Socket> socket)
                 ( Simulator::Now().GetMilliSeconds() - TimeStep( m_tag2Time.at(key)).GetMilliSeconds() )
                 >= m_interval.GetMilliSeconds())
             {
-              if (!m_downlinkOnly)
-                m_listSeqTs.push_back( m_tag2Time.at(key) );
-
-              m_listTagid.push_back(key);
-              m_sentTags.push_back(key);
+              if (!m_downlinkOnly) 
+                SendTo(key, m_tag2Time.at(key));
+              else
+                SendTo(key, 0);
               
               m_tag2TagVec.erase(tagVal);
               m_tag2Time.erase(key);
@@ -308,42 +303,31 @@ ApServer::HandleRead (Ptr<Socket> socket)
     }
 }
 
+
 void
-ApServer::SendTo (void)
+ApServer::SendTo (uint64_t tagId, int64_t seqTsV)
 {
   NS_LOG_FUNCTION(this);
-  NS_ASSERT(m_sendEvent.IsExpired());
 
-  if (m_listTagid.empty())
+  SeqTsHeader seqTs;
+  if (seqTsV) {
+    seqTs.SetTs( seqTsV );
+  }
+  PacketTag tag;
+  tag.SetValue( tagId );
+
+  Ptr<Packet> p = Create<Packet> (m_size-(8+4));
+  p->AddHeader (seqTs);
+  p->AddPacketTag(tag);
+
+  if ( (m_socket->SendTo(p, 0, m_peerAddress)) >= 0 )
   {
-    m_sendEvent = Simulator::Schedule(MilliSeconds(5), &ApServer::SendTo, this);
+    ++m_sent;
   }
   else
   {
-    SeqTsHeader seqTs;
-    if (!m_downlinkOnly) {
-      seqTs.SetTs( m_listSeqTs.front() );
-      m_listSeqTs.pop_front();
-    }
-    PacketTag tag;
-    tag.SetValue( m_listTagid.front() );
-
-    Ptr<Packet> p = Create<Packet> (m_size-(8+4));
-    p->AddHeader (seqTs);
-    p->AddPacketTag(tag);
-
-    m_listTagid.pop_front();
-
-    if ( (m_socket->SendTo(p, 0, m_peerAddress)) >= 0 )
-    {
-      ++m_sent;
-      m_sendEvent = Simulator::Schedule(MilliSeconds(5), &ApServer::SendTo, this);
-    }
-    else
-    {
-      NS_LOG_INFO ("Error while sending " << m_size);
-    }
-  }
+    NS_LOG_INFO ("Error while sending " << m_size);
+  } 
 }
 
 } // Namespace ns3

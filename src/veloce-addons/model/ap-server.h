@@ -102,7 +102,7 @@ private:
    */
   void HandleRead (Ptr<Socket> socket);
 
-  void SendTo(void);
+  void SendTo(uint64_t tagId, int64_t seqTs);
 
   uint16_t m_port; //!< Port on which we listen for incoming packets.
   Ptr<Socket> m_socket; //!< IPv4 Socket
@@ -121,8 +121,6 @@ private:
   std::map<uint64_t, int64_t > m_tag2Time;
   uint64_t m_totalRx;   //!< Total bytes received
   std::size_t m_nStations;
-  std::list< uint64_t > m_listTagid;
-   std::list< int64_t > m_listSeqTs;
   std::vector<uint64_t> m_sentTags;
   bool m_downlinkOnly; //!< exclude application delay
 
