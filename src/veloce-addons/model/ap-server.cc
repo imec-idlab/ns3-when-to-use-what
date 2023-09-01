@@ -294,9 +294,6 @@ ApServer::HandleRead (Ptr<Socket> socket)
                 SendTo(key, m_tag2Time.at(key));
               else
                 SendTo(key, 0);
-              
-              m_tag2TagVec.erase(tagVal);
-              m_tag2Time.erase(key);
             }
           } //end for 
         }
