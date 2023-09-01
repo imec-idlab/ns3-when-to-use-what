@@ -290,12 +290,15 @@ ApServer::HandleRead (Ptr<Socket> socket)
                 ( Simulator::Now().GetMilliSeconds() - TimeStep( m_tag2Time.at(key)).GetMilliSeconds() )
                 >= m_interval.GetMilliSeconds())
             {
-              if (!m_downlinkOnly) 
+              if (!m_downlinkOnly)
                 SendTo(key, m_tag2Time.at(key));
               else
                 SendTo(key, 0);
+
+              m_tag2TagVec.erase(tagVal);
+              m_tag2Time.erase(key);
             }
-          } //end for 
+          } //end for
         }
     }
 }
@@ -320,11 +323,12 @@ ApServer::SendTo (uint64_t tagId, int64_t seqTsV)
   if ( (m_socket->SendTo(p, 0, m_peerAddress)) >= 0 )
   {
     ++m_sent;
+    m_sentTags.push_back(tagId);
   }
   else
   {
     NS_LOG_INFO ("Error while sending " << m_size);
-  } 
+  }
 }
 
 } // Namespace ns3
