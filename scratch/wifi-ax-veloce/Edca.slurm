@@ -25,8 +25,8 @@ source <(aenv --data edca.csv)
 ./../../ns3 run --no-build "wifi-ax-veloce --simulationTime=20 --nStations=$nStations --RngRun=$run \
                     --accessCategory=AC_VO --phyModel=Spectrum --channelWidth=20 --mcs=$mcs \
                     --dlAckType=AGGR-MU-BAR --enableUlOfdma=true --enableBsrp=true --useRts=false \
-		            --logDir=$PWD/OFDMA_only/run$run-nStations$nStations-mcs$mcs --ulPayloadSize=740 \
-                    --dlPayloadSize=500 --interval=0.005 --maxDistance=40 --useMuEdca=true \
-                    --muSchedAccessReqInterval=0.1ms --txPowerStart=32.0412 --txPowerEnd=32.0412 \
-		            --UseCentral26TonesRus=true --StartSendInterval=0.001 --startLogTime=0.3
-                    --downlinkOnly=false" > /dev/null
+		            --logDir=$PWD/OFDMA_only/${run}run-${nStations}nStations-mcs$mcs \
+                    --ulPayloadSize=740 --dlPayloadSize=500 --interval=0.005 --maxDistance=40 \
+                    --useMuEdca=true --muSchedAccessReqInterval=0.1ms --txPowerStart=32.0412 \
+                    --txPowerEnd=32.0412 --UseCentral26TonesRus=true --StartSendInterval=0.001 \
+                    --startLogTime=0.3 --downlinkOnly=false" > /dev/null
