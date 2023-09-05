@@ -602,17 +602,20 @@ int  main(int argc, char *argv[])
 
   std::ofstream perStaOutStream;
   perStaOutStream.open ("per_sta_stats.out", std::ios::out);
-  perStaOutStream << "MAC-addr\tSINR_dB\tRX_bytes\tAvg_delay_ms" << std::endl;
+  perStaOutStream << "MAC-addr\tSINR_dB\tRX_bytes\tAvg_delay_ms\tPacket_loss_ratio" << std::endl;
   for (auto &staStats : g_statsMap)
     {
       staStats.second.sinr /= staStats.second.totalBeacons;
       double sumDelay = 0.;
+      double latePkts = staStats.second.pktDelaysLate.size() ;
+      double totalPkts = staStats.second.pktDelaysLate.size() + staStats.second.pktDelays.size() ;
+      double pktLossRatio = latePkts / totalPkts; 
       for (auto &delay : staStats.second.pktDelays)
         {
           sumDelay += delay * 1000.; //in ms
         }
       perStaOutStream << staStats.first << "\t" << staStats.second.sinr << "\t" << staStats.second.rxBytes
-        << "\t" << sumDelay / staStats.second.pktDelays.size () << std::endl;
+        << "\t" << sumDelay / staStats.second.pktDelays.size () << "\t" << pktLossRatio << std::endl;
     }
   perStaOutStream.close ();
 
