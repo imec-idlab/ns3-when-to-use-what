@@ -105,7 +105,7 @@ void RxTrace ( double startLogTime, Ptr< const Packet> p, const Address &src, co
   startLogTime *= 1e+9;
 
 
-  if (Simulator::Now().GetNanoSeconds () >= startLogTime) 
+  if (Simulator::Now().GetNanoSeconds () >= startLogTime)
   {
     g_statsMap[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (dst).GetIpv4 ())].rxBytesLate += p->GetSize ();
     g_statsMap[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (dst).GetIpv4 ())].pktDelaysLate.push_back ((Simulator::Now() - seqTs.GetTs ()).GetSeconds ());
@@ -590,7 +590,7 @@ int  main(int argc, char *argv[])
 
       //rxBytes += DynamicCast<ApServer> (staServerApp.Get (i))->GetTotalRx ();
     }
-
+  Simulator::Destroy ();
 
   double throughput = (rxBytes * 8) / (simulationTime * 1000000.0); //Mbit/s
 
@@ -609,7 +609,7 @@ int  main(int argc, char *argv[])
       double sumDelay = 0.;
       double latePkts = staStats.second.pktDelaysLate.size() ;
       double totalPkts = staStats.second.pktDelaysLate.size() + staStats.second.pktDelays.size() ;
-      double pktLossRatio = latePkts / totalPkts; 
+      double pktLossRatio = latePkts / totalPkts;
       for (auto &delay : staStats.second.pktDelays)
         {
           sumDelay += delay * 1000.; //in ms
@@ -644,8 +644,6 @@ int  main(int argc, char *argv[])
     pktDistOutStream.close();
   }
 
-
-  Simulator::Destroy ();
 
   return 0;
 }

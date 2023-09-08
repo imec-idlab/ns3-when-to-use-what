@@ -104,6 +104,8 @@ private:
 
   void SendTo(uint64_t tagId, int64_t seqTs);
 
+  void five_ms_window (uint64_t key);
+
   uint16_t m_port; //!< Port on which we listen for incoming packets.
   Ptr<Socket> m_socket; //!< IPv4 Socket
   Ptr<Socket> m_socket6; //!< IPv6 Socket
@@ -119,6 +121,7 @@ private:
   uint64_t m_tagValue; //!< packet tags
   std::map<uint64_t, std::vector<uint64_t> > m_tag2TagVec;
   std::map<uint64_t, int64_t > m_tag2Time;
+  std::map<uint64_t , EventId >  m_tag2EventId;
   uint64_t m_totalRx;   //!< Total bytes received
   std::size_t m_nStations;
   std::vector<uint64_t> m_sentTags;

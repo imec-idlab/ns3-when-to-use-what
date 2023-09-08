@@ -196,6 +196,9 @@ ApServer::StartApplication (void)
   m_socket->SetRecvCallback (MakeCallback (&ApServer::HandleRead, this));
   m_socket->SetAllowBroadcast(true);
 
+  //if (!m_staApFlag)
+    //m_sendEvent = Simulator::Schedule (m_interval, &ApServer::five_ms_window, this);
+
   if (m_socket6 == nullptr)
     {
       TypeId tid = TypeId::LookupByName ("ns3::UdpSocketFactory");
@@ -276,6 +279,9 @@ ApServer::HandleRead (Ptr<Socket> socket)
             std::vector<uint64_t> vec {m_tagValue};
             m_tag2TagVec.insert(std::make_pair (m_tagValue, vec ));
             m_tag2Time.insert(std::make_pair (m_tagValue, Simulator::Now().GetTimeStep()));
+  
+            m_sendEvent = Simulator::Schedule (m_interval, &ApServer::five_ms_window, this, m_tagValue); // schedule in case of delay
+            m_tag2EventId.insert(std::make_pair(m_tagValue, m_sendEvent) );
           }
           else{
             m_tag2TagVec.at(m_tagValue).push_back(m_tagValue);
@@ -286,9 +292,7 @@ ApServer::HandleRead (Ptr<Socket> socket)
             auto key = tagVal->first;
             ++next_tagVal;
 
-            if ( tagVal->second.size() == m_nStations ||
-                ( Simulator::Now().GetMilliSeconds() - TimeStep( m_tag2Time.at(key)).GetMilliSeconds() )
-                >= m_interval.GetMilliSeconds())
+            if ( tagVal->second.size() == m_nStations )
             {
               if (!m_downlinkOnly)
                 SendTo(key, m_tag2Time.at(key));
@@ -297,10 +301,28 @@ ApServer::HandleRead (Ptr<Socket> socket)
 
               m_tag2TagVec.erase(tagVal);
               m_tag2Time.erase(key);
+              Simulator::Cancel(m_tag2EventId.at(key));
+              m_tag2EventId.erase(key);
+              
             }
           } //end for
         }
     }
+}
+
+void ApServer::five_ms_window ( uint64_t key ) {
+
+  NS_LOG_FUNCTION (this);
+
+  std::cout <<"We are called: " <<Simulator::Now().GetMilliSeconds() << " key: " <<key <<std::endl;
+
+  if (!m_downlinkOnly)
+    SendTo(key, m_tag2Time.at(key));
+  else
+    SendTo(key, 0);
+
+  m_tag2TagVec.erase(key);
+  m_tag2Time.erase(key);
 }
 
 
