@@ -106,6 +106,8 @@ private:
 
   void five_ms_window (uint64_t key);
 
+  void five_ms_winB(void);
+
   uint16_t m_port; //!< Port on which we listen for incoming packets.
   Ptr<Socket> m_socket; //!< IPv4 Socket
   Ptr<Socket> m_socket6; //!< IPv6 Socket
