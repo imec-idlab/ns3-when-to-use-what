@@ -327,7 +327,6 @@ void ApServer::five_ms_window ( uint64_t key ) {
 void ApServer::five_ms_winB(void) {
 
   NS_LOG_FUNCTION (this);
-  NS_ASSERT(m_sendEvent.IsExpired());
 
   if (!m_tag2TagVec.empty()) {
 
@@ -342,7 +341,6 @@ void ApServer::five_ms_winB(void) {
         SendTo(key, 0);
       m_tag2TagVec.erase(tagVal);
       m_tag2Time.erase(key);
-      break;
     } //end for
     m_sendEvent = Simulator::Schedule (m_interval, &ApServer::five_ms_winB, this);
     }
