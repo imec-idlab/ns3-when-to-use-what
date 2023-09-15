@@ -126,7 +126,6 @@ int  main(int argc, char *argv[])
   double apHeight {3}; //meters
   double staHeight {1}; //meters
   double startLogTime = {1.030};
-  bool downlinkOnly = {false};
 
 
   std::string frequency {"5"}; //whether 2.4, 5 or 6 GHz
@@ -170,7 +169,6 @@ int  main(int argc, char *argv[])
   cmd.AddValue ("apHeight", "Height of AP [m]", apHeight);
   cmd.AddValue ("staHeight", "Height of STA [m]", staHeight);
   cmd.AddValue ("startLogTime","Time to begin logging [seconds]",startLogTime);
-  cmd.AddValue ("downlinkOnly","Tells AP not to include application delay", downlinkOnly);
 
 
   //PHY params
@@ -499,7 +497,6 @@ int  main(int argc, char *argv[])
   apServer.SetAttribute("NStations", UintegerValue(nStations));
   apServer.SetAttribute("LocalAddress", AddressValue(apLocalAddress) );
   apServer.SetAttribute ("Interval", TimeValue (Seconds (interval)));
-  apServer.SetAttribute("DownlinkOnly", BooleanValue(downlinkOnly));
 
   ApplicationContainer apServerApp = apServer.Install (wifiApNode);
 

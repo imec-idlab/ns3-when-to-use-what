@@ -122,12 +122,10 @@ private:
   uint32_t m_sent; //!< Counter for sent packets
   uint64_t m_tagValue; //!< packet tags
   std::map<uint64_t, std::vector<uint64_t> > m_tag2TagVec;
-  std::map<uint64_t, int64_t > m_tag2Time;
   std::map<uint64_t , EventId >  m_tag2EventId;
   uint64_t m_totalRx;   //!< Total bytes received
   std::size_t m_nStations;
   std::vector<uint64_t> m_sentTags;
-  bool m_downlinkOnly; //!< exclude application delay
 
 
   /// Callbacks for tracing the packet Rx events

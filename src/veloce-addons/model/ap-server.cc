@@ -68,11 +68,6 @@ ApServer::GetTypeId (void)
                    BooleanValue (false),
                    MakeBooleanAccessor (&ApServer::m_staApFlag),
                    MakeBooleanChecker ())
-    .AddAttribute ("DownlinkOnly",
-                   "To Enable/Disable inclussion of application delay",
-                   BooleanValue (false),
-                   MakeBooleanAccessor (&ApServer::m_downlinkOnly),
-                   MakeBooleanChecker ())
     .AddAttribute ("Port",
                    "Port on which we listen for incoming packets.",
                    UintegerValue (100),
@@ -124,7 +119,6 @@ ApServer::ApServer ()
   m_tagValue = 0;
   m_totalRx = 0;
   m_sentTags = {};
-  m_downlinkOnly = false;
 }
 
 ApServer::~ApServer ()
@@ -273,12 +267,11 @@ ApServer::HandleRead (Ptr<Socket> socket)
             m_rxTraceWithAddresses (packet_copy, from, m_localAddress);
             break;
           }
-          //check if first time seeing the tag
+          //check if first time seeing the tag 
           if (m_tag2TagVec.find(m_tagValue) == m_tag2TagVec.end() ) {
             // first time
             std::vector<uint64_t> vec {m_tagValue};
             m_tag2TagVec.insert(std::make_pair (m_tagValue, vec ));
-            m_tag2Time.insert(std::make_pair (m_tagValue, Simulator::Now().GetTimeStep()));
   
             //m_sendEvent = Simulator::Schedule (m_interval, &ApServer::five_ms_window, this, m_tagValue); // schedule in case of delay
             //m_tag2EventId.insert(std::make_pair(m_tagValue, m_sendEvent) );
@@ -294,13 +287,8 @@ ApServer::HandleRead (Ptr<Socket> socket)
 
             if ( tagVal->second.size() == m_nStations )
             {
-              if (!m_downlinkOnly)
-                SendTo(key, m_tag2Time.at(key));
-              else
-                SendTo(key, 0);
-
+              SendTo(key, 0);
               m_tag2TagVec.erase(tagVal);
-              m_tag2Time.erase(key);
               //Simulator::Cancel(m_tag2EventId.at(key));
               //m_tag2EventId.erase(key);
               
@@ -315,13 +303,9 @@ void ApServer::five_ms_window ( uint64_t key ) {
   NS_LOG_FUNCTION (this);
 
 
-  if (!m_downlinkOnly)
-    SendTo(key, m_tag2Time.at(key));
-  else
-    SendTo(key, 0);
+  SendTo(key, 0);
 
   m_tag2TagVec.erase(key);
-  m_tag2Time.erase(key);
 }
 
 void ApServer::five_ms_winB(void) {
@@ -335,12 +319,8 @@ void ApServer::five_ms_winB(void) {
       auto key = tagVal->first;
       ++next_tagVal;
 
-      if (!m_downlinkOnly)
-        SendTo(key, m_tag2Time.at(key));
-      else
-        SendTo(key, 0);
+      SendTo(key, 0);
       m_tag2TagVec.erase(tagVal);
-      m_tag2Time.erase(key);
     } //end for
     m_sendEvent = Simulator::Schedule (m_interval, &ApServer::five_ms_winB, this);
     }
