@@ -148,6 +148,7 @@ int  main(int argc, char *argv[])
   bool useMuEdca {true};
   uint32_t nMpdus = 1;
   bool UseCentral26TonesRus = {false};
+  bool DelayAccessReqUponAccess = {false};
 
 
   uint32_t ulPayloadSize = 93; // must fit in the max TX duration when transmitting at MCS 0 over an RU of 26 tones
@@ -192,6 +193,7 @@ int  main(int argc, char *argv[])
   cmd.AddValue ("muSchedAccessReqInterval", "Duration of the interval between two requests for channel access made by the MU scheduler", accessReqInterval);
   cmd.AddValue ("useMuEdca", "Enable/disable Specific EDCA parameters set", useMuEdca);
   cmd.AddValue ("nMpdus", "Number of aggregated MPDUs (=< 6500631/740 for HE PPDUs)", nMpdus);
+  cmd.AddValue ("DelayAccessReqUponAccess ", "Enable/Disable delay of access req only upon access grant", DelayAccessReqUponAccess);
 
   //Traffic params
   cmd.AddValue ("ulPayloadSize", "the application payload size in bytes for ul traffic", ulPayloadSize);
@@ -399,7 +401,7 @@ int  main(int argc, char *argv[])
                                       "EnableUlOfdma", BooleanValue (enableUlOfdma),
                                       "EnableBsrp", BooleanValue (enableBsrp),
                                       "AccessReqInterval", TimeValue (accessReqInterval),
-                                      "DelayAccessReqUponAccess", BooleanValue (false),
+                                      "DelayAccessReqUponAccess", BooleanValue (DelayAccessReqUponAccess),
                                       "UseCentral26TonesRus", BooleanValue (UseCentral26TonesRus),
                                       "NStations", UintegerValue (74),
                                       "AccessReqAc",EnumValue(AcIndex::AC_VO));
