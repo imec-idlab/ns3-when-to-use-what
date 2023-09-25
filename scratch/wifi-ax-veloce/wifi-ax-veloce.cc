@@ -142,7 +142,7 @@ int  main(int argc, char *argv[])
   std::string dlAckSeqType {"NO-OFDMA"};
   bool enableUlOfdma {false};
   bool enableBsrp {false};
-  Time accessReqInterval {0};
+  double accessReqInterval = {0};
   bool useRts {true};
   bool useExtendedBlockAck {false};
   bool useMuEdca {true};
@@ -190,10 +190,10 @@ int  main(int argc, char *argv[])
   cmd.AddValue ("dlAckType", "Ack sequence type for DL OFDMA (NO-OFDMA, ACK-SU-FORMAT, MU-BAR, AGGR-MU-BAR)", dlAckSeqType);
   cmd.AddValue ("enableUlOfdma", "Enable UL OFDMA (useful if DL OFDMA is enabled and TCP is used)", enableUlOfdma);
   cmd.AddValue ("enableBsrp", "Enable BSRP (useful if DL and UL OFDMA are enabled and TCP is used)", enableBsrp);
-  cmd.AddValue ("muSchedAccessReqInterval", "Duration of the interval between two requests for channel access made by the MU scheduler", accessReqInterval);
+  cmd.AddValue ("muSchedAccessReqInterval", "Duration of the interval between two requests for channel access made by the MU scheduler (Seconds)", accessReqInterval);
   cmd.AddValue ("useMuEdca", "Enable/disable Specific EDCA parameters set", useMuEdca);
   cmd.AddValue ("nMpdus", "Number of aggregated MPDUs (=< 6500631/740 for HE PPDUs)", nMpdus);
-  cmd.AddValue ("DelayAccessReqUponAccess ", "Enable/Disable delay of access req only upon access grant", DelayAccessReqUponAccess);
+  cmd.AddValue ("DelayAccessReqUponAccess", "Enable/Disable delay of access req only upon access grant", DelayAccessReqUponAccess);
 
   //Traffic params
   cmd.AddValue ("ulPayloadSize", "the application payload size in bytes for ul traffic", ulPayloadSize);
@@ -400,7 +400,7 @@ int  main(int argc, char *argv[])
           wifimac.SetMultiUserScheduler ("ns3::RrMultiUserScheduler",
                                       "EnableUlOfdma", BooleanValue (enableUlOfdma),
                                       "EnableBsrp", BooleanValue (enableBsrp),
-                                      "AccessReqInterval", TimeValue (accessReqInterval),
+                                      "AccessReqInterval", TimeValue (Seconds(accessReqInterval)),
                                       "DelayAccessReqUponAccess", BooleanValue (DelayAccessReqUponAccess),
                                       "UseCentral26TonesRus", BooleanValue (UseCentral26TonesRus),
                                       "NStations", UintegerValue (74),
