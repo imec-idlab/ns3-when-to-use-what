@@ -253,7 +253,13 @@ ApServer::HandleRead (Ptr<Socket> socket)
           if (!m_sentTags.empty() && std::find(m_sentTags.begin(), m_sentTags.end(),
                   m_tagValue ) !=  m_sentTags.end() )
           {
+            std::cout<<Simulator::Now().GetMilliSeconds()  <<": received tag value: delayed: "<< m_tagValue<< std::endl;
             latePacket = true;
+          }
+          else if( ( (Simulator::Now() - seqTs.GetTs ()).GetMilliSeconds() ) >= m_interval.GetMilliSeconds() ) {
+            // outdated packets
+            latePacket = true;
+            m_sentTags.push_back(m_tagValue);
           }
 
           if (!m_staApFlag && !latePacket ) { //AP not late
@@ -267,12 +273,13 @@ ApServer::HandleRead (Ptr<Socket> socket)
             m_rxTraceWithAddresses (packet_copy, from, m_localAddress);
             break;
           }
-          //check if first time seeing the tag 
+          //check if first time seeing the tag
           if (m_tag2TagVec.find(m_tagValue) == m_tag2TagVec.end() ) {
             // first time
             std::vector<uint64_t> vec {m_tagValue};
             m_tag2TagVec.insert(std::make_pair (m_tagValue, vec ));
-  
+
+
             //m_sendEvent = Simulator::Schedule (m_interval, &ApServer::five_ms_window, this, m_tagValue); // schedule in case of delay
             //m_tag2EventId.insert(std::make_pair(m_tagValue, m_sendEvent) );
           }
@@ -291,7 +298,7 @@ ApServer::HandleRead (Ptr<Socket> socket)
               m_tag2TagVec.erase(tagVal);
               //Simulator::Cancel(m_tag2EventId.at(key));
               //m_tag2EventId.erase(key);
-              
+
             }
           } //end for
         }
@@ -321,6 +328,7 @@ void ApServer::five_ms_winB(void) {
 
       SendTo(key, 0);
       m_tag2TagVec.erase(tagVal);
+      break;
     } //end for
     m_sendEvent = Simulator::Schedule (m_interval, &ApServer::five_ms_winB, this);
     }
