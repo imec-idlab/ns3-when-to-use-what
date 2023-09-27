@@ -253,7 +253,6 @@ ApServer::HandleRead (Ptr<Socket> socket)
           if (!m_sentTags.empty() && std::find(m_sentTags.begin(), m_sentTags.end(),
                   m_tagValue ) !=  m_sentTags.end() )
           {
-            std::cout<<Simulator::Now().GetMilliSeconds()  <<": received tag value: delayed: "<< m_tagValue<< std::endl;
             latePacket = true;
           }
           else if( ( (Simulator::Now() - seqTs.GetTs ()).GetMilliSeconds() ) >= m_interval.GetMilliSeconds() ) {
