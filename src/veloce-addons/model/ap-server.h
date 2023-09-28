@@ -116,6 +116,7 @@ private:
   uint8_t m_tos;
   uint16_t m_size;
   bool m_staApFlag; //!< flag to differentiate between STA and AP
+  bool m_strictWindow; //<! flag to enable hard AP serving window
   Time m_interval; //!< time between successive packet sents
   Address m_peerAddress, m_localAddress; //!< Remote peer address
   EventId m_sendEvent; //!< Event to send the next packet

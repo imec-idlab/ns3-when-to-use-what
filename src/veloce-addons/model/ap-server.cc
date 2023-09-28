@@ -68,6 +68,11 @@ ApServer::GetTypeId (void)
                    BooleanValue (false),
                    MakeBooleanAccessor (&ApServer::m_staApFlag),
                    MakeBooleanChecker ())
+    .AddAttribute ("StrictWindow",
+                   "To enable/disable strict AP sending time, independent of packet arrival",
+                   BooleanValue (false),
+                   MakeBooleanAccessor (&ApServer::m_strictWindow),
+                   MakeBooleanChecker ())
     .AddAttribute ("Port",
                    "Port on which we listen for incoming packets.",
                    UintegerValue (100),
@@ -190,7 +195,7 @@ ApServer::StartApplication (void)
   m_socket->SetRecvCallback (MakeCallback (&ApServer::HandleRead, this));
   m_socket->SetAllowBroadcast(true);
 
-  if (!m_staApFlag)
+  if (!m_staApFlag && m_strictWindow)
     m_sendEvent = Simulator::Schedule (m_interval, &ApServer::five_ms_winB, this);
 
   if (m_socket6 == nullptr)
@@ -255,7 +260,8 @@ ApServer::HandleRead (Ptr<Socket> socket)
           {
             latePacket = true;
           }
-          else if( ( (Simulator::Now() - seqTs.GetTs ()).GetMilliSeconds() ) >= m_interval.GetMilliSeconds() ) {
+          else if( m_strictWindow && ( ( (Simulator::Now() - seqTs.GetTs ()).GetMilliSeconds() ) >= m_interval.GetMilliSeconds() 
+              || !(seqTs.GetTs().GetMilliSeconds() + m_interval.GetMilliSeconds() > Simulator::Now().GetMilliSeconds() ) )) {
             // outdated packets
             latePacket = true;
             m_sentTags.push_back(m_tagValue);
@@ -278,9 +284,10 @@ ApServer::HandleRead (Ptr<Socket> socket)
             std::vector<uint64_t> vec {m_tagValue};
             m_tag2TagVec.insert(std::make_pair (m_tagValue, vec ));
 
-
-            //m_sendEvent = Simulator::Schedule (m_interval, &ApServer::five_ms_window, this, m_tagValue); // schedule in case of delay
-            //m_tag2EventId.insert(std::make_pair(m_tagValue, m_sendEvent) );
+            if (!m_strictWindow) {
+              m_sendEvent = Simulator::Schedule (m_interval, &ApServer::five_ms_window, this, m_tagValue); // schedule in case of delay
+              m_tag2EventId.insert(std::make_pair(m_tagValue, m_sendEvent) );
+            }
           }
           else{
             m_tag2TagVec.at(m_tagValue).push_back(m_tagValue);
@@ -295,8 +302,10 @@ ApServer::HandleRead (Ptr<Socket> socket)
             {
               SendTo(key, 0);
               m_tag2TagVec.erase(tagVal);
-              //Simulator::Cancel(m_tag2EventId.at(key));
-              //m_tag2EventId.erase(key);
+              if (!m_strictWindow) {
+                Simulator::Cancel(m_tag2EventId.at(key));
+                m_tag2EventId.erase(key);
+              }
 
             }
           } //end for
@@ -307,7 +316,6 @@ ApServer::HandleRead (Ptr<Socket> socket)
 void ApServer::five_ms_window ( uint64_t key ) {
 
   NS_LOG_FUNCTION (this);
-
 
   SendTo(key, 0);
 

@@ -158,6 +158,7 @@ int  main(int argc, char *argv[])
   std::string accessCategory {"AC_VO"};
   bool enableAggregation {false};
   double StartSendInterval {0.001}; //seconds
+  bool strictWindow {false};
 
 
   CommandLine cmd (__FILE__);
@@ -202,6 +203,8 @@ int  main(int argc, char *argv[])
   cmd.AddValue ("accessCategory", "Access category for traffic: AC_BE, AC_BK, AC_VO, AC_VI", accessCategory);
   cmd.AddValue ("enableAggregation", "Enable/disable mpdu/msdu aggregation", enableAggregation);
   cmd.AddValue ("StartSendInterval", "Time interval within which stations randomly send initial packet [Seconds]", StartSendInterval);
+  cmd.AddValue ("strictWindow", "To enable/disable strict AP sending time, independent of packet arrival", strictWindow);
+
 
   cmd.Parse (argc, argv);
 
@@ -499,6 +502,7 @@ int  main(int argc, char *argv[])
   apServer.SetAttribute("NStations", UintegerValue(nStations));
   apServer.SetAttribute("LocalAddress", AddressValue(apLocalAddress) );
   apServer.SetAttribute ("Interval", TimeValue (Seconds (interval)));
+  apServer.SetAttribute("StrictWindow", BooleanValue(strictWindow));
 
   ApplicationContainer apServerApp = apServer.Install (wifiApNode);
 
