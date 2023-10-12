@@ -510,7 +510,7 @@ int  main(int argc, char *argv[])
 
   ApplicationContainer apServerApp = apServer.Install (wifiApNode);
 
-  apServerApp.Start(Seconds (0));
+  apServerApp.Start(Seconds (startLogTime));
   apServerApp.Stop (Seconds (simulationTime + startLogTime));
 
   // Sta Server
@@ -521,7 +521,7 @@ int  main(int argc, char *argv[])
     staServer.SetAttribute("LocalAddress", AddressValue(staLocalAddress));
     staServer.SetAttribute("StaApFlag", BooleanValue(true));
     ApplicationContainer staServerApp = staServer.Install(wifiStaNodes.Get(i));
-    staServerApp.Start(Seconds(0));
+    staServerApp.Start(Seconds(startLogTime));
     staServerApp.Stop(Seconds(simulationTime + startLogTime ));
   }
 
@@ -543,7 +543,7 @@ int  main(int argc, char *argv[])
   }
   staUdpClient.SetAttribute ("PacketSize", UintegerValue (ulPayloadSize));
   ApplicationContainer staUdpclientApp = staUdpClient.Install (wifiStaNodes);
-  staUdpclientApp.Start (Seconds (0) );
+  staUdpclientApp.Start (Seconds (startLogTime) );
   staUdpclientApp.Stop (Seconds (simulationTime + startLogTime));
 
   Simulator::Schedule (Seconds (0), &Ipv4GlobalRoutingHelper::PopulateRoutingTables);
