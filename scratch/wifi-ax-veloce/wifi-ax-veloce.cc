@@ -46,6 +46,8 @@
 #include "ns3/packet-tag.h"
 #include "ns3/ap-server-helper.h"
 
+#include "ns3/arp-cache.h"
+
 using namespace ns3;
 
 struct stats_t
@@ -481,6 +483,8 @@ int  main(int argc, char *argv[])
 
   staNodeInterfaces = address.Assign (staNetDevices);
   apNodeInterface = address.Assign (apNetDevice);
+
+  ArpCache::PopulateArpCache ();
 
   /*
    * jitter for random start time
