@@ -10,17 +10,18 @@ set -e
 #
 #
     for run in $(seq 1 1); do
-        for mcs in $(seq 5 5); do
-            for nSta in $(seq 3 3); do
+        for mcs in $(seq 4 4); do
+            for nSta in $(seq 10 10); do
                 echo "${mcs} ${nSta}:"
-                ./../../ns3 run --gdb --no-build "wifi-ax-veloce --simulationTime=2 --nStations=$nSta  \
-                    --accessCategory=AC_VO --phyModel=Yans --channelWidth=20 --mcs=$mcs --RngRun=$run \
-                    --dlAckType=NO-OFDMA --enableUlOfdma=true --enableBsrp=true --useRts=false \
-                    --logDir=$PWD/results_edca_only/$run-withEDCA-$nSta-mcs$mcs --ulPayloadSize=740 \
+                ./../../ns3 run --no-build "scratch/wifi-ax-veloce/wifi-ax-veloce --simulationTime=2 --nStations=$nSta  \
+                    --accessCategory=AC_VO --phyModel=Spectrum --channelWidth=20 --mcs=$mcs --RngRun=$run \
+                    --dlAckType=AGGR-MU-BAR --enableUlOfdma=true --enableBsrp=true --useRts=false \
+                    --logDir=$PWD/result_ofdma_strict/${run}runs-${nSta}Stations-mcs$mcs --ulPayloadSize=740 \
                     --dlPayloadSize=500 --interval=0.005 --maxDistance=40 --useMuEdca=true \
-                    --muSchedAccessReqInterval=0.1ms --txPowerStart=32.0412 --txPowerEnd=32.0412 \
-                    --UseCentral26TonesRus=true --StartSendInterval=0.001 --startLogTime=0.3 \
-                    --downlinkOnly=false" # > limits_output_MAC_$mcs-$nSta.txt 2>&1
+                    --muSchedAccessReqInterval=0.0001 --txPowerStart=32.0412 --txPowerEnd=32.0412 \
+                    --UseCentral26TonesRus=false --StartSendInterval=0.001 --startLogTime=0.0 \
+                    --DelayAccessReqUponAccess=false --strictWindow=true --nMsdus=10 --nMpdus=10 \
+                    --enableAggregation=true --TxOPLimits=4160" # > interval_output_$mcs-$nSta.txt 2>&1
                 done
         done
     done

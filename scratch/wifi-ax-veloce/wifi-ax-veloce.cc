@@ -151,6 +151,7 @@ int  main(int argc, char *argv[])
   uint32_t nMpdus = 1;
   bool UseCentral26TonesRus = {false};
   bool DelayAccessReqUponAccess = {false};
+  double txOpLimits = {2080};  //AC_VO default value in microseconds
 
 
   uint32_t ulPayloadSize = 93; // must fit in the max TX duration when transmitting at MCS 0 over an RU of 26 tones
@@ -197,6 +198,7 @@ int  main(int argc, char *argv[])
   cmd.AddValue ("useMuEdca", "Enable/disable Specific EDCA parameters set", useMuEdca);
   cmd.AddValue ("nMpdus", "Number of aggregated MPDUs (=< 6500631/740 for HE PPDUs)", nMpdus);
   cmd.AddValue ("DelayAccessReqUponAccess", "Enable/Disable delay of access req only upon access grant", DelayAccessReqUponAccess);
+  cmd.AddValue ("TxOPLimits", "TX Opportunity limits in microseconds", txOpLimits);
 
   //Traffic params
   cmd.AddValue ("ulPayloadSize", "the application payload size in bytes for ul traffic", ulPayloadSize);
@@ -391,8 +393,8 @@ int  main(int argc, char *argv[])
       if (enableAggregation){
         wifimac.SetType ("ns3::StaWifiMac",
                   "Ssid", SsidValue (ssid),
-                  "VI_MaxAmsduSize", UintegerValue (nMsdus * ulPayloadSize ),
-                  "VI_MaxAmpduSize", UintegerValue (nMpdus * ulPayloadSize ));
+                  "VO_MaxAmsduSize", UintegerValue (nMsdus * ulPayloadSize ),
+                  "VO_MaxAmpduSize", UintegerValue (nMpdus * ulPayloadSize ));
       } else {
         wifimac.SetType ("ns3::StaWifiMac",
                   "Ssid", SsidValue (ssid));
@@ -415,8 +417,8 @@ int  main(int argc, char *argv[])
         wifimac.SetType ("ns3::ApWifiMac",
                   "EnableBeaconJitter", BooleanValue (false),
                   "Ssid", SsidValue (ssid),
-                  "VI_MaxAmsduSize", UintegerValue (nMsdus * dlPayloadSize ),
-                  "VI_MaxAmpduSize", UintegerValue (nMpdus * dlPayloadSize ));
+                  "VO_MaxAmsduSize", UintegerValue (nMsdus * dlPayloadSize ),
+                  "VO_MaxAmpduSize", UintegerValue (nMpdus * dlPayloadSize ));
 
       }
       else{
@@ -442,8 +444,8 @@ int  main(int argc, char *argv[])
       if (enableAggregation){
         wifimac.SetType ("ns3::StaWifiMac",
                   "Ssid", SsidValue (ssid),
-                  "VI_MaxAmsduSize", UintegerValue (nMsdus * ulPayloadSize),
-                  "VI_MaxAmpduSize", UintegerValue (nMpdus * ulPayloadSize ));
+                  "VO_MaxAmsduSize", UintegerValue (nMsdus * ulPayloadSize),
+                  "VO_MaxAmpduSize", UintegerValue (nMpdus * ulPayloadSize ));
       }
       else {
         wifimac.SetType ("ns3::StaWifiMac",
@@ -458,8 +460,8 @@ int  main(int argc, char *argv[])
         wifimac.SetType ("ns3::ApWifiMac",
                   "EnableBeaconJitter", BooleanValue (false),
                   "Ssid", SsidValue (ssid),
-                  "VI_MaxAmsduSize", UintegerValue (nMsdus * dlPayloadSize),
-                  "VI_MaxAmpduSize", UintegerValue (nMpdus * dlPayloadSize));
+                  "VO_MaxAmsduSize", UintegerValue (nMsdus * dlPayloadSize),
+                  "VO_MaxAmpduSize", UintegerValue (nMpdus * dlPayloadSize));
       }
       else {
          wifimac.SetType ("ns3::ApWifiMac",
@@ -550,6 +552,9 @@ int  main(int argc, char *argv[])
 
   for (uint32_t i = 0; i < staNetDevices.GetN (); i++)
     {
+      Ptr<WifiNetDevice> dev = DynamicCast<WifiNetDevice> ( staNetDevices.Get(i) );
+      Ptr<WifiMac> wifi_mac = dev->GetMac();
+      wifi_mac->GetQosTxop(AC_VO)->SetTxopLimit(MicroSeconds(txOpLimits));
       auto mac = Mac48Address::ConvertFrom (staNetDevices.Get (i)->GetAddress ());
       auto ip = staNodeInterfaces.Get (i).first->GetAddress (1, 0).GetAddress ();
       g_Ip2Mac[ip] = mac;
@@ -559,6 +564,9 @@ int  main(int argc, char *argv[])
     }
   for (uint32_t i = 0; i < apNetDevice.GetN (); i++)
     {
+      Ptr<WifiNetDevice> dev = DynamicCast<WifiNetDevice> ( apNetDevice.Get(i) );
+      Ptr<WifiMac> wifi_mac = dev->GetMac();
+      wifi_mac->GetQosTxop(AC_VO)->SetTxopLimit(MicroSeconds(txOpLimits));
       auto mac = Mac48Address::ConvertFrom (apNetDevice.Get (i)->GetAddress ());
       auto ip = apNodeInterface.Get (i).first->GetAddress (1, 0).GetAddress ();
       g_Ip2Mac[ip] = mac;
