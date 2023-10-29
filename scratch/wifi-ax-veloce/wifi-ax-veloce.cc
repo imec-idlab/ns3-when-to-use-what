@@ -185,7 +185,6 @@ int  main(int argc, char *argv[])
   cmd.AddValue ("enableShadowing", "Enable/disable gaussian shadowing", enableShadowing);
   cmd.AddValue ("txPowerStart", "Minimum available transmissions level (dBm)", txPowerStart);
   cmd.AddValue ("txPowerEnd", "Maximum available transmissions level (dBm)", txPowerEnd);
-  cmd.AddValue ("nMsdus", "Number of aggregated MSDUs (=< 11398/740 for VHT/HE/EHT PPDUs)", nMsdus);
   cmd.AddValue ("UseCentral26TonesRus","Enable/Disable the use of Cenral 26 tone RUs", UseCentral26TonesRus);
 
   //MAC params
@@ -196,6 +195,7 @@ int  main(int argc, char *argv[])
   cmd.AddValue ("enableBsrp", "Enable BSRP (useful if DL and UL OFDMA are enabled and TCP is used)", enableBsrp);
   cmd.AddValue ("muSchedAccessReqInterval", "Duration of the interval between two requests for channel access made by the MU scheduler (Seconds)", accessReqInterval);
   cmd.AddValue ("useMuEdca", "Enable/disable Specific EDCA parameters set", useMuEdca);
+  cmd.AddValue ("nMsdus", "Number of aggregated MSDUs (=< 11398/740 for VHT/HE/EHT PPDUs)", nMsdus);
   cmd.AddValue ("nMpdus", "Number of aggregated MPDUs (=< 6500631/740 for HE PPDUs)", nMpdus);
   cmd.AddValue ("DelayAccessReqUponAccess", "Enable/Disable delay of access req only upon access grant", DelayAccessReqUponAccess);
   cmd.AddValue ("TxOPLimits", "TX Opportunity limits in microseconds", txOpLimits);
@@ -390,15 +390,7 @@ int  main(int argc, char *argv[])
       phy.Set("TxPowerStart", DoubleValue(txPowerStart ));
       phy.Set("TxPowerEnd", DoubleValue(txPowerEnd ));
 
-      if (enableAggregation){
-        wifimac.SetType ("ns3::StaWifiMac",
-                  "Ssid", SsidValue (ssid),
-                  "VO_MaxAmsduSize", UintegerValue (nMsdus * ulPayloadSize ),
-                  "VO_MaxAmpduSize", UintegerValue (nMpdus * ulPayloadSize ));
-      } else {
-        wifimac.SetType ("ns3::StaWifiMac",
-                  "Ssid", SsidValue (ssid));
-      }
+      wifimac.SetType ("ns3::StaWifiMac", "Ssid", SsidValue (ssid));
 
       staNetDevices = wifi.Install (phy, wifimac, wifiStaNodes);
 
@@ -413,19 +405,9 @@ int  main(int argc, char *argv[])
                                       "NStations", UintegerValue (74),
                                       "AccessReqAc",EnumValue(AcIndex::AC_VO));
         }
-      if (enableAggregation) {
-        wifimac.SetType ("ns3::ApWifiMac",
-                  "EnableBeaconJitter", BooleanValue (false),
-                  "Ssid", SsidValue (ssid),
-                  "VO_MaxAmsduSize", UintegerValue (nMsdus * dlPayloadSize ),
-                  "VO_MaxAmpduSize", UintegerValue (nMpdus * dlPayloadSize ));
-
-      }
-      else{
         wifimac.SetType ("ns3::ApWifiMac",
                   "EnableBeaconJitter", BooleanValue (false),
                   "Ssid", SsidValue (ssid));
-      }
 
       apNetDevice = wifi.Install (phy, wifimac, wifiApNode);
 
@@ -441,33 +423,16 @@ int  main(int argc, char *argv[])
       YansWifiPhyHelper YansPhy;
       YansPhy.SetPcapDataLinkType (WifiPhyHelper::DLT_IEEE802_11_RADIO);
       YansPhy.SetChannel (channel); //channel.Create ()
-      if (enableAggregation){
-        wifimac.SetType ("ns3::StaWifiMac",
-                  "Ssid", SsidValue (ssid),
-                  "VO_MaxAmsduSize", UintegerValue (nMsdus * ulPayloadSize),
-                  "VO_MaxAmpduSize", UintegerValue (nMpdus * ulPayloadSize ));
-      }
-      else {
-        wifimac.SetType ("ns3::StaWifiMac",
-                  "Ssid", SsidValue (ssid));
-      }
+      wifimac.SetType ("ns3::StaWifiMac", "Ssid", SsidValue (ssid));
+      
       YansPhy.Set ("ChannelSettings", StringValue (channelStr));
       YansPhy.Set("TxPowerStart", DoubleValue(txPowerStart ));
       YansPhy.Set("TxPowerEnd", DoubleValue(txPowerEnd ));
       staNetDevices = wifi.Install (YansPhy, wifimac, wifiStaNodes);
 
-      if (enableAggregation){
-        wifimac.SetType ("ns3::ApWifiMac",
-                  "EnableBeaconJitter", BooleanValue (false),
-                  "Ssid", SsidValue (ssid),
-                  "VO_MaxAmsduSize", UintegerValue (nMsdus * dlPayloadSize),
-                  "VO_MaxAmpduSize", UintegerValue (nMpdus * dlPayloadSize));
-      }
-      else {
-         wifimac.SetType ("ns3::ApWifiMac",
-                  "EnableBeaconJitter", BooleanValue (false),
-                  "Ssid", SsidValue (ssid));
-      }
+      wifimac.SetType ("ns3::ApWifiMac",
+                       "EnableBeaconJitter", BooleanValue (false),
+                       "Ssid", SsidValue (ssid));
       apNetDevice = wifi.Install (YansPhy, wifimac, wifiApNode);
       YansPhy.EnablePcap("wifi-ax-edca-ap", apNetDevice); // enable pcap tracing
       YansPhy.EnablePcap("wifi-ax-edca-sta", staNetDevices);
@@ -554,6 +519,10 @@ int  main(int argc, char *argv[])
     {
       Ptr<WifiNetDevice> dev = DynamicCast<WifiNetDevice> ( staNetDevices.Get(i) );
       Ptr<WifiMac> wifi_mac = dev->GetMac();
+      if (enableAggregation) {
+        wifi_mac->SetAttribute("VO_MaxAmpduSize", UintegerValue (nMpdus * ulPayloadSize ));
+        wifi_mac->SetAttribute("VO_MaxAmsduSize", UintegerValue (nMsdus * ulPayloadSize ));
+      }
       wifi_mac->GetQosTxop(AC_VO)->SetTxopLimit(MicroSeconds(txOpLimits));
       auto mac = Mac48Address::ConvertFrom (staNetDevices.Get (i)->GetAddress ());
       auto ip = staNodeInterfaces.Get (i).first->GetAddress (1, 0).GetAddress ();
@@ -566,6 +535,10 @@ int  main(int argc, char *argv[])
     {
       Ptr<WifiNetDevice> dev = DynamicCast<WifiNetDevice> ( apNetDevice.Get(i) );
       Ptr<WifiMac> wifi_mac = dev->GetMac();
+      if (enableAggregation) {
+        wifi_mac->SetAttribute("VO_MaxAmpduSize", UintegerValue (nMpdus * dlPayloadSize ));
+        wifi_mac->SetAttribute("VO_MaxAmsduSize", UintegerValue (nMsdus * dlPayloadSize ));
+      }
       wifi_mac->GetQosTxop(AC_VO)->SetTxopLimit(MicroSeconds(txOpLimits));
       auto mac = Mac48Address::ConvertFrom (apNetDevice.Get (i)->GetAddress ());
       auto ip = apNodeInterface.Get (i).first->GetAddress (1, 0).GetAddress ();
