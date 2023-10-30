@@ -1,0 +1,34 @@
+{
+    "CONSTANTS": {
+        "simulationTime": 2,
+        "accessCategory": "AC_VO",
+        "phyModel": "Spectrum",
+        "channelWidth": 20,
+        "dlAckType": "AGGR-MU-BAR",
+        "enableUlOfdma": true,
+        "enableBsrp": true,
+        "useRts": false,
+        "ulPayloadSize": 740,
+        "dlPayloadSize": 500,
+        "maxDistance": 40,
+        "useMuEdca": true,
+        "muSchedAccessReqInterval": 0.0001,
+        "txPowerStart": 32.0412,
+        "txPowerEnd": 32.0412,
+        "UseCentral26TonesRus": false,
+        "StartSendInterval": 0.001,
+        "startLogTime": 0.0,
+        "DelayAccessReqUponAccess": false,
+        "strictWindow": true,
+        "nMsdus": 10,
+        "nMpdus": 10,
+        "enableAggregation": true,
+        "outputFolder": "OFDMA_only"
+    },
+    "VARIABLES": {
+        "TxOPLimits": [1120, 2080],
+        "mcs": [0, 12],
+        "RngRun": [1, 6],
+        "nStations": [1, 9]
+    }
+}
