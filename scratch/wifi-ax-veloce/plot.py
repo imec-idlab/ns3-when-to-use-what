@@ -160,59 +160,96 @@ def data_prep(vars: dict, log_dir: str):
 
         df_roundtrip = pd.concat([df_roundtrip, df_dl_rt], ignore_index=True)
 
+    # take our unnecessary columns
+
     df_roundtrip.drop(columns=["Reception_time", "Received_from",
                                "Generation_time", "Packet_Tag"],
                       inplace=True, axis=1)
-
-    # df_roundtrip.set_index("mcs", inplace=True)
-
+    # average base on the invidual runs
     grouped = df_roundtrip.groupby(['mcs', 'runs', 'nSta'], as_index=False
                                    )['round_trip_time'].mean()
 
-    df_to_write = grouped.reset_index()[['mcs', 'runs', 'nSta',
-                                         'round_trip_time']]
+    # prepare the dataframe to write to output
+    gr = grouped.reset_index()[['mcs', 'runs', 'nSta',
+                                'round_trip_time']]
 
-    df_to_write.rename(columns={'round_trip_time': 'avg_rtt'}, inplace=True)
+    gr.rename(columns={'round_trip_time': 'avg_rtt'}, inplace=True)
 
-    df_to_write['percent_rtt'] = df_roundtrip.groupby(
+    gr.drop(columns=['runs'], inplace=True, axis=1)
+
+    df_to_write = gr.groupby(['mcs', 'nSta'], as_index=False)[
+        'avg_rtt'].mean().reset_index()[['mcs', 'nSta', 'avg_rtt']]
+
+    df_to_write['std_rtt'] = gr.groupby(['mcs', 'nSta'], as_index=False)[
+        'avg_rtt'].std()['avg_rtt']
+
+    # rtt percentile
+    gr = df_roundtrip.groupby(
         ['mcs', 'runs', 'nSta'], as_index=False)[
             'round_trip_time'].quantile(q=.99).reset_index()[
-        ['mcs', 'runs', 'nSta', 'round_trip_time']]['round_trip_time']
+        ['mcs', 'runs', 'nSta', 'round_trip_time']]
+    gr.drop(columns=['runs'], inplace=True, axis=1)
 
-    df_to_write['avg_dl'] = df_downlink.groupby(
+    df_to_write['percent_rtt'] = gr.groupby(
+        ['mcs', 'nSta'], as_index=False)['round_trip_time'].quantile(
+        q=.99)['round_trip_time']
+
+    # downlink
+
+    gr = df_downlink.groupby(
         ['mcs', 'runs', 'nSta'], as_index=False)[
             'Delay_ms'].mean().reset_index()[
-        ['mcs', 'runs', 'nSta', 'Delay_ms']]['Delay_ms']
+        ['mcs', 'runs', 'nSta', 'Delay_ms']]
+    gr.drop(columns=['runs'], inplace=True, axis=1)
+    df_to_write['avg_dl'] = gr.groupby(
+        ['mcs', 'nSta'], as_index=False)['Delay_ms'].mean()['Delay_ms']
+    df_to_write['std_dl'] = gr.groupby(
+        ['mcs', 'nSta'], as_index=False)['Delay_ms'].std()['Delay_ms']
 
-    df_to_write['percent_dl'] = df_downlink.groupby(
+    gr = df_downlink.groupby(
         ['mcs', 'runs', 'nSta'], as_index=False)[
             'Delay_ms'].quantile(q=.99).reset_index()[
-        ['mcs', 'runs', 'nSta', 'Delay_ms']]['Delay_ms']
+        ['mcs', 'runs', 'nSta', 'Delay_ms']]
+    gr.drop(columns=['runs'], inplace=True, axis=1)
+    df_to_write['percent_dl'] = gr.groupby(
+        ['mcs', 'nSta'], as_index=False)['Delay_ms'].quantile(
+        q=.99)['Delay_ms']
 
-    df_to_write['avg_ul'] = df_uplink.groupby(
+    # uplink
+
+    gr = df_uplink.groupby(
         ['mcs', 'runs', 'nSta'], as_index=False)[
             'Delay_ms'].mean().reset_index()[
-        ['mcs', 'runs', 'nSta', 'Delay_ms']]['Delay_ms']
+        ['mcs', 'runs', 'nSta', 'Delay_ms']]
+    gr.drop(columns=['runs'], inplace=True, axis=1)
+    df_to_write['avg_ul'] = gr.groupby(
+        ['mcs', 'nSta'], as_index=False)['Delay_ms'].mean()['Delay_ms']
+    df_to_write['std_ul'] = gr.groupby(
+        ['mcs', 'nSta'], as_index=False)['Delay_ms'].std()['Delay_ms']
 
-    df_to_write['percent_ul'] = df_uplink.groupby(
+    gr = df_uplink.groupby(
         ['mcs', 'runs', 'nSta'], as_index=False)[
             'Delay_ms'].quantile(q=.99).reset_index()[
-        ['mcs', 'runs', 'nSta', 'Delay_ms']]['Delay_ms']
+        ['mcs', 'runs', 'nSta', 'Delay_ms']]
+    gr.drop(columns=['runs'], inplace=True, axis=1)
+    df_to_write['percent_ul'] = gr.groupby(
+        ['mcs', 'nSta'], as_index=False)['Delay_ms'].quantile(
+        q=.99)['Delay_ms']
 
-    df_to_write['avg_pkt_loss_ratio'] = df_packetLoss.groupby(
-        ['mcs', 'runs', 'nSta'], as_index=False)[
-            'Packet_loss_ratio'].mean().reset_index()[
-        ['mcs', 'runs', 'nSta', 'Packet_loss_ratio']]['Packet_loss_ratio']
+    # packet loss rate
 
-    df_to_write['percent_pkt_loss_ratio'] = df_packetLoss.groupby(
+    gr = df_packetLoss.groupby(
         ['mcs', 'runs', 'nSta'], as_index=False)[
             'Packet_loss_ratio'].quantile(q=.99).reset_index()[
-        ['mcs', 'runs', 'nSta', 'Packet_loss_ratio']]['Packet_loss_ratio']
+        ['mcs', 'runs', 'nSta', 'Packet_loss_ratio']]
+    gr.drop(columns=['runs'], inplace=True, axis=1)
+    df_to_write['percent_pkt_loss'] = gr.groupby(
+        ['mcs', 'nSta'], as_index=False)['Packet_loss_ratio'].quantile(
+        q=.99)['Packet_loss_ratio']
 
-    print(f"df_roundtrip\n{df_roundtrip}\n{df_to_write}\ndf_uplink:"
-          f"{df_uplink}\ndownlink: {df_downlink}\npacketloss: {df_packetLoss}")
+    print(f'\n{df_to_write}')
 
-    df_to_write.to_csv("output.csv", index=False)
+    df_to_write.to_csv("preped_output.csv", index=False)
 
 
 #        plot_mean(df_roundtrip, "Number of STAs", "Average Delay (ms)",
