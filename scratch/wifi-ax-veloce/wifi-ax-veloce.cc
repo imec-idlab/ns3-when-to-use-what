@@ -484,6 +484,7 @@ int  main(int argc, char *argv[])
   apServer.SetAttribute("LocalAddress", AddressValue(apLocalAddress) );
   apServer.SetAttribute ("Interval", TimeValue (Seconds (interval)));
   apServer.SetAttribute("StrictWindow", BooleanValue(strictWindow));
+  apServer.SetAttribute("NStations", UintegerValue(initNStations));
 
   VeloceAppContainer apServerApp = apServer.Install (wifiApNode);
 

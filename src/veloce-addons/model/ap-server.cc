@@ -249,9 +249,12 @@ ApServer::HandleRead (Ptr<Socket> socket)
           OnOffTag initTag;
           bool found = packet->RemovePacketTag(initTag);
           if (found){
-            std::cout <<"this is called FOUND" <<std::endl;
-
-            ++m_nStations;
+            if (initTag.GetValue() == 1) {
+              ++m_nStations;
+            }
+            else if(initTag.GetValue() == 2) {
+              --m_nStations;
+            }
             break;
           }
           Ptr<Packet> packet_copy = packet->Copy();

@@ -102,6 +102,7 @@ StaClient::StaClient ()
   m_totalTx = 0;
   m_socket = 0;
   m_sendEvent = EventId ();
+  m_onOffEvent = EventId ();
   m_tagValue = 0;
 }
 
@@ -204,7 +205,7 @@ StaClient::StartApplication (void)
 
   if (m_enableRandom)
   {
-    m_sendEvent = Simulator::Schedule ((m_interval), &StaClient::DelayedSession, this);
+    m_sendEvent = Simulator::Schedule ((m_interval), &StaClient::DelayedSession, this, "on" );
 
   }
   else
@@ -212,7 +213,7 @@ StaClient::StartApplication (void)
     Ptr<UniformRandomVariable> rand = CreateObject <UniformRandomVariable> ();
     double delay = rand->GetValue (0, m_startSendIntval.GetSeconds ());
     std::cout << "Initial TX after delay = " << delay << "s" << std::endl;
-    m_sendEvent = Simulator::Schedule (Seconds (delay), &StaClient::Send, this, true);
+    m_sendEvent = Simulator::Schedule (Seconds (delay), &StaClient::Send, this, "FirstPacket");
   }
 }
 
@@ -223,17 +224,26 @@ StaClient::StopApplication (void)
   Simulator::Cancel (m_sendEvent);
 }
 
-void StaClient::DelayedSession (void)
+void StaClient::DelayedSession (std::string onOrOff)
 {
-  double delay = m_intervalRandomVariable->GetValue();
-  std::cout << "Poison Initial TX after delay = " << delay << "s" << std::endl;
-  m_sendEvent = Simulator::Schedule (Seconds (delay), &StaClient::Send, this, true);
+  if (onOrOff == "on"){
+    double delay = m_intervalRandomVariable->GetValue();
+    std::cout << "Poison On After = " << delay << "s" << std::endl;
+    m_sendEvent = Simulator::Schedule (Seconds (delay), &StaClient::Send, this, "FirstPacket");
+  }
+  else if (onOrOff == "off") {
+    double delay = m_intervalRandomVariable->GetValue();
+    std::cout << "Poison Off After = " << delay << "s" << std::endl;
+    m_sendEvent = Simulator::Schedule (Seconds (delay), &StaClient::Send, this, "LastPacket");
+  }
 }
 
 void
-StaClient::Send (bool isFirstPacket)
+StaClient::Send (std::string PacketKind)
 {
   NS_LOG_FUNCTION (this);
+  if (PacketKind == "LastPacket")
+    Simulator::Cancel (m_sendEvent);
   NS_ASSERT (m_sendEvent.IsExpired ());
   SeqTsHeader seqTs;
   PacketTag tag;
@@ -241,12 +251,21 @@ StaClient::Send (bool isFirstPacket)
   seqTs.SetSeq (m_sent);
   Ptr<Packet> p = Create<Packet> (m_size-(8+4));
 
-
-  if (isFirstPacket) {
+  if (PacketKind == "FirstPacket") {
     p = Create<Packet> (64-(8+4));
     p->AddHeader (seqTs);
     initTag.SetValue(1);
     p->AddPacketTag(initTag);
+    if (m_enableRandom)
+      DelayedSession("off");
+  }
+  else if (PacketKind == "LastPacket") {
+    p = Create<Packet> (64-(8+4));
+    p->AddHeader (seqTs);
+    initTag.SetValue(2);
+    p->AddPacketTag(initTag);
+    if (m_enableRandom)
+      DelayedSession("on");
   }
   else {
     p->AddHeader (seqTs);
@@ -273,9 +292,9 @@ StaClient::Send (bool isFirstPacket)
     }
 #endif // NS3_LOG_ENABLE
 
-  if (m_sent < m_count)
+  if (m_sent < m_count && PacketKind != "LastPacket")
     {
-      m_sendEvent = Simulator::Schedule (m_interval, &StaClient::Send, this, false);
+      m_sendEvent = Simulator::Schedule (m_interval, &StaClient::Send, this, "");
     }
 }
 
