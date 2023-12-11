@@ -422,8 +422,8 @@ int  main(int argc, char *argv[])
 
       apNetDevice = wifi.Install (phy, wifimac, wifiApNode);
 
-      phy.EnablePcap("wifi-ax-ofdma-ap", apNetDevice); // enable pcap tracing
-      phy.EnablePcap("wifi-ax-ofdma-sta", staNetDevices);
+      //phy.EnablePcap("wifi-ax-ofdma-ap", apNetDevice); // enable pcap tracing
+      //phy.EnablePcap("wifi-ax-ofdma-sta", staNetDevices);
     }
   else
     {
@@ -445,8 +445,8 @@ int  main(int argc, char *argv[])
                        "EnableBeaconJitter", BooleanValue (false),
                        "Ssid", SsidValue (ssid));
       apNetDevice = wifi.Install (YansPhy, wifimac, wifiApNode);
-      YansPhy.EnablePcap("wifi-ax-edca-ap", apNetDevice); // enable pcap tracing
-      YansPhy.EnablePcap("wifi-ax-edca-sta", staNetDevices);
+      //YansPhy.EnablePcap("wifi-ax-edca-ap", apNetDevice); // enable pcap tracing
+      //YansPhy.EnablePcap("wifi-ax-edca-sta", staNetDevices);
     }
 
   /* Internet Stack on*/
