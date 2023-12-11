@@ -99,4 +99,75 @@ PacketTag::GetValue() const
 {
     return m_tagSimpleValue;
 }
+
+TypeId
+OnOffTag::GetTypeId(void)
+{
+    static TypeId tid = TypeId("ns3::MyOnOffTag")
+                            .SetParent<Tag>()
+                            .AddConstructor<PacketTag>()
+                            .AddAttribute("SimpleValue",
+                                          "A simple value",
+                                          UintegerValue (0),
+                                          MakeUintegerAccessor(&OnOffTag::m_tagSimpleValue),
+                                          MakeUintegerChecker<uint64_t>());
+
+    return tid;
+}
+
+
+OnOffTag::OnOffTag ()
+  : m_tagSimpleValue(0)
+{
+  m_tagSimpleValue = 0;
+}
+
+OnOffTag::~OnOffTag ()
+{
+  NS_LOG_FUNCTION (this);
+}
+
+TypeId
+OnOffTag::GetInstanceTypeId() const
+{
+    return GetTypeId();
+}
+
+uint32_t
+OnOffTag::GetSerializedSize() const
+{
+    return sizeof(uint64_t);
+}
+
+void
+OnOffTag::Serialize(TagBuffer i) const
+{
+  i.WriteU64(m_tagSimpleValue);
+}
+
+void
+OnOffTag::Deserialize(TagBuffer i)
+{
+    m_tagSimpleValue = i.ReadU64();
+}
+
+void
+OnOffTag::Print(std::ostream& os) const
+{
+    os << m_tagSimpleValue;
+}
+
+void
+OnOffTag::SetValue(uint64_t value)
+{
+    m_tagSimpleValue= value;
+}
+
+uint64_t
+OnOffTag::GetValue() const
+{
+    return m_tagSimpleValue;
+}
+
+
 } // ns3 namespace

@@ -65,4 +65,40 @@ class PacketTag : public Tag
     uint64_t m_tagSimpleValue;
 };
 
+class OnOffTag : public Tag
+{
+  public:
+    /**
+     * \brief Get the type ID.
+     * \return the object TypeId
+     */
+    static TypeId GetTypeId(void);
+
+    OnOffTag ();
+
+    virtual ~OnOffTag ();
+    TypeId GetInstanceTypeId() const override;
+    uint32_t GetSerializedSize() const override;
+    void Serialize(TagBuffer i) const override;
+    void Deserialize(TagBuffer i) override;
+    void Print(std::ostream& os) const override;
+
+    // these are our accessors to our tag structure
+    /**
+     * Set the tag value
+     * \param value The tag value.
+     */
+    void SetValue(uint64_t value);
+    /**
+     * Get the tag value
+     * \return the tag value.
+     */
+    uint64_t GetValue() const;
+
+
+  private:
+    uint64_t m_tagSimpleValue;
+};
+
+
 } // end namespace

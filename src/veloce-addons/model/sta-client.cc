@@ -1,6 +1,6 @@
 /* -*- Mode:C++; c-file-style:"gnu"; indent-tabs-mode:nil; -*- */
 /*
- * Copyright (c) 2007,2008,2009 INRIA, UDCAST
+ * Copyright (c) 2023
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -15,8 +15,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  *
- * Author: Amine Ismail <amine.ismail@sophia.inria.fr>
- *                      <amine.ismail@udcast.com>
+ * Author: Douglas AGbeve <douglas.agbeve@uantwerpen.be>
  */
 #include "ns3/log.h"
 #include "ns3/ipv4-address.h"
@@ -30,12 +29,14 @@
 #include "ns3/uinteger.h"
 #include "sta-client.h"
 #include "ns3/seq-ts-header.h"
-#include <cstdlib>
-#include <cstdio>
+
+#include "ns3/application-container.h"
+#include "ns3/names.h"
 
 #include "ns3/pointer.h"
 #include "ns3/string.h"
 #include "ns3/boolean.h"
+#include "ns3/double.h"
 #include "ns3/packet-tag.h"
 
 namespace ns3 {
@@ -74,7 +75,9 @@ StaClient::GetTypeId (void)
                    MakeUintegerAccessor (&StaClient::m_peerPort),
                    MakeUintegerChecker<uint16_t> ())
     .AddAttribute ("PacketSize",
-                   "Size of packets generated. The minimum packet size is 12 bytes which is the size of the header carrying the sequence number and the time stamp.",
+                   "Size of packets generated. The minimum packet size is 12 \
+                   bytes which is the size of the header carrying the sequence \
+                   number and the time stamp.",
                    UintegerValue (1024),
                    MakeUintegerAccessor (&StaClient::m_size),
                    MakeUintegerChecker<uint32_t> (12,65507))
@@ -201,14 +204,15 @@ StaClient::StartApplication (void)
 
   if (m_enableRandom)
   {
-    m_sendEvent = Simulator::Schedule (Seconds(m_intervalRandomVariable->GetValue()), &StaClient::Send, this);
+    m_sendEvent = Simulator::Schedule ((m_interval), &StaClient::DelayedSession, this);
+
   }
   else
   {
     Ptr<UniformRandomVariable> rand = CreateObject <UniformRandomVariable> ();
     double delay = rand->GetValue (0, m_startSendIntval.GetSeconds ());
     std::cout << "Initial TX after delay = " << delay << "s" << std::endl;
-    m_sendEvent = Simulator::Schedule (Seconds (delay), &StaClient::Send, this);
+    m_sendEvent = Simulator::Schedule (Seconds (delay), &StaClient::Send, this, true);
   }
 }
 
@@ -219,18 +223,36 @@ StaClient::StopApplication (void)
   Simulator::Cancel (m_sendEvent);
 }
 
+void StaClient::DelayedSession (void)
+{
+  double delay = m_intervalRandomVariable->GetValue();
+  std::cout << "Poison Initial TX after delay = " << delay << "s" << std::endl;
+  m_sendEvent = Simulator::Schedule (Seconds (delay), &StaClient::Send, this, true);
+}
+
 void
-StaClient::Send (void)
+StaClient::Send (bool isFirstPacket)
 {
   NS_LOG_FUNCTION (this);
   NS_ASSERT (m_sendEvent.IsExpired ());
   SeqTsHeader seqTs;
   PacketTag tag;
+  OnOffTag initTag;
   seqTs.SetSeq (m_sent);
-  Ptr<Packet> p = Create<Packet> (m_size-(8+4)); // 8+4 : the size of the seqTs header
-  p->AddHeader (seqTs);
-  tag.SetValue(++m_tagValue);
-  p->AddPacketTag(tag);
+  Ptr<Packet> p = Create<Packet> (m_size-(8+4));
+
+
+  if (isFirstPacket) {
+    p = Create<Packet> (64-(8+4));
+    p->AddHeader (seqTs);
+    initTag.SetValue(1);
+    p->AddPacketTag(initTag);
+  }
+  else {
+    p->AddHeader (seqTs);
+    tag.SetValue( std::floor( seqTs.GetTs().GetSeconds() / m_interval.GetSeconds() ));
+    p->AddPacketTag(tag);
+  }
 
   if ((m_socket->Send (p)) >= 0)
     {
@@ -253,14 +275,7 @@ StaClient::Send (void)
 
   if (m_sent < m_count)
     {
-      if (m_enableRandom)
-        {
-          m_sendEvent = Simulator::Schedule (Seconds(m_intervalRandomVariable->GetValue()), &StaClient::Send, this);
-        }
-      else
-        {
-          m_sendEvent = Simulator::Schedule (m_interval, &StaClient::Send, this);
-        }
+      m_sendEvent = Simulator::Schedule (m_interval, &StaClient::Send, this, false);
     }
 }
 
@@ -271,5 +286,4 @@ StaClient::GetTotalTx () const
   return m_totalTx;
 }
 
-
-} // Namespace ns3
+} // namespace ns3

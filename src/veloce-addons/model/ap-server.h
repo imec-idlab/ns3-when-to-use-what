@@ -26,7 +26,6 @@
 #include "ns3/packet-loss-counter.h"
 #include <cstddef>
 #include <cstdint>
-#include <list>
 #include <vector>
 #include <map>
 

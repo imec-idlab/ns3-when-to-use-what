@@ -79,12 +79,14 @@ ApServer::GetTypeId (void)
                    MakeUintegerAccessor (&ApServer::m_port),
                    MakeUintegerChecker<uint16_t> ())
     .AddAttribute ("PacketSize",
-                   "Size of packets generated. The minimum packet size is 12 bytes which is the size of the header carrying the sequence number and the time stamp.",
+                   "Size of packets generated. The minimum packet size is 12 bytes \
+                   which is the size of the header carrying the sequence number and the time stamp.",
                    UintegerValue (1024),
                    MakeUintegerAccessor (&ApServer::m_size),
                    MakeUintegerChecker<uint32_t> (12,65507))
     .AddAttribute ("PacketWindowSize",
-                   "The size of the window used to compute the packet loss. This value should be a multiple of 8.",
+                   "The size of the window used to compute the packet loss. \
+                   This value should be a multiple of 8.",
                    UintegerValue (32),
                    MakeUintegerAccessor (&ApServer::GetPacketWindowSize,
                                          &ApServer::SetPacketWindowSize),
@@ -243,8 +245,16 @@ ApServer::HandleRead (Ptr<Socket> socket)
           bool latePacket = false;
           uint32_t receivedSize = packet->GetSize ();
           m_totalRx += receivedSize;
-          Ptr<Packet> packet_copy = packet->Copy();
           PacketTag tag;
+          OnOffTag initTag;
+          bool found = packet->RemovePacketTag(initTag);
+          if (found){
+            std::cout <<"this is called FOUND" <<std::endl;
+
+            ++m_nStations;
+            break;
+          }
+          Ptr<Packet> packet_copy = packet->Copy();
           packet->RemovePacketTag(tag);
           SeqTsHeader seqTs;
           packet->RemoveHeader (seqTs);

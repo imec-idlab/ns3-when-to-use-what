@@ -124,7 +124,8 @@ int  main(int argc, char *argv[])
   std::string logDir {"output"};
   double minDistance {1.0}; //meters
   double maxDistance {4.0}; //meters
-  std::size_t nStations {1};
+  std::size_t totalNStations {1};
+  std::size_t initNStations = {1};
   double apHeight {3}; //meters
   double staHeight {1}; //meters
   double startLogTime = {1.030};
@@ -152,6 +153,8 @@ int  main(int argc, char *argv[])
   bool UseCentral26TonesRus = {false};
   bool DelayAccessReqUponAccess = {false};
   double txOpLimits = {2080};  //AC_VO default value in microseconds
+  std::string ruAllocationType {"ru-undefined"};
+  HeRu::RuType ruAllocType {HeRu::RU_UNDEFINED};
 
 
   uint32_t ulPayloadSize = 93; // must fit in the max TX duration when transmitting at MCS 0 over an RU of 26 tones
@@ -170,7 +173,8 @@ int  main(int argc, char *argv[])
   cmd.AddValue ("logDir", "Directory for the output stats files", logDir);
   cmd.AddValue ("minDistance", "Minimum distance in meters between the station and the access point", minDistance);
   cmd.AddValue ("maxDistance", "Maximum distance in meters between the station and the access point", maxDistance);
-  cmd.AddValue ("nStations", "Number of non-AP HE stations", nStations);
+  cmd.AddValue ("totalNStations", "Total number of non-AP HE stations", totalNStations);
+  cmd.AddValue ("initNStations", "Initial number of non-AP HE stations to start transmitting", initNStations);
   cmd.AddValue ("apHeight", "Height of AP [m]", apHeight);
   cmd.AddValue ("staHeight", "Height of STA [m]", staHeight);
   cmd.AddValue ("startLogTime","Time to begin logging [seconds]",startLogTime);
@@ -186,6 +190,7 @@ int  main(int argc, char *argv[])
   cmd.AddValue ("txPowerStart", "Minimum available transmissions level (dBm)", txPowerStart);
   cmd.AddValue ("txPowerEnd", "Maximum available transmissions level (dBm)", txPowerEnd);
   cmd.AddValue ("UseCentral26TonesRus","Enable/Disable the use of Cenral 26 tone RUs", UseCentral26TonesRus);
+  cmd.AddValue ("ruAllocationType","The type of RUs allocated to STAs, if undefined - dynamically selected based on the number of STAs (ru-26-tone, ru-52-tone)", ruAllocationType);
 
   //MAC params
   cmd.AddValue ("useRts", "Enable/disable RTS/CTS", useRts);
@@ -265,9 +270,14 @@ int  main(int argc, char *argv[])
       phyModel = "Spectrum";
     }
 
-  // create nStations of STA and 1 AP
+  if (ruAllocationType == "ru-26-tone" )
+    ruAllocType = HeRu::RU_26_TONE;
+  else if (ruAllocationType == "ru-52-tone")
+    ruAllocType = HeRu::RU_52_TONE;
+
+  // create totalNStations of STA and 1 AP
   NodeContainer wifiStaNodes;
-  wifiStaNodes.Create(nStations);
+  wifiStaNodes.Create(totalNStations);
   NodeContainer wifiApNode;
   wifiApNode.Create(1);
 
@@ -403,7 +413,8 @@ int  main(int argc, char *argv[])
                                       "DelayAccessReqUponAccess", BooleanValue (DelayAccessReqUponAccess),
                                       "UseCentral26TonesRus", BooleanValue (UseCentral26TonesRus),
                                       "NStations", UintegerValue (74),
-                                      "AccessReqAc",EnumValue(AcIndex::AC_VO));
+                                      "AccessReqAc",EnumValue(AcIndex::AC_VO),
+                                      "RuAllocationType", EnumValue(ruAllocType));
         }
         wifimac.SetType ("ns3::ApWifiMac",
                   "EnableBeaconJitter", BooleanValue (false),
@@ -470,48 +481,62 @@ int  main(int argc, char *argv[])
   ApServerHelper apServer(port);
   apServer.SetAttribute("PacketSize", UintegerValue (dlPayloadSize));
   apServer.SetAttribute("RemoteAddress", AddressValue (broadcastAddress));
-  apServer.SetAttribute("NStations", UintegerValue(nStations));
   apServer.SetAttribute("LocalAddress", AddressValue(apLocalAddress) );
   apServer.SetAttribute ("Interval", TimeValue (Seconds (interval)));
   apServer.SetAttribute("StrictWindow", BooleanValue(strictWindow));
 
-  ApplicationContainer apServerApp = apServer.Install (wifiApNode);
+  VeloceAppContainer apServerApp = apServer.Install (wifiApNode);
 
   apServerApp.Start(Seconds (startLogTime));
   apServerApp.Stop (Seconds (simulationTime + startLogTime));
 
   // Sta Server
-  for (size_t i = 0; i < nStations; i++) {
+  for (size_t i = 0; i < totalNStations; i++) {
     ApServerHelper staServer(port);
     InetSocketAddress staLocalAddress = InetSocketAddress (staNodeInterfaces.Get (i).first->GetAddress (1, 0).GetAddress () );
     staLocalAddress.SetTos(0xc0);
     staServer.SetAttribute("LocalAddress", AddressValue(staLocalAddress));
     staServer.SetAttribute("StaApFlag", BooleanValue(true));
-    ApplicationContainer staServerApp = staServer.Install(wifiStaNodes.Get(i));
+    VeloceAppContainer staServerApp = staServer.Install(wifiStaNodes.Get(i));
     staServerApp.Start(Seconds(startLogTime));
     staServerApp.Stop(Seconds(simulationTime + startLogTime ));
   }
 
-    //Udp Sta
+    //Udp Sta CBR Stations
+
+  for (size_t i = 0; i < initNStations; i++) {
   StaClientHelper staUdpClient (apLocalAddress);
   staUdpClient.SetAttribute ("MaxPackets", UintegerValue (4294967295u));
-  if (trafficType == "CBR") /*CBR traffic*/
-  {
-    staUdpClient.SetAttribute ("EnableRandom", BooleanValue (false));
-    staUdpClient.SetAttribute ("Interval", TimeValue (Seconds (interval)));
-    staUdpClient.SetAttribute ("StartSendInterval", TimeValue (Seconds(StartSendInterval)));
-  }
-  else //Poisson traffic
-  {
-    staUdpClient.SetAttribute ("EnableRandom", BooleanValue (true));
-    std::ostringstream intervalDistr;
-    intervalDistr << "ns3::ExponentialRandomVariable[Mean=" << interval << "|Bound=0]";
-    staUdpClient.SetAttribute ("IntervalRandomVariable", StringValue (intervalDistr.str()));
-  }
+  staUdpClient.SetAttribute ("EnableRandom", BooleanValue (false));
+  staUdpClient.SetAttribute ("Interval", TimeValue (Seconds (interval)));
+  staUdpClient.SetAttribute ("StartSendInterval", TimeValue (Seconds(StartSendInterval)));
+  
   staUdpClient.SetAttribute ("PacketSize", UintegerValue (ulPayloadSize));
-  ApplicationContainer staUdpclientApp = staUdpClient.Install (wifiStaNodes);
+  VeloceAppContainer staUdpclientApp = staUdpClient.Install (wifiStaNodes.Get(i));
   staUdpclientApp.Start (Seconds (startLogTime) );
   staUdpclientApp.Stop (Seconds (simulationTime + startLogTime));
+  }
+
+  //poison clients
+  for (size_t i = initNStations ; i < totalNStations; i++) {
+    StaClientHelper staUdpClient (apLocalAddress);
+    staUdpClient.SetAttribute ("MaxPackets", UintegerValue (4294967295u));
+    staUdpClient.SetAttribute ("EnableRandom", BooleanValue (true));
+    staUdpClient.SetAttribute ("Interval", TimeValue (Seconds (interval)));
+    staUdpClient.SetAttribute ("EnableRandom", BooleanValue (true));
+    staUdpClient.SetAttribute ("PacketSize", UintegerValue (ulPayloadSize));
+
+    std::ostringstream intervalDistr;
+    double mean = ((simulationTime + startLogTime) - (startLogTime + interval)/2);
+    double bound = (simulationTime + startLogTime) - (interval*2);
+    intervalDistr << "ns3::ExponentialRandomVariable[Mean=" << mean  << "|Bound="<< bound <<"]";
+    staUdpClient.SetAttribute ("IntervalRandomVariable", StringValue (intervalDistr.str()));
+    
+    VeloceAppContainer staUdpclientApp = staUdpClient.Install (wifiStaNodes.Get(i));
+    staUdpclientApp.Start (Seconds (startLogTime) );
+    staUdpclientApp.Stop (Seconds (simulationTime + startLogTime));
+    
+  }
 
   Simulator::Schedule (Seconds (0), &Ipv4GlobalRoutingHelper::PopulateRoutingTables);
 

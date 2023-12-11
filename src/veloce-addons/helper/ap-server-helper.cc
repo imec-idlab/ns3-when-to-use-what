@@ -40,10 +40,10 @@ ApServerHelper::SetAttribute (std::string name, const AttributeValue &value)
   m_factory.Set (name, value);
 }
 
-ApplicationContainer
+VeloceAppContainer
 ApServerHelper::Install (NodeContainer c)
 {
-  ApplicationContainer apps;
+  VeloceAppContainer apps;
   for (NodeContainer::Iterator i = c.Begin (); i != c.End (); ++i)
     {
       Ptr<Node> node = *i;
@@ -87,10 +87,10 @@ StaClientHelper::SetAttribute (std::string name, const AttributeValue &value)
   m_factory.Set (name, value);
 }
 
-ApplicationContainer
+VeloceAppContainer
 StaClientHelper::Install (NodeContainer c)
 {
-  ApplicationContainer apps;
+  VeloceAppContainer apps;
   for (NodeContainer::Iterator i = c.Begin (); i != c.End (); ++i)
     {
       Ptr<Node> node = *i;

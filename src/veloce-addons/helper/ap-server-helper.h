@@ -18,12 +18,12 @@
 #define AP_SERVER_HELPER_H
 
 #include <stdint.h>
-#include "ns3/application-container.h"
 #include "ns3/node-container.h"
 #include "ns3/object-factory.h"
 #include "ns3/ipv4-address.h"
 #include "ns3/ap-server.h"
 #include "ns3/sta-client.h"
+#include "veloce-app-container.h"
 
 namespace ns3 {
 /**
@@ -68,7 +68,7 @@ public:
    * \returns The applications created, one Application per Node in the
    *          NodeContainer.
    */
-  ApplicationContainer Install (NodeContainer c);
+  VeloceAppContainer Install (NodeContainer c);
 
   /**
    * \brief Return the last created server.
@@ -138,7 +138,7 @@ public:
      *
      * \returns the applications created, one application per input node.
      */
-  ApplicationContainer Install (NodeContainer c);
+  VeloceAppContainer Install (NodeContainer c);
 
 private:
   ObjectFactory m_factory; //!< Object factory.
