@@ -126,9 +126,11 @@ int  main(int argc, char *argv[])
   double maxDistance {4.0}; //meters
   std::size_t totalNStations {1};
   std::size_t initNStations = {1};
+  std::size_t nStationsToJoin = {1};
   double apHeight {3}; //meters
   double staHeight {1}; //meters
   double startLogTime = {1.030};
+  double timeToJoin {5}; //seconds
 
 
   std::string frequency {"5"}; //whether 2.4, 5 or 6 GHz
@@ -175,9 +177,11 @@ int  main(int argc, char *argv[])
   cmd.AddValue ("maxDistance", "Maximum distance in meters between the station and the access point", maxDistance);
   cmd.AddValue ("totalNStations", "Total number of non-AP HE stations", totalNStations);
   cmd.AddValue ("initNStations", "Initial number of non-AP HE stations to start transmitting", initNStations);
+  cmd.AddValue ("nStationsToJoin", "Number of non-AP HE stations to join later", nStationsToJoin);
   cmd.AddValue ("apHeight", "Height of AP [m]", apHeight);
   cmd.AddValue ("staHeight", "Height of STA [m]", staHeight);
   cmd.AddValue ("startLogTime","Time to begin logging [seconds]",startLogTime);
+  cmd.AddValue ("timeToJoin","Time for random stations to join [seconds]", timeToJoin);
 
 
   //PHY params
@@ -435,7 +439,7 @@ int  main(int argc, char *argv[])
       YansPhy.SetPcapDataLinkType (WifiPhyHelper::DLT_IEEE802_11_RADIO);
       YansPhy.SetChannel (channel); //channel.Create ()
       wifimac.SetType ("ns3::StaWifiMac", "Ssid", SsidValue (ssid));
-      
+
       YansPhy.Set ("ChannelSettings", StringValue (channelStr));
       YansPhy.Set("TxPowerStart", DoubleValue(txPowerStart ));
       YansPhy.Set("TxPowerEnd", DoubleValue(txPowerEnd ));
@@ -484,7 +488,6 @@ int  main(int argc, char *argv[])
   apServer.SetAttribute("LocalAddress", AddressValue(apLocalAddress) );
   apServer.SetAttribute ("Interval", TimeValue (Seconds (interval)));
   apServer.SetAttribute("StrictWindow", BooleanValue(strictWindow));
-  apServer.SetAttribute("NStations", UintegerValue(initNStations));
 
   VeloceAppContainer apServerApp = apServer.Install (wifiApNode);
 
@@ -503,15 +506,15 @@ int  main(int argc, char *argv[])
     staServerApp.Stop(Seconds(simulationTime + startLogTime ));
   }
 
-    //Udp Sta CBR Stations
-
+    //Initial Session Stations
+    //
   for (size_t i = 0; i < initNStations; i++) {
   StaClientHelper staUdpClient (apLocalAddress);
   staUdpClient.SetAttribute ("MaxPackets", UintegerValue (4294967295u));
-  staUdpClient.SetAttribute ("EnableRandom", BooleanValue (false));
+  staUdpClient.SetAttribute ("InitSession", BooleanValue (true));
   staUdpClient.SetAttribute ("Interval", TimeValue (Seconds (interval)));
   staUdpClient.SetAttribute ("StartSendInterval", TimeValue (Seconds(StartSendInterval)));
-  
+
   staUdpClient.SetAttribute ("PacketSize", UintegerValue (ulPayloadSize));
   VeloceAppContainer staUdpclientApp = staUdpClient.Install (wifiStaNodes.Get(i));
   staUdpclientApp.Start (Seconds (startLogTime) );
@@ -519,25 +522,40 @@ int  main(int argc, char *argv[])
   }
 
   //poison clients
-  for (size_t i = initNStations ; i < totalNStations; i++) {
+  for (size_t i = 0 ; i < nStationsToJoin; i++) {
     StaClientHelper staUdpClient (apLocalAddress);
     staUdpClient.SetAttribute ("MaxPackets", UintegerValue (4294967295u));
-    staUdpClient.SetAttribute ("EnableRandom", BooleanValue (true));
+    staUdpClient.SetAttribute ("ToJoinSession", BooleanValue (true));
     staUdpClient.SetAttribute ("Interval", TimeValue (Seconds (interval)));
     staUdpClient.SetAttribute ("EnableRandom", BooleanValue (true));
     staUdpClient.SetAttribute ("PacketSize", UintegerValue (ulPayloadSize));
+    staUdpClient.SetAttribute("TimeToJoin", TimeValue(Seconds(timeToJoin)));
 
     std::ostringstream intervalDistr;
-    double mean = ((simulationTime + startLogTime) - (startLogTime + interval)/2);
-    double bound = (simulationTime + startLogTime) - (interval*2);
+    double mean = (((simulationTime + startLogTime) - timeToJoin) - (startLogTime + timeToJoin) / 2);
+    double bound = ((simulationTime + startLogTime) - timeToJoin );
     intervalDistr << "ns3::ExponentialRandomVariable[Mean=" << mean  << "|Bound="<< bound <<"]";
     staUdpClient.SetAttribute ("IntervalRandomVariable", StringValue (intervalDistr.str()));
-    
+
     VeloceAppContainer staUdpclientApp = staUdpClient.Install (wifiStaNodes.Get(i));
     staUdpclientApp.Start (Seconds (startLogTime) );
     staUdpclientApp.Stop (Seconds (simulationTime + startLogTime));
-    
   }
+
+  // idle clients
+  for (size_t i = (initNStations + nStationsToJoin); i < totalNStations; i++) {
+    StaClientHelper staUdpClient (apLocalAddress);
+    staUdpClient.SetAttribute ("MaxPackets", UintegerValue (4294967295u));
+    //staUdpClient.SetAttribute ("InitSession", BooleanValue (true));
+    staUdpClient.SetAttribute ("Interval", TimeValue (Seconds (interval)));
+    staUdpClient.SetAttribute ("StartSendInterval", TimeValue (Seconds(StartSendInterval)));
+
+    staUdpClient.SetAttribute ("PacketSize", UintegerValue (ulPayloadSize));
+    VeloceAppContainer staUdpclientApp = staUdpClient.Install (wifiStaNodes.Get(i));
+    staUdpclientApp.Start (Seconds (startLogTime) );
+    staUdpclientApp.Stop (Seconds (simulationTime + startLogTime));
+  }
+
 
   Simulator::Schedule (Seconds (0), &Ipv4GlobalRoutingHelper::PopulateRoutingTables);
 

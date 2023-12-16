@@ -125,6 +125,7 @@ ApServer::ApServer ()
   m_sent = 0;
   m_tagValue = 0;
   m_totalRx = 0;
+  m_nStations = 0;
   m_sentTags = {};
 }
 
@@ -273,7 +274,7 @@ ApServer::HandleRead (Ptr<Socket> socket)
           {
             latePacket = true;
           }
-          else if( m_strictWindow && ( ( (Simulator::Now() - seqTs.GetTs ()).GetMilliSeconds() ) >= m_interval.GetMilliSeconds() 
+          else if( m_strictWindow && ( ( (Simulator::Now() - seqTs.GetTs ()).GetMilliSeconds() ) >= m_interval.GetMilliSeconds()
               || !(seqTs.GetTs().GetMilliSeconds() + m_interval.GetMilliSeconds() > Simulator::Now().GetMilliSeconds() ) )) {
             // outdated packets
             latePacket = true;

@@ -72,7 +72,7 @@ public:
    * \return the total bytes sent by this app
    */
   uint64_t GetTotalTx () const;
-  
+
 
 protected:
   virtual void DoDispose (void);
@@ -94,8 +94,11 @@ private:
   uint32_t m_size; //!< Size of the sent packet (including the SeqTsHeader)
   Ptr<RandomVariableStream> m_intervalRandomVariable; //!< Random variable for inter-packet interval
   Time m_startSendIntval; //!< Interval within which initial packets are randomly sent
+  Time m_timeToJoin; //<! Time for random stations to join the badwagon
 
   bool m_enableRandom; //!< Enable random distribution
+  bool m_initFlag; //!< Flag for initial sessions
+  bool m_toJoinFlag; //!< Flag for STAs that would join
 
 
   uint32_t m_sent; //!< Counter for sent packets

@@ -86,6 +86,20 @@ StaClient::GetTypeId (void)
                    BooleanValue (false),
                    MakeBooleanAccessor (&StaClient::m_enableRandom),
                    MakeBooleanChecker ())
+    .AddAttribute ("InitSession",
+                   "Flag for initial STA sessions",
+                   BooleanValue (false),
+                   MakeBooleanAccessor (&StaClient::m_initFlag),
+                   MakeBooleanChecker ())
+    .AddAttribute ("ToJoinSession",
+                   "Flag to join the session",
+                   BooleanValue (false),
+                   MakeBooleanAccessor (&StaClient::m_toJoinFlag),
+                   MakeBooleanChecker ())
+    .AddAttribute ("TimeToJoin",
+                   "Time to for random stations to join", TimeValue (Seconds (1.0)),
+                   MakeTimeAccessor (&StaClient::m_timeToJoin),
+                   MakeTimeChecker ())
     .AddAttribute ("IntervalRandomVariable",
                    "For random interval distribution instead of constant",
                    StringValue ("ns3::ConstantRandomVariable[Constant=1.0]"),
@@ -203,17 +217,20 @@ StaClient::StartApplication (void)
   m_socket->SetRecvCallback (MakeNullCallback<void, Ptr<Socket> > ());
   m_socket->SetAllowBroadcast (true);
 
-  if (m_enableRandom)
+  if (m_toJoinFlag)
   {
-    m_sendEvent = Simulator::Schedule ((m_interval), &StaClient::DelayedSession, this, "on" );
+    m_sendEvent = Simulator::Schedule ((m_timeToJoin), &StaClient::DelayedSession, this, "on" );
 
   }
-  else
+  else if (m_initFlag)
   {
     Ptr<UniformRandomVariable> rand = CreateObject <UniformRandomVariable> ();
     double delay = rand->GetValue (0, m_startSendIntval.GetSeconds ());
     std::cout << "Initial TX after delay = " << delay << "s" << std::endl;
     m_sendEvent = Simulator::Schedule (Seconds (delay), &StaClient::Send, this, "FirstPacket");
+  }
+  else{
+    //
   }
 }
 
@@ -256,16 +273,16 @@ StaClient::Send (std::string PacketKind)
     p->AddHeader (seqTs);
     initTag.SetValue(1);
     p->AddPacketTag(initTag);
-    if (m_enableRandom)
-      DelayedSession("off");
+    //if (m_enableRandom)
+    //  DelayedSession("off");
   }
   else if (PacketKind == "LastPacket") {
     p = Create<Packet> (64-(8+4));
     p->AddHeader (seqTs);
     initTag.SetValue(2);
     p->AddPacketTag(initTag);
-    if (m_enableRandom)
-      DelayedSession("on");
+    //if (m_enableRandom)
+     // DelayedSession("on");
   }
   else {
     p->AddHeader (seqTs);
