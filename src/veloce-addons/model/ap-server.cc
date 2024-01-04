@@ -252,6 +252,7 @@ ApServer::HandleRead (Ptr<Socket> socket)
           if (found){
             if (initTag.GetValue() == 1) {
               ++m_nStations;
+              //std::cout <<"first packet recieved from: " << InetSocketAddress::ConvertFrom(from).GetIpv4() << std::endl;
             }
             else if(initTag.GetValue() == 2) {
               --m_nStations;

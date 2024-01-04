@@ -19,6 +19,7 @@
            Douglas Agbeve <douglas.agbeve@uantwerpen.be>
  */
 
+#include <algorithm>
 #include <cerrno>
 #include <cstdint>
 #include <cstdlib>
@@ -472,8 +473,8 @@ int  main(int argc, char *argv[])
    * jitter for random start time
    * */
 
-  Ptr<UniformRandomVariable> rv = CreateObject<UniformRandomVariable>();
-  rv->SetAttribute("Max", DoubleValue(interval));
+  //Ptr<UniformRandomVariable> rv = CreateObject<UniformRandomVariable>();
+  //rv->SetAttribute("Max", DoubleValue(interval));
 
   uint16_t port = {9};
 
@@ -506,9 +507,39 @@ int  main(int argc, char *argv[])
     staServerApp.Stop(Seconds(simulationTime + startLogTime ));
   }
 
+
+  std::set<std::size_t> totalNStationsSet;
+  std::set<std::size_t> initNStationsSet;
+  std::set<std::size_t> nStationsToJoinSet;
+  Ptr<UniformRandomVariable> rv = CreateObject<UniformRandomVariable>();
+  rv->SetAttribute("Max", DoubleValue(totalNStations -1));
+
+  while (initNStationsSet.size() < initNStations) {
+    initNStationsSet.insert(rv->GetInteger());
+  }
+
+  while (nStationsToJoinSet.size() < nStationsToJoin) {
+    size_t lrv = rv->GetInteger();
+    auto p = std::find(initNStationsSet.begin(), initNStationsSet.end(), lrv);
+      if (p != initNStationsSet.end())
+        continue;
+      else
+       nStationsToJoinSet.insert(lrv);
+  }
+
+  for (size_t i = 0; i < totalNStations; i++) {
+    auto  p = std::find(initNStationsSet.begin(), initNStationsSet.end(), i );
+      auto q = std::find(nStationsToJoinSet.begin(), nStationsToJoinSet.end(), i);
+      if ( p != initNStationsSet.end() || q != nStationsToJoinSet.end())
+        continue;
+      else
+       totalNStationsSet.insert(i);
+    }
+
+
     //Initial Session Stations
     //
-  for (size_t i = 0; i < initNStations; i++) {
+  for (auto i : initNStationsSet) {
   StaClientHelper staUdpClient (apLocalAddress);
   staUdpClient.SetAttribute ("MaxPackets", UintegerValue (4294967295u));
   staUdpClient.SetAttribute ("InitSession", BooleanValue (true));
@@ -522,7 +553,7 @@ int  main(int argc, char *argv[])
   }
 
   //poison clients
-  for (size_t i = 0 ; i < nStationsToJoin; i++) {
+  for (auto i : nStationsToJoinSet ) {
     StaClientHelper staUdpClient (apLocalAddress);
     staUdpClient.SetAttribute ("MaxPackets", UintegerValue (4294967295u));
     staUdpClient.SetAttribute ("ToJoinSession", BooleanValue (true));
@@ -543,7 +574,7 @@ int  main(int argc, char *argv[])
   }
 
   // idle clients
-  for (size_t i = (initNStations + nStationsToJoin); i < totalNStations; i++) {
+  for (auto i : totalNStationsSet) {
     StaClientHelper staUdpClient (apLocalAddress);
     staUdpClient.SetAttribute ("MaxPackets", UintegerValue (4294967295u));
     //staUdpClient.SetAttribute ("InitSession", BooleanValue (true));
