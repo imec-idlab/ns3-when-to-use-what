@@ -417,7 +417,7 @@ int  main(int argc, char *argv[])
                                       "AccessReqInterval", TimeValue (Seconds(accessReqInterval)),
                                       "DelayAccessReqUponAccess", BooleanValue (DelayAccessReqUponAccess),
                                       "UseCentral26TonesRus", BooleanValue (UseCentral26TonesRus),
-                                      "NStations", UintegerValue (74),
+                                      "NStations", UintegerValue (totalNStations),
                                       "AccessReqAc",EnumValue(AcIndex::AC_VO),
                                       "RuAllocationType", EnumValue(ruAllocType));
         }
