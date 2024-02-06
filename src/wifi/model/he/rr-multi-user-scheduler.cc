@@ -52,7 +52,7 @@ RrMultiUserScheduler::GetTypeId()
                           "OFDMA transmission",
                           UintegerValue(4),
                           MakeUintegerAccessor(&RrMultiUserScheduler::m_nStations),
-                          MakeUintegerChecker<uint8_t>(1, 148))
+                          MakeUintegerChecker<uint8_t>(1, 74))
             .AddAttribute("EnableTxopSharing",
                           "If enabled, allow A-MPDUs of different TIDs in a DL MU PPDU.",
                           BooleanValue(true),
