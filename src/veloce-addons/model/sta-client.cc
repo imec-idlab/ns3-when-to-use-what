@@ -247,13 +247,13 @@ void StaClient::DelayedSession (std::string onOrOff)
   if (onOrOff == "on"){
     double delay = m_intervalRandomVariable->GetValue();
     std::cout << "Poison On After = " << delay << "s" <<std::endl;
+
     //get which 5ms window
     double  actual_delay = Simulator::Now().GetSeconds() + Seconds(delay).GetSeconds();
-
     double mt5 = std::floor(actual_delay / m_interval.GetSeconds() ) * m_interval.GetSeconds();
-
-    std::cout <<"NOW: "<<Simulator::Now().GetSeconds() <<" actual_delay: " <<actual_delay <<" mt5 "<< mt5 << std::endl;
-
+    
+    //if not in the 1ms of the 5ms window selected, force to the 1ms of the next
+    //5ms window
     if ( (actual_delay - mt5) <= 0.001 ) {
       m_sendEvent = Simulator::Schedule (Seconds (delay), &StaClient::Send, this, "FirstPacket");
     }
@@ -262,7 +262,6 @@ void StaClient::DelayedSession (std::string onOrOff)
       double del = rand->GetValue (mt5 + m_interval.GetSeconds() + MicroSeconds(1).GetSeconds(),
           mt5 + m_interval.GetSeconds() + Seconds(0.001).GetSeconds());
       delay = del - Simulator::Now().GetSeconds();
-      std::cout << "delay now" << Seconds( delay) <<" delay " <<  delay << std::endl ;
       m_sendEvent = Simulator::Schedule ( Seconds( delay), &StaClient::Send, this, "FirstPacket");
     }
   }
