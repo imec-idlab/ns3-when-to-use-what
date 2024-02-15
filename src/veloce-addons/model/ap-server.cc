@@ -308,6 +308,7 @@ ApServer::HandleRead (Ptr<Socket> socket)
             m_tag2TagVec.at(m_tagValue).push_back(m_tagValue);
           }
 
+          /*
           for (auto tagVal = m_tag2TagVec.cbegin(), next_tagVal = tagVal; tagVal != m_tag2TagVec.cend();
               tagVal = next_tagVal) {
             auto key = tagVal->first;
@@ -323,7 +324,7 @@ ApServer::HandleRead (Ptr<Socket> socket)
               }
 
             }
-          } //end for
+          } */ //end for
         }
     }
 }
