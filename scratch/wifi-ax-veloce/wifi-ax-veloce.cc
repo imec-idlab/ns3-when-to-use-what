@@ -126,8 +126,8 @@ int  main(int argc, char *argv[])
   double minDistance {1.0}; //meters
   double maxDistance {4.0}; //meters
   std::size_t totalNStations {1};
-  std::size_t initNStations = {1};
-  std::size_t nStationsToJoin = {1};
+  std::size_t initNStations = {0};
+  std::size_t nStationsToJoin = {0};
   double apHeight {3}; //meters
   double staHeight {1}; //meters
   double startLogTime = {1.030};
@@ -427,8 +427,8 @@ int  main(int argc, char *argv[])
 
       apNetDevice = wifi.Install (phy, wifimac, wifiApNode);
 
-      //phy.EnablePcap("wifi-ax-ofdma-ap", apNetDevice); // enable pcap tracing
-      //phy.EnablePcap("wifi-ax-ofdma-sta", staNetDevices);
+      phy.EnablePcap("wifi-ax-ofdma-ap", apNetDevice); // enable pcap tracing
+      phy.EnablePcap("wifi-ax-ofdma-sta", staNetDevices);
     }
   else
     {
@@ -507,28 +507,27 @@ int  main(int argc, char *argv[])
     staServerApp.Stop(Seconds(simulationTime + startLogTime ));
   }
 
+  if (initNStations && nStationsToJoin) {
 
-  std::set<std::size_t> totalNStationsSet;
-  std::set<std::size_t> initNStationsSet;
-  std::set<std::size_t> nStationsToJoinSet;
-  Ptr<UniformRandomVariable> rv = CreateObject<UniformRandomVariable>();
-  rv->SetAttribute("Max", DoubleValue(totalNStations -1));
+    std::set<std::size_t> totalNStationsSet;
+    std::set<std::size_t> initNStationsSet;
+    std::set<std::size_t> nStationsToJoinSet;
+    Ptr<UniformRandomVariable> rv = CreateObject<UniformRandomVariable>();
+    rv->SetAttribute("Max", DoubleValue(totalNStations -1));
 
-  while (initNStationsSet.size() < initNStations) {
-    initNStationsSet.insert(rv->GetInteger());
-  }
-
-  while (nStationsToJoinSet.size() < nStationsToJoin) {
-    size_t lrv = rv->GetInteger();
-    auto p = std::find(initNStationsSet.begin(), initNStationsSet.end(), lrv);
-      if (p != initNStationsSet.end())
-        continue;
-      else
-       nStationsToJoinSet.insert(lrv);
-  }
-
-  for (size_t i = 0; i < totalNStations; i++) {
-    auto  p = std::find(initNStationsSet.begin(), initNStationsSet.end(), i );
+    while (initNStationsSet.size() < initNStations) {
+      initNStationsSet.insert(rv->GetInteger());
+    }
+    while (nStationsToJoinSet.size() < nStationsToJoin) {
+      size_t lrv = rv->GetInteger();
+      auto p = std::find(initNStationsSet.begin(), initNStationsSet.end(), lrv);
+        if (p != initNStationsSet.end())
+          continue;
+        else
+          nStationsToJoinSet.insert(lrv);
+    }
+    for (size_t i = 0; i < totalNStations; i++) {
+      auto  p = std::find(initNStationsSet.begin(), initNStationsSet.end(), i );
       auto q = std::find(nStationsToJoinSet.begin(), nStationsToJoinSet.end(), i);
       if ( p != initNStationsSet.end() || q != nStationsToJoinSet.end())
         continue;
@@ -536,57 +535,68 @@ int  main(int argc, char *argv[])
        totalNStationsSet.insert(i);
     }
 
-
     //Initial Session Stations
-    //
-  for (auto i : initNStationsSet) {
-  StaClientHelper staUdpClient (apLocalAddress);
-  staUdpClient.SetAttribute ("MaxPackets", UintegerValue (4294967295u));
-  staUdpClient.SetAttribute ("InitSession", BooleanValue (true));
-  staUdpClient.SetAttribute ("Interval", TimeValue (Seconds (interval)));
-  staUdpClient.SetAttribute ("StartSendInterval", TimeValue (Seconds(StartSendInterval)));
-
-  staUdpClient.SetAttribute ("PacketSize", UintegerValue (ulPayloadSize));
-  VeloceAppContainer staUdpclientApp = staUdpClient.Install (wifiStaNodes.Get(i));
-  staUdpclientApp.Start (Seconds (startLogTime) );
-  staUdpclientApp.Stop (Seconds (simulationTime + startLogTime));
-  }
-
-  //poison clients
-  for (auto i : nStationsToJoinSet ) {
+    for (auto i : initNStationsSet) {
     StaClientHelper staUdpClient (apLocalAddress);
     staUdpClient.SetAttribute ("MaxPackets", UintegerValue (4294967295u));
-    staUdpClient.SetAttribute ("ToJoinSession", BooleanValue (true));
-    staUdpClient.SetAttribute ("Interval", TimeValue (Seconds (interval)));
-    staUdpClient.SetAttribute ("EnableRandom", BooleanValue (true));
-    staUdpClient.SetAttribute ("PacketSize", UintegerValue (ulPayloadSize));
-    staUdpClient.SetAttribute("TimeToJoin", TimeValue(Seconds(timeToJoin)));
-
-    std::ostringstream intervalDistr;
-    double mean = (((simulationTime + startLogTime) - timeToJoin) - (startLogTime + timeToJoin) / 2);
-    double bound = ((simulationTime + startLogTime) - timeToJoin );
-    intervalDistr << "ns3::ExponentialRandomVariable[Mean=" << mean  << "|Bound="<< bound <<"]";
-    staUdpClient.SetAttribute ("IntervalRandomVariable", StringValue (intervalDistr.str()));
-
-    VeloceAppContainer staUdpclientApp = staUdpClient.Install (wifiStaNodes.Get(i));
-    staUdpclientApp.Start (Seconds (startLogTime) );
-    staUdpclientApp.Stop (Seconds (simulationTime + startLogTime));
-  }
-
-  // idle clients
-  for (auto i : totalNStationsSet) {
-    StaClientHelper staUdpClient (apLocalAddress);
-    staUdpClient.SetAttribute ("MaxPackets", UintegerValue (4294967295u));
-    //staUdpClient.SetAttribute ("InitSession", BooleanValue (true));
+    staUdpClient.SetAttribute ("InitSession", BooleanValue (true));
     staUdpClient.SetAttribute ("Interval", TimeValue (Seconds (interval)));
     staUdpClient.SetAttribute ("StartSendInterval", TimeValue (Seconds(StartSendInterval)));
-
     staUdpClient.SetAttribute ("PacketSize", UintegerValue (ulPayloadSize));
     VeloceAppContainer staUdpclientApp = staUdpClient.Install (wifiStaNodes.Get(i));
     staUdpclientApp.Start (Seconds (startLogTime) );
     staUdpclientApp.Stop (Seconds (simulationTime + startLogTime));
-  }
+    }
 
+    //poison clients
+    for (auto i : nStationsToJoinSet ) {
+      StaClientHelper staUdpClient (apLocalAddress);
+      staUdpClient.SetAttribute ("MaxPackets", UintegerValue (4294967295u));
+      staUdpClient.SetAttribute ("ToJoinSession", BooleanValue (true));
+      staUdpClient.SetAttribute ("Interval", TimeValue (Seconds (interval)));
+      staUdpClient.SetAttribute ("EnableRandom", BooleanValue (true));
+      staUdpClient.SetAttribute ("PacketSize", UintegerValue (ulPayloadSize));
+      staUdpClient.SetAttribute("TimeToJoin", TimeValue(Seconds(timeToJoin)));
+
+      std::ostringstream intervalDistr;
+      double mean = (((simulationTime + startLogTime) - timeToJoin) - (startLogTime + timeToJoin) / 2);
+      double bound = ((simulationTime + startLogTime) - timeToJoin );
+      intervalDistr << "ns3::ExponentialRandomVariable[Mean=" << mean  << "|Bound="<< bound <<"]";
+      staUdpClient.SetAttribute ("IntervalRandomVariable", StringValue (intervalDistr.str()));
+
+      VeloceAppContainer staUdpclientApp = staUdpClient.Install (wifiStaNodes.Get(i));
+      staUdpclientApp.Start (Seconds (startLogTime) );
+      staUdpclientApp.Stop (Seconds (simulationTime + startLogTime));
+    }
+
+  // idle clients
+    for (auto i : totalNStationsSet) {
+      StaClientHelper staUdpClient (apLocalAddress);
+      staUdpClient.SetAttribute ("MaxPackets", UintegerValue (4294967295u));
+    //staUdpClient.SetAttribute ("InitSession", BooleanValue (true));
+      staUdpClient.SetAttribute ("Interval", TimeValue (Seconds (interval)));
+      staUdpClient.SetAttribute ("StartSendInterval", TimeValue (Seconds(StartSendInterval)));
+
+      staUdpClient.SetAttribute ("PacketSize", UintegerValue (ulPayloadSize));
+      VeloceAppContainer staUdpclientApp = staUdpClient.Install (wifiStaNodes.Get(i));
+      staUdpclientApp.Start (Seconds (startLogTime) );
+      staUdpclientApp.Stop (Seconds (simulationTime + startLogTime));
+    }
+  }
+  else {
+    for (size_t i = 0; i < totalNStations; i++) {
+      StaClientHelper staUdpClient (apLocalAddress);
+      staUdpClient.SetAttribute ("MaxPackets", UintegerValue (4294967295u));
+      staUdpClient.SetAttribute ("InitSession", BooleanValue (true));
+      staUdpClient.SetAttribute ("Interval", TimeValue (Seconds (interval)));
+      staUdpClient.SetAttribute ("StartSendInterval", TimeValue (Seconds(StartSendInterval)));
+
+      staUdpClient.SetAttribute ("PacketSize", UintegerValue (ulPayloadSize));
+      VeloceAppContainer staUdpclientApp = staUdpClient.Install (wifiStaNodes.Get(i));
+      staUdpclientApp.Start (Seconds (startLogTime) );
+      staUdpclientApp.Stop (Seconds (simulationTime + startLogTime));
+    }
+  }
 
   Simulator::Schedule (Seconds (0), &Ipv4GlobalRoutingHelper::PopulateRoutingTables);
 
