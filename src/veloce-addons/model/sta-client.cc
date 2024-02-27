@@ -101,6 +101,11 @@ StaClient::GetTypeId (void)
                    "Time to for random stations to join", TimeValue (Seconds (1.0)),
                    MakeTimeAccessor (&StaClient::m_timeToJoin),
                    MakeTimeChecker ())
+    .AddAttribute ("IdleStations",
+                   "Flag to indicate idle stations",
+                   BooleanValue (false),
+                   MakeBooleanAccessor (&StaClient::m_idleFlag),
+                   MakeBooleanChecker ())
     .AddAttribute ("IntervalRandomVariable",
                    "For random interval distribution instead of constant",
                    StringValue ("ns3::ConstantRandomVariable[Constant=1.0]"),
@@ -218,21 +223,26 @@ StaClient::StartApplication (void)
   m_socket->SetRecvCallback (MakeNullCallback<void, Ptr<Socket> > ());
   m_socket->SetAllowBroadcast (true);
 
+  Ptr<UniformRandomVariable> rand = CreateObject <UniformRandomVariable> ();
+  double delay = rand->GetValue (MicroSeconds(1).GetSeconds(), m_startSendIntval.GetSeconds ());
+  std::cout << "Initial TX after delay = " << delay << "s" << std::endl;
+  m_sendEvent = Simulator::Schedule (Seconds (delay), &StaClient::Send, this, "FirstPacket");
+
+  /*
   if (m_toJoinFlag)
   {
     m_sendEvent = Simulator::Schedule ((m_timeToJoin), &StaClient::DelayedSession, this, "on" );
-
   }
   else if (m_initFlag)
   {
     Ptr<UniformRandomVariable> rand = CreateObject <UniformRandomVariable> ();
-    double delay = rand->GetValue (0, m_startSendIntval.GetSeconds ());
+    double delay = rand->GetValue (MicroSeconds(1).GetSeconds(), m_startSendIntval.GetSeconds ());
     std::cout << "Initial TX after delay = " << delay << "s" << std::endl;
     m_sendEvent = Simulator::Schedule (Seconds (delay), &StaClient::Send, this, "FirstPacket");
   }
   else{
     //
-  }
+  } */
 }
 
 void
@@ -251,18 +261,18 @@ void StaClient::DelayedSession (std::string onOrOff)
     //get which 5ms window
     double  actual_delay = Simulator::Now().GetSeconds() + Seconds(delay).GetSeconds();
     double mt5 = std::floor(actual_delay / m_interval.GetSeconds() ) * m_interval.GetSeconds();
-    
+
     //if not in the 1ms of the 5ms window selected, force to the 1ms of the next
     //5ms window
     if ( (actual_delay - mt5) <= 0.001 ) {
-      m_sendEvent = Simulator::Schedule (Seconds (delay), &StaClient::Send, this, "FirstPacket");
+      m_sendEvent = Simulator::Schedule (Seconds (delay), &StaClient::Send, this, "");
     }
     else {
       Ptr<UniformRandomVariable> rand = CreateObject <UniformRandomVariable> ();
       double del = rand->GetValue (mt5 + m_interval.GetSeconds() + MicroSeconds(1).GetSeconds(),
           mt5 + m_interval.GetSeconds() + Seconds(0.001).GetSeconds());
       delay = del - Simulator::Now().GetSeconds();
-      m_sendEvent = Simulator::Schedule ( Seconds( delay), &StaClient::Send, this, "FirstPacket");
+      m_sendEvent = Simulator::Schedule ( Seconds( delay), &StaClient::Send, this, "");
     }
   }
   else if (onOrOff == "off") {
@@ -283,13 +293,13 @@ StaClient::Send (std::string PacketKind)
   PacketTag tag;
   OnOffTag initTag;
   seqTs.SetSeq (m_sent);
-  Ptr<Packet> p = Create<Packet> (m_size-(8+4));
-
+  Ptr<Packet> p = Create<Packet> ();
   if (PacketKind == "FirstPacket") {
     p = Create<Packet> (64-(8+4));
     p->AddHeader (seqTs);
     initTag.SetValue(1);
     p->AddPacketTag(initTag);
+
     //if (m_enableRandom)
     //  DelayedSession("off");
   }
@@ -302,6 +312,7 @@ StaClient::Send (std::string PacketKind)
      // DelayedSession("on");
   }
   else {
+    p = Create<Packet> (m_size-(8+4));
     p->AddHeader (seqTs);
     tag.SetValue( std::floor( seqTs.GetTs().GetSeconds() / m_interval.GetSeconds() ));
     p->AddPacketTag(tag);
@@ -326,7 +337,13 @@ StaClient::Send (std::string PacketKind)
     }
 #endif // NS3_LOG_ENABLE
 
-  if (m_sent < m_count && PacketKind != "LastPacket")
+  if (m_toJoinFlag && PacketKind == "FirstPacket"){
+    m_sendEvent = Simulator::Schedule ((m_timeToJoin), &StaClient::DelayedSession, this, "on" );
+  }
+  else if (m_idleFlag && PacketKind == "FirstPacket"){
+     //do nothing
+    }
+  else if (m_sent < m_count && PacketKind != "LastPacket")
     {
       m_sendEvent = Simulator::Schedule (m_interval, &StaClient::Send, this, "");
     }

@@ -99,6 +99,7 @@ private:
   bool m_enableRandom; //!< Enable random distribution
   bool m_initFlag; //!< Flag for initial sessions
   bool m_toJoinFlag; //!< Flag for STAs that would join
+  bool m_idleFlag; //<! Flag for Idle STAs
 
 
   uint32_t m_sent; //!< Counter for sent packets

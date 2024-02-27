@@ -405,7 +405,8 @@ int  main(int argc, char *argv[])
       phy.Set("TxPowerStart", DoubleValue(txPowerStart ));
       phy.Set("TxPowerEnd", DoubleValue(txPowerEnd ));
 
-      wifimac.SetType ("ns3::StaWifiMac", "Ssid", SsidValue (ssid));
+      wifimac.SetType ("ns3::StaWifiMac", "Ssid", SsidValue (ssid),
+                       "VO_BlockAckThreshold", UintegerValue(0));
 
       staNetDevices = wifi.Install (phy, wifimac, wifiStaNodes);
 
@@ -423,12 +424,13 @@ int  main(int argc, char *argv[])
         }
         wifimac.SetType ("ns3::ApWifiMac",
                   "EnableBeaconJitter", BooleanValue (false),
-                  "Ssid", SsidValue (ssid));
+                  "Ssid", SsidValue (ssid),
+                  "VO_BlockAckThreshold", UintegerValue(0));
 
       apNetDevice = wifi.Install (phy, wifimac, wifiApNode);
 
-      //phy.EnablePcap("wifi-ax-ofdma-ap", apNetDevice); // enable pcap tracing
-      //phy.EnablePcap("wifi-ax-ofdma-sta", staNetDevices);
+      phy.EnablePcap("wifi-ax-ofdma-ap", apNetDevice); // enable pcap tracing
+      phy.EnablePcap("wifi-ax-ofdma-sta", staNetDevices);
     }
   else
     {
@@ -448,10 +450,11 @@ int  main(int argc, char *argv[])
 
       wifimac.SetType ("ns3::ApWifiMac",
                        "EnableBeaconJitter", BooleanValue (false),
-                       "Ssid", SsidValue (ssid));
+                       "Ssid", SsidValue (ssid),
+                       "VO_BlockAckThreshold", UintegerValue(0));
       apNetDevice = wifi.Install (YansPhy, wifimac, wifiApNode);
-      //YansPhy.EnablePcap("wifi-ax-edca-ap", apNetDevice); // enable pcap tracing
-      //YansPhy.EnablePcap("wifi-ax-edca-sta", staNetDevices);
+      YansPhy.EnablePcap("wifi-ax-edca-ap", apNetDevice); // enable pcap tracing
+      YansPhy.EnablePcap("wifi-ax-edca-sta", staNetDevices);
     }
 
   /* Internet Stack on*/
@@ -492,7 +495,7 @@ int  main(int argc, char *argv[])
 
   VeloceAppContainer apServerApp = apServer.Install (wifiApNode);
 
-  apServerApp.Start(Seconds (startLogTime));
+  apServerApp.Start(Seconds (0));
   apServerApp.Stop (Seconds (simulationTime + startLogTime));
 
   // Sta Server
@@ -503,7 +506,7 @@ int  main(int argc, char *argv[])
     staServer.SetAttribute("LocalAddress", AddressValue(staLocalAddress));
     staServer.SetAttribute("StaApFlag", BooleanValue(true));
     VeloceAppContainer staServerApp = staServer.Install(wifiStaNodes.Get(i));
-    staServerApp.Start(Seconds(startLogTime));
+    staServerApp.Start(Seconds(0));
     staServerApp.Stop(Seconds(simulationTime + startLogTime ));
   }
 
@@ -544,7 +547,7 @@ int  main(int argc, char *argv[])
     staUdpClient.SetAttribute ("StartSendInterval", TimeValue (Seconds(StartSendInterval)));
     staUdpClient.SetAttribute ("PacketSize", UintegerValue (ulPayloadSize));
     VeloceAppContainer staUdpclientApp = staUdpClient.Install (wifiStaNodes.Get(i));
-    staUdpclientApp.Start (Seconds (startLogTime) );
+    staUdpclientApp.Start (Seconds (0) );
     staUdpclientApp.Stop (Seconds (simulationTime + startLogTime));
     }
 
@@ -565,7 +568,7 @@ int  main(int argc, char *argv[])
       staUdpClient.SetAttribute ("IntervalRandomVariable", StringValue (intervalDistr.str()));
 
       VeloceAppContainer staUdpclientApp = staUdpClient.Install (wifiStaNodes.Get(i));
-      staUdpclientApp.Start (Seconds (startLogTime) );
+      staUdpclientApp.Start (Seconds (0) );
       staUdpclientApp.Stop (Seconds (simulationTime + startLogTime));
     }
 
@@ -573,18 +576,19 @@ int  main(int argc, char *argv[])
     for (auto i : totalNStationsSet) {
       StaClientHelper staUdpClient (apLocalAddress);
       staUdpClient.SetAttribute ("MaxPackets", UintegerValue (4294967295u));
-    //staUdpClient.SetAttribute ("InitSession", BooleanValue (true));
+      staUdpClient.SetAttribute ("IdleStations", BooleanValue (true));
       staUdpClient.SetAttribute ("Interval", TimeValue (Seconds (interval)));
       staUdpClient.SetAttribute ("StartSendInterval", TimeValue (Seconds(StartSendInterval)));
 
       staUdpClient.SetAttribute ("PacketSize", UintegerValue (ulPayloadSize));
       VeloceAppContainer staUdpclientApp = staUdpClient.Install (wifiStaNodes.Get(i));
-      staUdpclientApp.Start (Seconds (startLogTime) );
+      staUdpclientApp.Start (Seconds (0) );
       staUdpclientApp.Stop (Seconds (simulationTime + startLogTime));
     }
   }
   else {
     for (size_t i = 0; i < totalNStations; i++) {
+      std::cout <<"this that must not be called" << std::endl;
       StaClientHelper staUdpClient (apLocalAddress);
       staUdpClient.SetAttribute ("MaxPackets", UintegerValue (4294967295u));
       staUdpClient.SetAttribute ("InitSession", BooleanValue (true));
@@ -593,7 +597,7 @@ int  main(int argc, char *argv[])
 
       staUdpClient.SetAttribute ("PacketSize", UintegerValue (ulPayloadSize));
       VeloceAppContainer staUdpclientApp = staUdpClient.Install (wifiStaNodes.Get(i));
-      staUdpclientApp.Start (Seconds (startLogTime) );
+      staUdpclientApp.Start (Seconds (0) );
       staUdpclientApp.Stop (Seconds (simulationTime + startLogTime));
     }
   }
