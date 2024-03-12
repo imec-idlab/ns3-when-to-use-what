@@ -133,6 +133,7 @@ int  main(int argc, char *argv[])
   double startLogTime = {1.030};
   double timeToJoin {5}; //seconds
   double initStaJoinTime {2}; //seconds
+  std::size_t scenario {1};
 
 
   std::string frequency {"5"}; //whether 2.4, 5 or 6 GHz
@@ -185,6 +186,7 @@ int  main(int argc, char *argv[])
   cmd.AddValue ("startLogTime","Time to begin logging [seconds]",startLogTime);
   cmd.AddValue ("timeToJoin","Time for random stations to join [seconds]", timeToJoin);
   cmd.AddValue ("initStaJoinTime","Time at which Initial STAs transmit after established connection with AP [seconds]", initStaJoinTime);
+  cmd.AddValue ("scenario","Scenario to simulate; 0 - only up to 8 active stations.  1 - idle stations joining along the way", scenario);
 
 
 
@@ -513,7 +515,7 @@ int  main(int argc, char *argv[])
     staServerApp.Stop(Seconds(simulationTime + startLogTime ));
   }
 
-  if (initNStations && nStationsToJoin) {
+  if (scenario) {
 
     std::set<std::size_t> totalNStationsSet;
     std::set<std::size_t> initNStationsSet;
