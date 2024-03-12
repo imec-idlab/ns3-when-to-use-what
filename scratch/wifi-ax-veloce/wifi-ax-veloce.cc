@@ -132,6 +132,7 @@ int  main(int argc, char *argv[])
   double staHeight {1}; //meters
   double startLogTime = {1.030};
   double timeToJoin {5}; //seconds
+  double initStaJoinTime {2}; //seconds
 
 
   std::string frequency {"5"}; //whether 2.4, 5 or 6 GHz
@@ -183,6 +184,8 @@ int  main(int argc, char *argv[])
   cmd.AddValue ("staHeight", "Height of STA [m]", staHeight);
   cmd.AddValue ("startLogTime","Time to begin logging [seconds]",startLogTime);
   cmd.AddValue ("timeToJoin","Time for random stations to join [seconds]", timeToJoin);
+  cmd.AddValue ("initStaJoinTime","Time at which Initial STAs transmit after established connection with AP [seconds]", initStaJoinTime);
+
 
 
   //PHY params
@@ -429,8 +432,8 @@ int  main(int argc, char *argv[])
 
       apNetDevice = wifi.Install (phy, wifimac, wifiApNode);
 
-      phy.EnablePcap("wifi-ax-ofdma-ap", apNetDevice); // enable pcap tracing
-      phy.EnablePcap("wifi-ax-ofdma-sta", staNetDevices);
+      //phy.EnablePcap("wifi-ax-ofdma-ap", apNetDevice); // enable pcap tracing
+      //phy.EnablePcap("wifi-ax-ofdma-sta", staNetDevices);
     }
   else
     {
@@ -453,8 +456,8 @@ int  main(int argc, char *argv[])
                        "Ssid", SsidValue (ssid),
                        "VO_BlockAckThreshold", UintegerValue(0));
       apNetDevice = wifi.Install (YansPhy, wifimac, wifiApNode);
-      YansPhy.EnablePcap("wifi-ax-edca-ap", apNetDevice); // enable pcap tracing
-      YansPhy.EnablePcap("wifi-ax-edca-sta", staNetDevices);
+      //YansPhy.EnablePcap("wifi-ax-edca-ap", apNetDevice); // enable pcap tracing
+      //YansPhy.EnablePcap("wifi-ax-edca-sta", staNetDevices);
     }
 
   /* Internet Stack on*/
@@ -538,14 +541,19 @@ int  main(int argc, char *argv[])
        totalNStationsSet.insert(i);
     }
 
+    double staStartTime = 1;
     //Initial Session Stations
     for (auto i : initNStationsSet) {
+    staStartTime += 0.00208;
     StaClientHelper staUdpClient (apLocalAddress);
     staUdpClient.SetAttribute ("MaxPackets", UintegerValue (4294967295u));
     staUdpClient.SetAttribute ("InitSession", BooleanValue (true));
     staUdpClient.SetAttribute ("Interval", TimeValue (Seconds (interval)));
     staUdpClient.SetAttribute ("StartSendInterval", TimeValue (Seconds(StartSendInterval)));
     staUdpClient.SetAttribute ("PacketSize", UintegerValue (ulPayloadSize));
+    staUdpClient.SetAttribute("InitStaJoinTime", TimeValue(Seconds(initStaJoinTime)));
+    staUdpClient.SetAttribute("InitPacketSentDelay", TimeValue(Seconds(staStartTime)));
+
     VeloceAppContainer staUdpclientApp = staUdpClient.Install (wifiStaNodes.Get(i));
     staUdpclientApp.Start (Seconds (0) );
     staUdpclientApp.Stop (Seconds (simulationTime + startLogTime));
@@ -553,6 +561,7 @@ int  main(int argc, char *argv[])
 
     //poison clients
     for (auto i : nStationsToJoinSet ) {
+      staStartTime += 0.00208;
       StaClientHelper staUdpClient (apLocalAddress);
       staUdpClient.SetAttribute ("MaxPackets", UintegerValue (4294967295u));
       staUdpClient.SetAttribute ("ToJoinSession", BooleanValue (true));
@@ -566,6 +575,7 @@ int  main(int argc, char *argv[])
       double bound = ((simulationTime + startLogTime) - timeToJoin );
       intervalDistr << "ns3::ExponentialRandomVariable[Mean=" << mean  << "|Bound="<< bound <<"]";
       staUdpClient.SetAttribute ("IntervalRandomVariable", StringValue (intervalDistr.str()));
+      staUdpClient.SetAttribute("InitPacketSentDelay", TimeValue(Seconds(staStartTime)));
 
       VeloceAppContainer staUdpclientApp = staUdpClient.Install (wifiStaNodes.Get(i));
       staUdpclientApp.Start (Seconds (0) );
@@ -574,13 +584,16 @@ int  main(int argc, char *argv[])
 
   // idle clients
     for (auto i : totalNStationsSet) {
+      staStartTime += 0.00208;
       StaClientHelper staUdpClient (apLocalAddress);
       staUdpClient.SetAttribute ("MaxPackets", UintegerValue (4294967295u));
       staUdpClient.SetAttribute ("IdleStations", BooleanValue (true));
       staUdpClient.SetAttribute ("Interval", TimeValue (Seconds (interval)));
       staUdpClient.SetAttribute ("StartSendInterval", TimeValue (Seconds(StartSendInterval)));
-
       staUdpClient.SetAttribute ("PacketSize", UintegerValue (ulPayloadSize));
+
+      staUdpClient.SetAttribute("InitPacketSentDelay", TimeValue(Seconds(staStartTime)));
+
       VeloceAppContainer staUdpclientApp = staUdpClient.Install (wifiStaNodes.Get(i));
       staUdpclientApp.Start (Seconds (0) );
       staUdpclientApp.Stop (Seconds (simulationTime + startLogTime));
@@ -588,13 +601,11 @@ int  main(int argc, char *argv[])
   }
   else {
     for (size_t i = 0; i < totalNStations; i++) {
-      std::cout <<"this that must not be called" << std::endl;
       StaClientHelper staUdpClient (apLocalAddress);
       staUdpClient.SetAttribute ("MaxPackets", UintegerValue (4294967295u));
       staUdpClient.SetAttribute ("InitSession", BooleanValue (true));
       staUdpClient.SetAttribute ("Interval", TimeValue (Seconds (interval)));
       staUdpClient.SetAttribute ("StartSendInterval", TimeValue (Seconds(StartSendInterval)));
-
       staUdpClient.SetAttribute ("PacketSize", UintegerValue (ulPayloadSize));
       VeloceAppContainer staUdpclientApp = staUdpClient.Install (wifiStaNodes.Get(i));
       staUdpclientApp.Start (Seconds (0) );

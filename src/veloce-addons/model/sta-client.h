@@ -95,6 +95,8 @@ private:
   Ptr<RandomVariableStream> m_intervalRandomVariable; //!< Random variable for inter-packet interval
   Time m_startSendIntval; //!< Interval within which initial packets are randomly sent
   Time m_timeToJoin; //<! Time for random stations to join the badwagon
+  Time m_initStaJoinTime; //<! Time to send actual data after establishing connection
+  Time m_initPacketSentDelay; //<! Time to send the initial packets
 
   bool m_enableRandom; //!< Enable random distribution
   bool m_initFlag; //!< Flag for initial sessions

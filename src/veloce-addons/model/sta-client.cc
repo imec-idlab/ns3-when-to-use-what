@@ -38,7 +38,6 @@
 #include "ns3/boolean.h"
 #include "ns3/double.h"
 #include "ns3/packet-tag.h"
-#include <iomanip>
 
 namespace ns3 {
 
@@ -100,6 +99,14 @@ StaClient::GetTypeId (void)
     .AddAttribute ("TimeToJoin",
                    "Time to for random stations to join", TimeValue (Seconds (1.0)),
                    MakeTimeAccessor (&StaClient::m_timeToJoin),
+                   MakeTimeChecker ())
+    .AddAttribute ("InitStaJoinTime",
+                   "Time to for initial stations to join after establishing connection", TimeValue (Seconds (1.0)),
+                   MakeTimeAccessor (&StaClient::m_initStaJoinTime),
+                   MakeTimeChecker ())
+    .AddAttribute ("InitPacketSentDelay",
+                   "Time to start sending initial packets", TimeValue (Seconds (1.0)),
+                   MakeTimeAccessor (&StaClient::m_initPacketSentDelay),
                    MakeTimeChecker ())
     .AddAttribute ("IdleStations",
                    "Flag to indicate idle stations",
@@ -223,12 +230,14 @@ StaClient::StartApplication (void)
   m_socket->SetRecvCallback (MakeNullCallback<void, Ptr<Socket> > ());
   m_socket->SetAllowBroadcast (true);
 
+  m_sendEvent = Simulator::Schedule(Seconds( m_initPacketSentDelay.GetSeconds() ), &StaClient::Send, this, "FirstPacket");
+
+  /*
   Ptr<UniformRandomVariable> rand = CreateObject <UniformRandomVariable> ();
   double delay = rand->GetValue (MicroSeconds(1).GetSeconds(), m_startSendIntval.GetSeconds ());
   std::cout << "Initial TX after delay = " << delay << "s" << std::endl;
   m_sendEvent = Simulator::Schedule (Seconds (delay), &StaClient::Send, this, "FirstPacket");
 
-  /*
   if (m_toJoinFlag)
   {
     m_sendEvent = Simulator::Schedule ((m_timeToJoin), &StaClient::DelayedSession, this, "on" );
@@ -336,8 +345,14 @@ StaClient::Send (std::string PacketKind)
                                           << m_peerAddressString);
     }
 #endif // NS3_LOG_ENABLE
-
-  if (m_toJoinFlag && PacketKind == "FirstPacket"){
+  if (m_initFlag && PacketKind == "FirstPacket") {
+    Ptr<UniformRandomVariable> rand = CreateObject <UniformRandomVariable> ();
+    double delay = rand->GetValue (0, m_startSendIntval.GetSeconds ());
+    delay += (m_initStaJoinTime.GetSeconds() - Simulator::Now().GetSeconds());
+    std::cout << "Initial TX after delay = " << delay << "s" << std::endl;
+    m_sendEvent = Simulator::Schedule (Seconds (delay), &StaClient::Send, this, "initialFlag");
+  }
+  else if (m_toJoinFlag && PacketKind == "FirstPacket"){
     m_sendEvent = Simulator::Schedule ((m_timeToJoin), &StaClient::DelayedSession, this, "on" );
   }
   else if (m_idleFlag && PacketKind == "FirstPacket"){
