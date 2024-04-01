@@ -130,6 +130,8 @@ class MultiUserScheduler : public Object
      */
     void SetAccessReqInterval(Time interval);
 
+    virtual void UpdatePollList(Mac48Address address) = 0;
+
   protected:
     /**
      * Get the station manager attached to the AP on the given link.
@@ -225,6 +227,7 @@ class MultiUserScheduler : public Object
      */
     virtual UlMuInfo ComputeUlMuInfo() = 0;
 
+    
     /**
      * Ensure that the Trigger Frame returned in case of UL MU transmission is
      * correct. Currently, this method sets the CS Required, the AP Tx Power and
