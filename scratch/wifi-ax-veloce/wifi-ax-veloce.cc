@@ -150,7 +150,7 @@ int  main(int argc, char *argv[])
   std::string dlAckSeqType {"NO-OFDMA"};
   bool enableUlOfdma {false};
   bool enableBsrp {false};
-  double accessReqInterval = {0};
+  double accessReqInterval = {0}; //microseconds
   bool useRts {true};
   bool useExtendedBlockAck {false};
   bool useMuEdca {true};
@@ -208,7 +208,7 @@ int  main(int argc, char *argv[])
   cmd.AddValue ("dlAckType", "Ack sequence type for DL OFDMA (NO-OFDMA, ACK-SU-FORMAT, MU-BAR, AGGR-MU-BAR)", dlAckSeqType);
   cmd.AddValue ("enableUlOfdma", "Enable UL OFDMA (useful if DL OFDMA is enabled and TCP is used)", enableUlOfdma);
   cmd.AddValue ("enableBsrp", "Enable BSRP (useful if DL and UL OFDMA are enabled and TCP is used)", enableBsrp);
-  cmd.AddValue ("muSchedAccessReqInterval", "Duration of the interval between two requests for channel access made by the MU scheduler (Seconds)", accessReqInterval);
+  cmd.AddValue ("muSchedAccessReqInterval", "Duration of the interval between two requests for channel access made by the MU scheduler (MicroSeconds)", accessReqInterval);
   cmd.AddValue ("useMuEdca", "Enable/disable Specific EDCA parameters set", useMuEdca);
   cmd.AddValue ("nMsdus", "Number of aggregated MSDUs (=< 11398/740 for VHT/HE/EHT PPDUs)", nMsdus);
   cmd.AddValue ("nMpdus", "Number of aggregated MPDUs (=< 6500631/740 for HE PPDUs)", nMpdus);
@@ -331,10 +331,10 @@ int  main(int argc, char *argv[])
       Config::SetDefault ("ns3::HeConfiguration::MuVoCwMax", UintegerValue (32767));
 
       //STA timer (validity of set)
-      Config::SetDefault ("ns3::HeConfiguration::BkMuEdcaTimer", TimeValue (MicroSeconds (2088960)));
-      Config::SetDefault ("ns3::HeConfiguration::BeMuEdcaTimer", TimeValue (MicroSeconds (2088960)));
-      Config::SetDefault ("ns3::HeConfiguration::ViMuEdcaTimer", TimeValue (MicroSeconds (2088960)));
-      Config::SetDefault ("ns3::HeConfiguration::VoMuEdcaTimer", TimeValue (MicroSeconds (2088960)));
+      Config::SetDefault ("ns3::HeConfiguration::BkMuEdcaTimer", TimeValue (MicroSeconds(8192 * 5) ));
+      Config::SetDefault ("ns3::HeConfiguration::BeMuEdcaTimer", TimeValue (MicroSeconds(8192 * 5) ));
+      Config::SetDefault ("ns3::HeConfiguration::ViMuEdcaTimer", TimeValue (MicroSeconds(8192 * 5) ));
+      Config::SetDefault ("ns3::HeConfiguration::VoMuEdcaTimer", TimeValue (MicroSeconds(8192 * 5) ));
   }
 
   //sifs and slot time
@@ -345,7 +345,7 @@ int  main(int argc, char *argv[])
   Config::SetDefault ("ns3::WifiRemoteStationManager::MaxSsrc", UintegerValue (32));
   Config::SetDefault ("ns3::WifiRemoteStationManager::MaxSlrc", UintegerValue (32));
 
-  Config::SetDefault("ns3::QosFrameExchangeManager::SetQueueSize", BooleanValue(true));
+  Config::SetDefault("ns3::QosFrameExchangeManager::SetQueueSize", BooleanValue(false));
 
   if (enableAggregation)
     Config::SetDefault ("ns3::WifiRemoteStationManager::FragmentationThreshold", StringValue ("990000"));
@@ -417,10 +417,10 @@ int  main(int argc, char *argv[])
 
       if (dlAckSeqType != "NO-OFDMA")
         {
-          wifimac.SetMultiUserScheduler ("ns3::RrMultiUserScheduler",
+          wifimac.SetMultiUserScheduler ("ns3::VlceMultiUserScheduler",
                                       "EnableUlOfdma", BooleanValue (enableUlOfdma),
                                       "EnableBsrp", BooleanValue (enableBsrp),
-                                      "AccessReqInterval", TimeValue (Seconds(accessReqInterval)),
+                                      "AccessReqInterval", TimeValue (MicroSeconds(accessReqInterval)),
                                       "DelayAccessReqUponAccess", BooleanValue (DelayAccessReqUponAccess),
                                       "UseCentral26TonesRus", BooleanValue (UseCentral26TonesRus),
                                       "NStations", UintegerValue (totalNStations),
@@ -570,7 +570,7 @@ int  main(int argc, char *argv[])
       staUdpClient.SetAttribute ("Interval", TimeValue (Seconds (interval)));
       staUdpClient.SetAttribute ("EnableRandom", BooleanValue (true));
       staUdpClient.SetAttribute ("PacketSize", UintegerValue (ulPayloadSize));
-      staUdpClient.SetAttribute("TimeToJoin", TimeValue(Seconds(timeToJoin)));
+      staUdpClient.SetAttribute("TimeToJoin", TimeValue(Seconds(timeToJoin - staStartTime)));
 
       std::ostringstream intervalDistr;
       double mean = (((simulationTime + startLogTime) - timeToJoin) - (startLogTime + timeToJoin) / 2);

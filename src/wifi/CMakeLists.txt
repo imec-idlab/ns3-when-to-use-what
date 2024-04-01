@@ -51,6 +51,7 @@ set(source_files
     model/he/multi-user-scheduler.cc
     model/he/obss-pd-algorithm.cc
     model/he/rr-multi-user-scheduler.cc
+    model/he/vlce-multi-user-scheduler.cc
     model/ht/ht-capabilities.cc
     model/ht/ht-configuration.cc
     model/ht/ht-frame-exchange-manager.cc
@@ -200,6 +201,7 @@ set(header_files
     model/he/multi-user-scheduler.h
     model/he/obss-pd-algorithm.h
     model/he/rr-multi-user-scheduler.h
+    model/he/vlce-multi-user-scheduler.h
     model/ht/ht-capabilities.h
     model/ht/ht-configuration.h
     model/ht/ht-frame-exchange-manager.h

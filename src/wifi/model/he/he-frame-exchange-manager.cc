@@ -1918,6 +1918,7 @@ HeFrameExchangeManager::SendQosNullFramesInTbPpdu(const CtrlTriggerHeader& trigg
     Ptr<WifiPsdu> psdu = (mpduList.size() > 1 ? Create<WifiPsdu>(std::move(mpduList))
                                               : Create<WifiPsdu>(mpduList.front(), true));
     uint16_t staId = m_staMac->GetAssociationId();
+
     SendPsduMapWithProtection(WifiPsduMap{{staId, psdu}}, txParams);
 }
 
@@ -2687,6 +2688,10 @@ HeFrameExchangeManager::ReceiveMpdu(Ptr<const WifiMpdu> mpdu,
         return;
     }
 
+    if (!hdr.IsCtl() && hdr.IsQosData() && hdr.HasData() && hdr.GetAddr1() == m_self)
+    {
+      m_muScheduler->UpdatePollList(hdr.GetAddr2());
+    }
     // the received frame cannot be handled here
     VhtFrameExchangeManager::ReceiveMpdu(mpdu, rxSignalInfo, txVector, inAmpdu);
     ;

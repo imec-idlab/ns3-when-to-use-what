@@ -1064,4 +1064,7 @@ RrMultiUserScheduler::ComputeUlMuInfo()
     return UlMuInfo{m_trigger, m_triggerMacHdr, std::move(m_txParams)};
 }
 
+void
+RrMultiUserScheduler::UpdatePollList(Mac48Address address){}
+
 } // namespace ns3

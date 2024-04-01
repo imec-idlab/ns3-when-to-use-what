@@ -52,6 +52,8 @@ class RrMultiUserScheduler : public MultiUserScheduler
     RrMultiUserScheduler();
     ~RrMultiUserScheduler() override;
 
+    void UpdatePollList(Mac48Address address) override;
+
   protected:
     void DoDispose() override;
     void DoInitialize() override;
