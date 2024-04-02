@@ -217,7 +217,6 @@ void VlceMultiUserScheduler::UpdatePollList(Mac48Address address)
     if (b == m_staListToPoll.end())
         {
           it->initCredit = Simulator::Now().ToDouble(Time::US);
-          it->credits = Simulator::Now().ToDouble(Time::US);
           m_staListToPoll.emplace_back(*it);
         }
     else {
@@ -276,7 +275,6 @@ VlceMultiUserScheduler::GetTxVectorForUlMu(Func canbeSolicited, bool isBasicTrig
         if (!canbeSolicited(*staIt))
         {
             NS_LOG_DEBUG("Skipping station based on provided function object");
-            staIt->credits += Simulator::Now().ToDouble(Time::US);
             if ( staIt->initCredit + m_maxCredits.ToDouble(Time::US) <= Simulator::Now().ToDouble(Time::US)){
               staIt = m_staListToPoll.erase(staIt);
               continue;
@@ -605,10 +603,6 @@ VlceMultiUserScheduler::TrySendingBasicTf()
     {
         userInfo.SetBasicTriggerDepUserInfo(0, 0, m_edca->GetAccessCategory());
     }
-
-    std::for_each(m_candidates.begin(), m_candidates.end(), [](auto elem){
-        elem.first->credits -= Simulator::Now().ToDouble(Time::US);
-        });
 
     UpdateCredits(m_staListToPoll, maxDuration, txVector);
 

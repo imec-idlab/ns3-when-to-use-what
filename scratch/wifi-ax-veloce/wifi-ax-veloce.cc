@@ -134,6 +134,7 @@ int  main(int argc, char *argv[])
   double timeToJoin {5}; //seconds
   double initStaJoinTime {2}; //seconds
   std::size_t scenario {1};
+  bool onOffFlag {false}; 
 
 
   std::string frequency {"5"}; //whether 2.4, 5 or 6 GHz
@@ -187,6 +188,8 @@ int  main(int argc, char *argv[])
   cmd.AddValue ("timeToJoin","Time for random stations to join [seconds]", timeToJoin);
   cmd.AddValue ("initStaJoinTime","Time at which Initial STAs transmit after established connection with AP [seconds]", initStaJoinTime);
   cmd.AddValue ("scenario","Scenario to simulate; 0 - only up to 8 active stations.  1 - idle stations joining along the way", scenario);
+  cmd.AddValue ("onOffFlag","Enable on and off behavior of joining STAs or ONLY on and no off", onOffFlag);
+
 
 
 
@@ -434,8 +437,8 @@ int  main(int argc, char *argv[])
 
       apNetDevice = wifi.Install (phy, wifimac, wifiApNode);
 
-      //phy.EnablePcap("wifi-ax-ofdma-ap", apNetDevice); // enable pcap tracing
-      //phy.EnablePcap("wifi-ax-ofdma-sta", staNetDevices);
+      phy.EnablePcap("wifi-ax-ofdma-ap", apNetDevice); // enable pcap tracing
+      phy.EnablePcap("wifi-ax-ofdma-sta", staNetDevices);
     }
   else
     {
@@ -571,6 +574,7 @@ int  main(int argc, char *argv[])
       staUdpClient.SetAttribute ("EnableRandom", BooleanValue (true));
       staUdpClient.SetAttribute ("PacketSize", UintegerValue (ulPayloadSize));
       staUdpClient.SetAttribute("TimeToJoin", TimeValue(Seconds(timeToJoin - staStartTime)));
+      staUdpClient.SetAttribute("OnOffFlag", BooleanValue(onOffFlag));
 
       std::ostringstream intervalDistr;
       double mean = (((simulationTime + startLogTime) - timeToJoin) - (startLogTime + timeToJoin) / 2);
