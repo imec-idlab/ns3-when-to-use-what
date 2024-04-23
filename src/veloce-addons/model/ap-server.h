@@ -133,6 +133,7 @@ private:
 
   /// Callbacks for tracing the packet Rx events, includes source and destination addresses
   TracedCallback<Ptr<const Packet>, const Address &, const Address &> m_rxTraceWithAddresses;
+  TracedCallback<Ptr<const Packet>, const Address &, const Address &, size_t> m_rxTraceWithAddressesWakeUp;
 
 };
 

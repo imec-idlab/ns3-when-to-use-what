@@ -95,7 +95,7 @@ RrMultiUserScheduler::GetTypeId()
                           MakeTimeChecker())
             .AddAttribute("NumRandomAccessRus",
                           "Number of RUs that are reserved for random access",
-                          UintegerValue (0.),
+                          UintegerValue (0),
                           MakeUintegerAccessor (&RrMultiUserScheduler::m_numRaRus),
                           MakeUintegerChecker<uint16_t> ())
             .AddAttribute("RuAllocationType",

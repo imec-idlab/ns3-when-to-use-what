@@ -714,6 +714,7 @@ HtFrameExchangeManager::NotifyReceivedNormalAck(Ptr<WifiMpdu> mpdu)
             // notify the BA manager that the MPDU was acknowledged
             edca->GetBaManager()->NotifyGotAck(m_linkId, mpdu);
         }
+        edca->StartMuEdcaTimerNow(m_linkId);
     }
     else if (mpdu->GetHeader().IsAction())
     {

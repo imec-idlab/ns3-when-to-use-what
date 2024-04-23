@@ -112,6 +112,10 @@ ApServer::GetTypeId (void)
     .AddTraceSource ("RxWithAddresses", "A packet has been received",
                      MakeTraceSourceAccessor (&ApServer::m_rxTraceWithAddresses),
                      "ns3::Packet::TwoAddressTracedCallback")
+    .AddTraceSource ("RxWithAddressesWakeUp", "Trace for wake up packets",
+                     MakeTraceSourceAccessor (&ApServer::m_rxTraceWithAddressesWakeUp),
+                     "ns3::Packet::TwoAddressTracedCallback")
+
   ;
   return tid;
 }
@@ -248,18 +252,18 @@ ApServer::HandleRead (Ptr<Socket> socket)
           m_totalRx += receivedSize;
           PacketTag tag;
           OnOffTag initTag;
+          Ptr<Packet> packet_copy = packet->Copy();
           bool found = packet->RemovePacketTag(initTag);
           if (found){
             if (initTag.GetValue() == 1) {
-              ++m_nStations;
+              //++m_nStations; Do nothing here
               //std::cout <<"first packet recieved from: " << InetSocketAddress::ConvertFrom(from).GetIpv4() << std::endl;
             }
             else if(initTag.GetValue() == 2) {
-              --m_nStations;
+             m_rxTraceWithAddressesWakeUp(packet, from, m_localAddress, 0);
             }
             break;
           }
-          Ptr<Packet> packet_copy = packet->Copy();
           packet->RemovePacketTag(tag);
           SeqTsHeader seqTs;
           packet->RemoveHeader (seqTs);

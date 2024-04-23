@@ -217,7 +217,8 @@ void VlceMultiUserScheduler::UpdatePollList(Mac48Address address)
     if (b == m_staListToPoll.end())
         {
           it->initCredit = Simulator::Now().ToDouble(Time::US);
-          m_staListToPoll.emplace_back(*it);
+          it->credits = m_staListToPoll.front().credits;
+          m_staListToPoll.emplace_front(*it);
         }
     else {
       it->initCredit = Simulator::Now().ToDouble(Time::US);
@@ -343,6 +344,7 @@ VlceMultiUserScheduler::GetTxVectorForUlMu(Func canbeSolicited, bool isBasicTrig
     if (txVector.GetHeMuUserInfoMap().empty())
     {
         NS_LOG_DEBUG("No suitable station");
+        m_staListToPoll.reverse();
         return txVector;
     }
 

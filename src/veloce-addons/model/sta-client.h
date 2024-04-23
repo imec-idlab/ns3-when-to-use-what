@@ -87,9 +87,9 @@ private:
    */
   void Send (std::string);
 
-  void DelayedSession(std::string);
+  void DelayedSession(std::string, std::string);
 
-  void DelayedToRightWindow(double);
+  void DelayedToRightWindow(double, std::string);
 
   uint32_t m_count; //!< Maximum number of packets the application will send
   Time m_interval; //!< Packet inter-send time

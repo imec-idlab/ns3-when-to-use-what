@@ -210,6 +210,19 @@ QosTxop::StartMuEdcaTimerNow(uint8_t linkId)
     }
 }
 
+void 
+QosTxop::UpdateMuEdcaTimer(uint8_t linkId, Time timer)
+{
+  NS_LOG_FUNCTION(this << +linkId);
+  auto& link = GetLink(linkId);
+  link.muEdcaTimerStartTime = MilliSeconds(0);
+  if (EdcaDisabled(linkId))
+  {
+    NS_LOG_DEBUG("Updating EDCA disabled time for " << timer.As(Time::MS));
+    m_mac->GetChannelAccessManager(linkId)->DisableEdcaFor(this, timer);
+  }
+}
+
 bool
 QosTxop::MuEdcaTimerRunning(uint8_t linkId) const
 {

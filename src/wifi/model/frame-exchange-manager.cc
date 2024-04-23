@@ -1316,8 +1316,6 @@ FrameExchangeManager::ReceivedNormalAck(Ptr<WifiMpdu> mpdu,
     Mac48Address sender = mpdu->GetHeader().GetAddr1();
     NS_LOG_DEBUG("Received ACK from=" << sender);
 
-    NotifyReceivedNormalAck(mpdu);
-
     // When fragmentation is used, only update manager when the last fragment is acknowledged
     if (!mpdu->GetHeader().IsMoreFragments())
     {
@@ -1334,7 +1332,17 @@ FrameExchangeManager::ReceivedNormalAck(Ptr<WifiMpdu> mpdu,
 
     // The CW shall be reset to aCWmin after every successful attempt to transmit
     // a frame containing all or part of an MSDU or MMPDU (sec. 10.3.3 of 802.11-2016)
-    m_dcf->ResetCw(m_linkId);
+    if (mpdu->GetHeader().IsQosData())
+    {
+      if (!m_mac->GetQosTxop( mpdu->GetHeader().GetQosTid() )->EdcaDisabled(m_linkId))
+      {
+        m_dcf->ResetCw(m_linkId);
+      }
+    }
+    else
+      m_dcf->ResetCw(m_linkId);
+
+    NotifyReceivedNormalAck(mpdu);
 
     if (mpdu->GetHeader().IsMoreFragments())
     {

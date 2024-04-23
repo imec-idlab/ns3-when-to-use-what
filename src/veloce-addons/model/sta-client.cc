@@ -244,24 +244,24 @@ StaClient::StopApplication (void)
   Simulator::Cancel (m_sendEvent);
 }
 
-void StaClient::DelayedSession (std::string onOrOff)
+void StaClient::DelayedSession (std::string onOrOff, std::string joinPolling)
 {
   double delay {0};
-  double mean {};
-  double bound = m_intervalRandomVariable->GetBound();
+  //double mean {};
+  //double bound = m_intervalRandomVariable->GetBound();
 
   if (onOrOff == "on"){
     delay = m_intervalRandomVariable->GetValue();
     std::cout << "Poison On After = " << delay << "s" <<std::endl;
-    DelayedToRightWindow(delay);
+    DelayedToRightWindow(delay, joinPolling);
   }
   else if (onOrOff == "off") {
     //check if there is enough time to come on
     if (Simulator::Now().GetSeconds() < m_intervalRandomVariable->GetBound()){
-      mean = (bound - Simulator::Now().GetSeconds()) / 2;
-      delay = m_intervalRandomVariable->GetValue(mean, bound);
+      //mean = (bound - Simulator::Now().GetSeconds()) / 2;
+      delay = m_intervalRandomVariable->GetValue();
       std::cout << "Poison Off For = " << delay << "s" << std::endl;
-      DelayedToRightWindow(delay);
+      DelayedToRightWindow(delay, joinPolling);
     }
     else{
       //keep it on till the end
@@ -271,13 +271,13 @@ void StaClient::DelayedSession (std::string onOrOff)
   }
 
   if (m_onOffFlag){
-    mean = (bound - (Simulator::Now().GetSeconds() + delay )) / 2;
-    double of_delay = m_intervalRandomVariable->GetValue(mean, bound );
+    //mean = (bound - (Simulator::Now().GetSeconds() + delay )) / 2;
+    double of_delay = m_intervalRandomVariable->GetValue( );
     m_offTime = Simulator::Now() + Seconds(delay) + Seconds(of_delay);
   }
 }
 
-void StaClient::DelayedToRightWindow(double delay){
+void StaClient::DelayedToRightWindow(double delay, std::string joinPolling){
 
   //get which 5ms window
   double  actual_delay = Simulator::Now().GetSeconds() + Seconds(delay).GetSeconds();
@@ -286,14 +286,20 @@ void StaClient::DelayedToRightWindow(double delay){
   //if not in the 1ms of the 5ms window selected, force to the 1ms of the next
   //5ms window
   if ( (actual_delay - mt5) <= 0.001 ) {
-    m_sendEvent = Simulator::Schedule (Seconds (delay), &StaClient::Send, this, "");
+    if (joinPolling == "JoinPolling")
+      m_sendEvent = Simulator::Schedule (Seconds (delay), &StaClient::Send, this, joinPolling);
+    else
+      m_sendEvent = Simulator::Schedule (Seconds (delay), &StaClient::Send, this, "");
   }
   else {
     Ptr<UniformRandomVariable> rand = CreateObject <UniformRandomVariable> ();
     double del = rand->GetValue (mt5 + m_interval.GetSeconds() + MicroSeconds(1).GetSeconds(),
         mt5 + m_interval.GetSeconds() + Seconds(0.001).GetSeconds());
     delay = del - Simulator::Now().GetSeconds();
-    m_sendEvent = Simulator::Schedule ( Seconds( delay), &StaClient::Send, this, "");
+    if (joinPolling == "JoinPolling")
+      m_sendEvent = Simulator::Schedule (Seconds (delay), &StaClient::Send, this, joinPolling);
+    else
+      m_sendEvent = Simulator::Schedule ( Seconds( delay), &StaClient::Send, this, "");
     }
 }
 
@@ -313,6 +319,12 @@ StaClient::Send (std::string PacketKind)
     p = Create<Packet> (64-(8+4));
     p->AddHeader (seqTs);
     initTag.SetValue(1);
+    p->AddPacketTag(initTag);
+  }
+  else if (PacketKind == "JoinPolling") {
+    p = Create<Packet> (m_size-(8+4));
+    p->AddHeader (seqTs);
+    initTag.SetValue(2);
     p->AddPacketTag(initTag);
   }
   else {
@@ -345,10 +357,10 @@ StaClient::Send (std::string PacketKind)
     double delay = rand->GetValue (0, m_startSendIntval.GetSeconds ());
     delay += (m_initStaJoinTime.GetSeconds() - Simulator::Now().GetSeconds());
     std::cout << "Initial TX after delay = " << delay << "s" << std::endl;
-    m_sendEvent = Simulator::Schedule (Seconds (delay), &StaClient::Send, this, "initialFlag");
+    m_sendEvent = Simulator::Schedule (Seconds (delay), &StaClient::Send, this, "JoinPolling");
   }
   else if (m_toJoinFlag && PacketKind == "FirstPacket"){
-    m_sendEvent = Simulator::Schedule ((m_timeToJoin), &StaClient::DelayedSession, this, "on" );
+    m_sendEvent = Simulator::Schedule ((m_timeToJoin), &StaClient::DelayedSession, this, "on", "JoinPolling" );
   }
   else if (m_idleFlag && PacketKind == "FirstPacket"){
      //do nothing
@@ -356,7 +368,7 @@ StaClient::Send (std::string PacketKind)
   else if (m_sent < m_count)
     {
       if (m_toJoinFlag && m_onOffFlag && (Simulator::Now().GetSeconds() >= m_offTime.GetSeconds() )){
-        DelayedSession("off");
+        DelayedSession("off", "JoinPolling");
       }
       else
         m_sendEvent = Simulator::Schedule (m_interval, &StaClient::Send, this, "");

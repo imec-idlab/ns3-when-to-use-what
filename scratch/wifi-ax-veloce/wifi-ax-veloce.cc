@@ -64,6 +64,12 @@ struct stats_t
   std::vector<double> pktDelaysLate, genTimeLate, rxTimeLate;
   std::vector<uint64_t> pktTagLate;
   std::vector<Mac48Address> srcLate;
+
+  //wakeup_time
+  uint64_t rxBytesWakeUp;
+  std::vector<double> pktDelaysWakeUp, genTimeWakeUp, rxTimeWakeUp;
+  std::vector<uint64_t> pktTagWakeUp;
+  std::vector<Mac48Address> srcWakeUp;
 };
 
 std::map<Mac48Address, stats_t> g_statsMap; //!< map for statistics for each station
@@ -97,7 +103,7 @@ void RxTraceWithAddress ( double startLogTime, Ptr<const Packet> p, const Addres
   }
 }
 
-void RxTrace ( double startLogTime, Ptr< const Packet> p, const Address &src, const Address &dst,bool k)
+void RxTrace ( double startLogTime, Ptr< const Packet> p, const Address &src, const Address &dst, bool k)
 {
   Ptr<Packet> pkt = p->Copy ();
 
@@ -118,6 +124,30 @@ void RxTrace ( double startLogTime, Ptr< const Packet> p, const Address &src, co
     g_statsMap[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (dst).GetIpv4 ())].srcLate.push_back( g_Ip2Mac.at (InetSocketAddress::ConvertFrom (src).GetIpv4 ()));
   }
 }
+
+
+void RxTraceWakeUp ( double startLogTime, Ptr< const Packet> p, const Address &src, const Address &dst, size_t k)
+{
+  Ptr<Packet> pkt = p->Copy ();
+
+  SeqTsHeader seqTs;
+  PacketTag tag;
+  pkt->RemovePacketTag(tag);
+  pkt->RemoveHeader(seqTs);
+  startLogTime *= 1e+9;
+
+
+  if (Simulator::Now().GetNanoSeconds () >= startLogTime)
+  {
+    g_statsMap[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (dst).GetIpv4 ())].rxBytesLate += p->GetSize ();
+    g_statsMap[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (dst).GetIpv4 ())].pktDelaysWakeUp.push_back ((Simulator::Now() - seqTs.GetTs ()).GetSeconds ());
+    g_statsMap[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (dst).GetIpv4 ())].pktTagWakeUp.push_back (tag.GetValue());
+    g_statsMap[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (dst).GetIpv4 ())].genTimeWakeUp.push_back(seqTs.GetTs().GetSeconds() );
+    g_statsMap[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (dst).GetIpv4 ())].rxTimeWakeUp.push_back(Simulator::Now().GetSeconds());
+    g_statsMap[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (dst).GetIpv4 ())].srcWakeUp.push_back( g_Ip2Mac.at (InetSocketAddress::ConvertFrom (src).GetIpv4 ()));
+  }
+}
+
 
 int  main(int argc, char *argv[])
 {
@@ -667,6 +697,9 @@ int  main(int argc, char *argv[])
 
   Config::ConnectWithoutContext("/NodeList/*/ApplicationList/*/$ns3::ApServer/RxWithAddresses", MakeBoundCallback(&RxTraceWithAddress, startLogTime));
 
+  Config::ConnectWithoutContext("/NodeList/*/ApplicationList/*/$ns3::ApServer/RxWithAddressesWakeUp", MakeBoundCallback(&RxTraceWakeUp, startLogTime));
+
+
   ProgressBar pg (Seconds(simulationTime + startLogTime ));
   Simulator::Stop (Seconds (simulationTime + startLogTime ));
   Simulator::Run ();
@@ -685,6 +718,7 @@ int  main(int argc, char *argv[])
       //rxBytes += DynamicCast<ApServer> (staServerApp.Get (i))->GetTotalRx ();
     }
   Simulator::Destroy ();
+  /*
 
   double throughput = (rxBytes * 8) / (simulationTime * 1000000.0); //Mbit/s
 
@@ -734,6 +768,19 @@ int  main(int argc, char *argv[])
     pktDistOutStream << "Packet_Tag\tReceived_from\tGeneration_time\tReception_time\tDelay_ms" << std::endl;
     for (size_t i = 0;  i < staStats.second.pktDelaysLate.size(); i++) {
       pktDistOutStream << staStats.second.pktTagLate[i] <<"\t"<< staStats.second.srcLate[i] <<"\t"<<staStats.second.genTimeLate[i] * 1000 <<"\t"<<staStats.second.rxTimeLate[i]* 1000<< "\t"<< staStats.second.pktDelaysLate[i] * 1000 << std::endl;
+    }
+    pktDistOutStream.close();
+  }
+  */
+  std::ofstream pktDistOutStream;
+
+  for (auto &staStats : g_statsMap) {
+    std::ostringstream mac_str;
+    mac_str << staStats.first;
+    pktDistOutStream.open ("wakeup_packet_" + mac_str.str(), std::ios::out);
+    pktDistOutStream << "Packet_Tag\tReceived_from\tGeneration_time\tReception_time\tDelay_ms" << std::endl;
+    for (size_t i = 0;  i < staStats.second.pktDelaysWakeUp.size(); i++) {
+      pktDistOutStream << staStats.second.pktTagWakeUp[i] <<"\t"<< staStats.second.srcWakeUp[i] <<"\t"<<staStats.second.genTimeWakeUp[i] * 1000 <<"\t"<<staStats.second.rxTimeWakeUp[i]* 1000<< "\t"<< staStats.second.pktDelaysWakeUp[i] * 1000 << std::endl;
     }
     pktDistOutStream.close();
   }
