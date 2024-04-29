@@ -74,7 +74,7 @@ struct stats_t
 
 std::map<Mac48Address, stats_t> g_statsMap; //!< map for statistics for each station
 std::map<Ipv4Address, Mac48Address> g_Ip2Mac; //!< map for mapping IPv4 to MAC address
-
+std::map<Mac48Address, stats_t> g_statsMapAp;  //!< map for starts for only AP
 void SinrTrace (Mac48Address addr, double sinr)
 {
   g_statsMap[addr].sinr += sinr;
@@ -131,7 +131,7 @@ void RxTraceWakeUp ( double startLogTime, Ptr< const Packet> p, const Address &s
   Ptr<Packet> pkt = p->Copy ();
 
   SeqTsHeader seqTs;
-  PacketTag tag;
+  OnOffTag tag;
   pkt->RemovePacketTag(tag);
   pkt->RemoveHeader(seqTs);
   startLogTime *= 1e+9;
@@ -139,12 +139,12 @@ void RxTraceWakeUp ( double startLogTime, Ptr< const Packet> p, const Address &s
 
   if (Simulator::Now().GetNanoSeconds () >= startLogTime)
   {
-    g_statsMap[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (dst).GetIpv4 ())].rxBytesLate += p->GetSize ();
-    g_statsMap[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (dst).GetIpv4 ())].pktDelaysWakeUp.push_back ((Simulator::Now() - seqTs.GetTs ()).GetSeconds ());
-    g_statsMap[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (dst).GetIpv4 ())].pktTagWakeUp.push_back (tag.GetValue());
-    g_statsMap[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (dst).GetIpv4 ())].genTimeWakeUp.push_back(seqTs.GetTs().GetSeconds() );
-    g_statsMap[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (dst).GetIpv4 ())].rxTimeWakeUp.push_back(Simulator::Now().GetSeconds());
-    g_statsMap[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (dst).GetIpv4 ())].srcWakeUp.push_back( g_Ip2Mac.at (InetSocketAddress::ConvertFrom (src).GetIpv4 ()));
+    g_statsMapAp[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (dst).GetIpv4 ())].rxBytesLate += p->GetSize ();
+    g_statsMapAp[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (dst).GetIpv4 ())].pktDelaysWakeUp.push_back ((Simulator::Now() - seqTs.GetTs ()).GetSeconds ());
+    g_statsMapAp[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (dst).GetIpv4 ())].pktTagWakeUp.push_back (tag.GetValue());
+    g_statsMapAp[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (dst).GetIpv4 ())].genTimeWakeUp.push_back(seqTs.GetTs().GetSeconds() );
+    g_statsMapAp[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (dst).GetIpv4 ())].rxTimeWakeUp.push_back(Simulator::Now().GetSeconds());
+    g_statsMapAp[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (dst).GetIpv4 ())].srcWakeUp.push_back( g_Ip2Mac.at (InetSocketAddress::ConvertFrom (src).GetIpv4 ()));
   }
 }
 
@@ -164,7 +164,7 @@ int  main(int argc, char *argv[])
   double timeToJoin {5}; //seconds
   double initStaJoinTime {2}; //seconds
   std::size_t scenario {1};
-  bool onOffFlag {false}; 
+  bool onOffFlag {false};
 
 
   std::string frequency {"5"}; //whether 2.4, 5 or 6 GHz
@@ -279,7 +279,9 @@ int  main(int argc, char *argv[])
     }
   else
     {
-      Config::SetDefault ("ns3::WifiRemoteStationManager::RtsCtsThreshold", StringValue ("2200"));
+      //use rts/cts for edca to see if this solves the retransmission issue in
+      //some cases.
+      Config::SetDefault ("ns3::WifiRemoteStationManager::RtsCtsThreshold", StringValue ("700"));
       Config::SetDefault("ns3::WifiDefaultProtectionManager::EnableMuRts", BooleanValue(false));
     }
 
@@ -466,7 +468,6 @@ int  main(int argc, char *argv[])
                   "VO_BlockAckThreshold", UintegerValue(0));
 
       apNetDevice = wifi.Install (phy, wifimac, wifiApNode);
-
       //phy.EnablePcap("wifi-ax-ofdma-ap", apNetDevice); // enable pcap tracing
       //phy.EnablePcap("wifi-ax-ofdma-sta", staNetDevices);
     }
@@ -718,8 +719,8 @@ int  main(int argc, char *argv[])
       //rxBytes += DynamicCast<ApServer> (staServerApp.Get (i))->GetTotalRx ();
     }
   Simulator::Destroy ();
-  /*
-
+  
+    
   double throughput = (rxBytes * 8) / (simulationTime * 1000000.0); //Mbit/s
 
   std::ofstream totalStatsOutStream;
@@ -771,13 +772,11 @@ int  main(int argc, char *argv[])
     }
     pktDistOutStream.close();
   }
-  */
-  std::ofstream pktDistOutStream;
-
-  for (auto &staStats : g_statsMap) {
-    std::ostringstream mac_str;
-    mac_str << staStats.first;
-    pktDistOutStream.open ("wakeup_packet_" + mac_str.str(), std::ios::out);
+  
+  for (auto &staStats : g_statsMapAp) {
+    //std::ostringstream mac_str;
+    //mac_str << staStats.first ;
+    pktDistOutStream.open ("wakeup_packet_stats" ,std::ios::out);
     pktDistOutStream << "Packet_Tag\tReceived_from\tGeneration_time\tReception_time\tDelay_ms" << std::endl;
     for (size_t i = 0;  i < staStats.second.pktDelaysWakeUp.size(); i++) {
       pktDistOutStream << staStats.second.pktTagWakeUp[i] <<"\t"<< staStats.second.srcWakeUp[i] <<"\t"<<staStats.second.genTimeWakeUp[i] * 1000 <<"\t"<<staStats.second.rxTimeWakeUp[i]* 1000<< "\t"<< staStats.second.pktDelaysWakeUp[i] * 1000 << std::endl;

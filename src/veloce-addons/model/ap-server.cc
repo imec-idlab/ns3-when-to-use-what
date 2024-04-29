@@ -260,7 +260,7 @@ ApServer::HandleRead (Ptr<Socket> socket)
               //std::cout <<"first packet recieved from: " << InetSocketAddress::ConvertFrom(from).GetIpv4() << std::endl;
             }
             else if(initTag.GetValue() == 2) {
-             m_rxTraceWithAddressesWakeUp(packet, from, m_localAddress, 0);
+             m_rxTraceWithAddressesWakeUp(packet_copy, from, m_localAddress, 0);
             }
             break;
           }
