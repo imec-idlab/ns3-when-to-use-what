@@ -176,6 +176,7 @@ int  main(int argc, char *argv[])
   double txPowerStart = {16.0206};
   double txPowerEnd = {16.0206};
   uint32_t nMsdus = 1;
+  std::string scheduler {"ns3::RrMultiUserScheduler"};
 
 
   std::string dlAckSeqType {"NO-OFDMA"};
@@ -219,6 +220,8 @@ int  main(int argc, char *argv[])
   cmd.AddValue ("initStaJoinTime","Time at which Initial STAs transmit after established connection with AP [seconds]", initStaJoinTime);
   cmd.AddValue ("scenario","Scenario to simulate; 0 - only up to 8 active stations.  1 - idle stations joining along the way", scenario);
   cmd.AddValue ("onOffFlag","Enable on and off behavior of joining STAs or ONLY on and no off", onOffFlag);
+  cmd.AddValue ("scheduler","The OFDMA scheduler to use e.g ns3::RrMultiUserScheduler | ns3::VlceMultiUserScheduler", scheduler);
+
 
 
 
@@ -347,29 +350,38 @@ int  main(int argc, char *argv[])
    * */
   if (useMuEdca)
     {
-    //STA AIFSN
-      Config::SetDefault ("ns3::HeConfiguration::MuBkAifsn", UintegerValue (0));
-      Config::SetDefault ("ns3::HeConfiguration::MuBeAifsn", UintegerValue (0));
-      Config::SetDefault ("ns3::HeConfiguration::MuViAifsn", UintegerValue (0));
-      Config::SetDefault ("ns3::HeConfiguration::MuVoAifsn", UintegerValue (0));
+              //STA AIFSN
+        Config::SetDefault ("ns3::HeConfiguration::MuBkAifsn", UintegerValue (0));
+        Config::SetDefault ("ns3::HeConfiguration::MuBeAifsn", UintegerValue (0));
+        Config::SetDefault ("ns3::HeConfiguration::MuViAifsn", UintegerValue (0));
+        Config::SetDefault ("ns3::HeConfiguration::MuVoAifsn", UintegerValue (0));
 
-      //STA CW min
-      Config::SetDefault ("ns3::HeConfiguration::MuBkCwMin", UintegerValue (32767));
-      Config::SetDefault ("ns3::HeConfiguration::MuBeCwMin", UintegerValue (32767));
-      Config::SetDefault ("ns3::HeConfiguration::MuViCwMin", UintegerValue (32767));
-      Config::SetDefault ("ns3::HeConfiguration::MuVoCwMin", UintegerValue (32767));
+        //STA CW min
+        Config::SetDefault ("ns3::HeConfiguration::MuBkCwMin", UintegerValue (32767));
+        Config::SetDefault ("ns3::HeConfiguration::MuBeCwMin", UintegerValue (32767));
+        Config::SetDefault ("ns3::HeConfiguration::MuViCwMin", UintegerValue (32767));
+        Config::SetDefault ("ns3::HeConfiguration::MuVoCwMin", UintegerValue (32767));
 
-      //STA CW max
-      Config::SetDefault ("ns3::HeConfiguration::MuBkCwMax", UintegerValue (32767));
-      Config::SetDefault ("ns3::HeConfiguration::MuBeCwMax", UintegerValue (32767));
-      Config::SetDefault ("ns3::HeConfiguration::MuViCwMax", UintegerValue (32767));
-      Config::SetDefault ("ns3::HeConfiguration::MuVoCwMax", UintegerValue (32767));
+        //STA CW max
+        Config::SetDefault ("ns3::HeConfiguration::MuBkCwMax", UintegerValue (32767));
+        Config::SetDefault ("ns3::HeConfiguration::MuBeCwMax", UintegerValue (32767));
+        Config::SetDefault ("ns3::HeConfiguration::MuViCwMax", UintegerValue (32767));
+        Config::SetDefault ("ns3::HeConfiguration::MuVoCwMax", UintegerValue (32767));
 
-      //STA timer (validity of set)
-      Config::SetDefault ("ns3::HeConfiguration::BkMuEdcaTimer", TimeValue (MicroSeconds(8192 * 5) ));
-      Config::SetDefault ("ns3::HeConfiguration::BeMuEdcaTimer", TimeValue (MicroSeconds(8192 * 5) ));
-      Config::SetDefault ("ns3::HeConfiguration::ViMuEdcaTimer", TimeValue (MicroSeconds(8192 * 5) ));
-      Config::SetDefault ("ns3::HeConfiguration::VoMuEdcaTimer", TimeValue (MicroSeconds(8192 * 5) ));
+        if (scheduler == "ns3::VlceMultiUserScheduler") {
+          //STA timer (validity of set)
+          Config::SetDefault ("ns3::HeConfiguration::BkMuEdcaTimer", TimeValue (MicroSeconds(8192 * 5) ));
+          Config::SetDefault ("ns3::HeConfiguration::BeMuEdcaTimer", TimeValue (MicroSeconds(8192 * 5) ));
+          Config::SetDefault ("ns3::HeConfiguration::ViMuEdcaTimer", TimeValue (MicroSeconds(8192 * 5) ));
+          Config::SetDefault ("ns3::HeConfiguration::VoMuEdcaTimer", TimeValue (MicroSeconds(8192 * 5) ));
+        }
+        else {
+          //STA timer (validity of set)
+          Config::SetDefault ("ns3::HeConfiguration::BkMuEdcaTimer", TimeValue (MicroSeconds(2088960) ));
+          Config::SetDefault ("ns3::HeConfiguration::BeMuEdcaTimer", TimeValue (MicroSeconds(2088960) ));
+          Config::SetDefault ("ns3::HeConfiguration::ViMuEdcaTimer", TimeValue (MicroSeconds(2088960) ));
+          Config::SetDefault ("ns3::HeConfiguration::VoMuEdcaTimer", TimeValue (MicroSeconds(2088960) ));
+        }
   }
 
   //sifs and slot time
@@ -452,7 +464,7 @@ int  main(int argc, char *argv[])
 
       if (dlAckSeqType != "NO-OFDMA")
         {
-          wifimac.SetMultiUserScheduler ("ns3::VlceMultiUserScheduler",
+          wifimac.SetMultiUserScheduler (scheduler,
                                       "EnableUlOfdma", BooleanValue (enableUlOfdma),
                                       "EnableBsrp", BooleanValue (enableBsrp),
                                       "AccessReqInterval", TimeValue (MicroSeconds(accessReqInterval)),
@@ -468,8 +480,8 @@ int  main(int argc, char *argv[])
                   "VO_BlockAckThreshold", UintegerValue(0));
 
       apNetDevice = wifi.Install (phy, wifimac, wifiApNode);
-      //phy.EnablePcap("wifi-ax-ofdma-ap", apNetDevice); // enable pcap tracing
-      //phy.EnablePcap("wifi-ax-ofdma-sta", staNetDevices);
+      phy.EnablePcap("wifi-ax-ofdma-ap", apNetDevice); // enable pcap tracing
+      phy.EnablePcap("wifi-ax-ofdma-sta", staNetDevices);
     }
   else
     {
@@ -761,7 +773,7 @@ int  main(int argc, char *argv[])
     pktDistOutStream.close();
   }
 
-
+/*
   for (auto &staStats : g_statsMap) {
     std::ostringstream mac_str;
     mac_str << staStats.first;
@@ -772,7 +784,7 @@ int  main(int argc, char *argv[])
     }
     pktDistOutStream.close();
   }
-  
+  */
   for (auto &staStats : g_statsMapAp) {
     //std::ostringstream mac_str;
     //mac_str << staStats.first ;

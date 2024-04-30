@@ -2688,7 +2688,10 @@ HeFrameExchangeManager::ReceiveMpdu(Ptr<const WifiMpdu> mpdu,
         return;
     }
 
-    if (!hdr.IsCtl() && hdr.IsQosData() && hdr.HasData() && hdr.GetAddr1() == m_self)
+    if (m_muScheduler != nullptr && !hdr.IsCtl() && hdr.IsQosData() && hdr.HasData() &&
+        hdr.GetAddr1() == m_self &&
+        m_muScheduler->GetInstanceTypeId().GetName() == "ns3::VlceMultiUserScheduler"
+        )
     {
       m_muScheduler->UpdatePollList(hdr.GetAddr2());
     }
