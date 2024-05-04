@@ -105,7 +105,7 @@ StaClient::GetTypeId (void)
                    MakeTimeAccessor (&StaClient::m_initStaJoinTime),
                    MakeTimeChecker ())
     .AddAttribute ("InitPacketSentDelay",
-                   "Time to start sending initial packets", TimeValue (Seconds (1.0)),
+                   "Time to start sending initial packets", TimeValue (Seconds (0.0)),
                    MakeTimeAccessor (&StaClient::m_initPacketSentDelay),
                    MakeTimeChecker ())
     .AddAttribute ("IdleStations",
@@ -234,7 +234,17 @@ StaClient::StartApplication (void)
   m_socket->SetRecvCallback (MakeNullCallback<void, Ptr<Socket> > ());
   m_socket->SetAllowBroadcast (true);
 
-  m_sendEvent = Simulator::Schedule(Seconds( m_initPacketSentDelay.GetSeconds() ), &StaClient::Send, this, "FirstPacket");
+  if (m_initPacketSentDelay.GetSeconds()){
+    m_sendEvent = Simulator::Schedule(Seconds( m_initPacketSentDelay.GetSeconds() ), &StaClient::Send, this, "FirstPacket");
+  } else
+  {
+    Ptr<UniformRandomVariable> rand = CreateObject <UniformRandomVariable> ();
+    double delay = rand->GetValue (0, m_startSendIntval.GetSeconds ());
+    //delay += (m_initStaJoinTime.GetSeconds() - Simulator::Now().GetSeconds());
+    std::cout << "Initial TX after delay = " << delay << "s" << std::endl;
+    m_sendEvent = Simulator::Schedule (Seconds (delay), &StaClient::Send, this, "FirstPacket");
+
+  }
 }
 
 void

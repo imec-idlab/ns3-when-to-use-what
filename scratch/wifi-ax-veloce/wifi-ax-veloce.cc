@@ -480,8 +480,8 @@ int  main(int argc, char *argv[])
                   "VO_BlockAckThreshold", UintegerValue(0));
 
       apNetDevice = wifi.Install (phy, wifimac, wifiApNode);
-      phy.EnablePcap("wifi-ax-ofdma-ap", apNetDevice); // enable pcap tracing
-      phy.EnablePcap("wifi-ax-ofdma-sta", staNetDevices);
+      //phy.EnablePcap("wifi-ax-ofdma-ap", apNetDevice); // enable pcap tracing
+      //phy.EnablePcap("wifi-ax-ofdma-sta", staNetDevices);
     }
   else
     {
@@ -652,7 +652,7 @@ int  main(int argc, char *argv[])
     for (size_t i = 0; i < totalNStations; i++) {
       StaClientHelper staUdpClient (apLocalAddress);
       staUdpClient.SetAttribute ("MaxPackets", UintegerValue (4294967295u));
-      staUdpClient.SetAttribute ("InitSession", BooleanValue (true));
+      staUdpClient.SetAttribute ("InitSession", BooleanValue (false));
       staUdpClient.SetAttribute ("Interval", TimeValue (Seconds (interval)));
       staUdpClient.SetAttribute ("StartSendInterval", TimeValue (Seconds(StartSendInterval)));
       staUdpClient.SetAttribute ("PacketSize", UintegerValue (ulPayloadSize));
