@@ -202,6 +202,7 @@ int  main(int argc, char *argv[])
   bool enableAggregation {false};
   double StartSendInterval {0.001}; //seconds
   bool strictWindow {false};
+  double poissonMean {5};
 
 
   CommandLine cmd (__FILE__);
@@ -259,6 +260,8 @@ int  main(int argc, char *argv[])
   cmd.AddValue ("enableAggregation", "Enable/disable mpdu/msdu aggregation", enableAggregation);
   cmd.AddValue ("StartSendInterval", "Time interval within which stations randomly send initial packet [Seconds]", StartSendInterval);
   cmd.AddValue ("strictWindow", "To enable/disable strict AP sending time, independent of packet arrival", strictWindow);
+  cmd.AddValue ("poissonMean", "The mean of the values returned by Poisson Distro", poissonMean);
+
 
 
   cmd.Parse (argc, argv);
@@ -377,10 +380,10 @@ int  main(int argc, char *argv[])
         }
         else {
           //STA timer (validity of set)
-          Config::SetDefault ("ns3::HeConfiguration::BkMuEdcaTimer", TimeValue (MicroSeconds(2088960) ));
-          Config::SetDefault ("ns3::HeConfiguration::BeMuEdcaTimer", TimeValue (MicroSeconds(2088960) ));
-          Config::SetDefault ("ns3::HeConfiguration::ViMuEdcaTimer", TimeValue (MicroSeconds(2088960) ));
-          Config::SetDefault ("ns3::HeConfiguration::VoMuEdcaTimer", TimeValue (MicroSeconds(2088960) ));
+          Config::SetDefault ("ns3::HeConfiguration::BkMuEdcaTimer", TimeValue (MicroSeconds(8192 * 5) ));
+          Config::SetDefault ("ns3::HeConfiguration::BeMuEdcaTimer", TimeValue (MicroSeconds(8192 * 5) ));
+          Config::SetDefault ("ns3::HeConfiguration::ViMuEdcaTimer", TimeValue (MicroSeconds(8192 * 5) ));
+          Config::SetDefault ("ns3::HeConfiguration::VoMuEdcaTimer", TimeValue (MicroSeconds(8192 * 5) ));
         }
   }
 
@@ -480,8 +483,8 @@ int  main(int argc, char *argv[])
                   "VO_BlockAckThreshold", UintegerValue(0));
 
       apNetDevice = wifi.Install (phy, wifimac, wifiApNode);
-      //phy.EnablePcap("wifi-ax-ofdma-ap", apNetDevice); // enable pcap tracing
-      //phy.EnablePcap("wifi-ax-ofdma-sta", staNetDevices);
+      phy.EnablePcap("wifi-ax-ofdma-ap", apNetDevice); // enable pcap tracing
+      phy.EnablePcap("wifi-ax-ofdma-sta", staNetDevices);
     }
   else
     {
@@ -620,7 +623,7 @@ int  main(int argc, char *argv[])
       staUdpClient.SetAttribute("OnOffFlag", BooleanValue(onOffFlag));
 
       std::ostringstream intervalDistr;
-      double mean = (((simulationTime + startLogTime) - timeToJoin) - (startLogTime + timeToJoin) / 2);
+      double mean = poissonMean;
       double bound = ((simulationTime + startLogTime) - timeToJoin );
       intervalDistr << "ns3::ExponentialRandomVariable[Mean=" << mean  << "|Bound="<< bound <<"]";
       staUdpClient.SetAttribute ("IntervalRandomVariable", StringValue (intervalDistr.str()));
