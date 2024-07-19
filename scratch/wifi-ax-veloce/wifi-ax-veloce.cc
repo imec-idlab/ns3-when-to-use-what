@@ -165,6 +165,7 @@ int  main(int argc, char *argv[])
   double initStaJoinTime {2}; //seconds
   std::size_t scenario {1};
   bool onOffFlag {false};
+  std::string simType {"OFDMA_only"};
 
 
   std::string frequency {"5"}; //whether 2.4, 5 or 6 GHz
@@ -222,6 +223,8 @@ int  main(int argc, char *argv[])
   cmd.AddValue ("scenario","Scenario to simulate; 0 - only up to 8 active stations.  1 - idle stations joining along the way", scenario);
   cmd.AddValue ("onOffFlag","Enable on and off behavior of joining STAs or ONLY on and no off", onOffFlag);
   cmd.AddValue ("scheduler","The OFDMA scheduler to use e.g ns3::RrMultiUserScheduler | ns3::VlceMultiUserScheduler", scheduler);
+  cmd.AddValue ("simType","the type of sim to run e.g OFDMA+MUEDCA (least timer value) | OFDMA+EDCA(non-standard no disabling of edca (comment out the code in he-frame-exchange for disabling)) | OFDMA_only", simType);
+
 
 
 
@@ -378,12 +381,19 @@ int  main(int argc, char *argv[])
           Config::SetDefault ("ns3::HeConfiguration::ViMuEdcaTimer", TimeValue (MicroSeconds(8192 * 5) ));
           Config::SetDefault ("ns3::HeConfiguration::VoMuEdcaTimer", TimeValue (MicroSeconds(8192 * 5) ));
         }
-        else {
+        else if (scheduler == "ns3::RrMultiUserScheduler" && simType =="OFDMA_only" ){
           //STA timer (validity of set)
-          Config::SetDefault ("ns3::HeConfiguration::BkMuEdcaTimer", TimeValue (MicroSeconds(8192 * 5) ));
-          Config::SetDefault ("ns3::HeConfiguration::BeMuEdcaTimer", TimeValue (MicroSeconds(8192 * 5) ));
-          Config::SetDefault ("ns3::HeConfiguration::ViMuEdcaTimer", TimeValue (MicroSeconds(8192 * 5) ));
-          Config::SetDefault ("ns3::HeConfiguration::VoMuEdcaTimer", TimeValue (MicroSeconds(8192 * 5) ));
+          Config::SetDefault ("ns3::HeConfiguration::BkMuEdcaTimer", TimeValue (MicroSeconds(2088960) ));
+          Config::SetDefault ("ns3::HeConfiguration::BeMuEdcaTimer", TimeValue (MicroSeconds(2088960) ));
+          Config::SetDefault ("ns3::HeConfiguration::ViMuEdcaTimer", TimeValue (MicroSeconds(2088960) ));
+          Config::SetDefault ("ns3::HeConfiguration::VoMuEdcaTimer", TimeValue (MicroSeconds(2088960) ));
+        }
+        else if (scheduler == "ns3::RrMultiUserScheduler" && (simType =="OFDMA+MUEDCA" || simType =="OFDMA+EDCA") ){
+          //STA timer (validity of set)
+          Config::SetDefault ("ns3::HeConfiguration::BkMuEdcaTimer", TimeValue (MicroSeconds(8192) ));
+          Config::SetDefault ("ns3::HeConfiguration::BeMuEdcaTimer", TimeValue (MicroSeconds(8192) ));
+          Config::SetDefault ("ns3::HeConfiguration::ViMuEdcaTimer", TimeValue (MicroSeconds(8192) ));
+          Config::SetDefault ("ns3::HeConfiguration::VoMuEdcaTimer", TimeValue (MicroSeconds(8192) ));
         }
   }
 
