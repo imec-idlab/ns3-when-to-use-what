@@ -62,7 +62,12 @@ HeFrameExchangeManager::GetTypeId()
     static TypeId tid = TypeId("ns3::HeFrameExchangeManager")
                             .SetParent<VhtFrameExchangeManager>()
                             .AddConstructor<HeFrameExchangeManager>()
-                            .SetGroupName("Wifi");
+                            .SetGroupName("Wifi")
+                            .AddAttribute("DisableEDCA",
+                                "Disable edca or not by starting MUEDCA timer after a successful EDCA transmission",
+                                BooleanValue(true),
+                                MakeBooleanAccessor(&HeFrameExchangeManager::val),
+                                MakeBooleanChecker());
     return tid;
 }
 
@@ -2532,7 +2537,8 @@ HeFrameExchangeManager::ReceiveMpdu(Ptr<const WifiMpdu> mpdu,
                     // transmitted in response to a Basic Trigger Frame and at least one
                     // MPDU was acknowledged. Therefore, it needs to update the access
                     // parameters if it received an MU EDCA Parameter Set element.
-                    m_mac->GetQosTxop(tid)->StartMuEdcaTimerNow(m_linkId);
+                    if (val)
+                      m_mac->GetQosTxop(tid)->StartMuEdcaTimerNow(m_linkId);
                 }
             }
 

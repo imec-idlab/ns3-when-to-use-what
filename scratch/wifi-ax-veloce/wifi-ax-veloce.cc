@@ -398,6 +398,8 @@ int  main(int argc, char *argv[])
           Config::SetDefault ("ns3::HeConfiguration::BeMuEdcaTimer", TimeValue (MicroSeconds(8192) ));
           Config::SetDefault ("ns3::HeConfiguration::ViMuEdcaTimer", TimeValue (MicroSeconds(8192) ));
           Config::SetDefault ("ns3::HeConfiguration::VoMuEdcaTimer", TimeValue (MicroSeconds(8192) ));
+
+          Config::SetDefault("ns3::HeFrameExchangeManager::DisableEDCA", BooleanValue(false));
         }
   }
 
