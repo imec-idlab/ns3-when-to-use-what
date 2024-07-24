@@ -63,7 +63,7 @@ HeFrameExchangeManager::GetTypeId()
                             .SetParent<VhtFrameExchangeManager>()
                             .AddConstructor<HeFrameExchangeManager>()
                             .SetGroupName("Wifi")
-                            .AddAttribute("DisableEDCA",
+                            .AddAttribute("HeDisableEDCA",
                                 "Disable edca or not by starting MUEDCA timer after a successful EDCA transmission",
                                 BooleanValue(true),
                                 MakeBooleanAccessor(&HeFrameExchangeManager::val),

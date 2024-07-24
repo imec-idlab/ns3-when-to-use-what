@@ -399,7 +399,7 @@ int  main(int argc, char *argv[])
           Config::SetDefault ("ns3::HeConfiguration::ViMuEdcaTimer", TimeValue (MicroSeconds(8192) ));
           Config::SetDefault ("ns3::HeConfiguration::VoMuEdcaTimer", TimeValue (MicroSeconds(8192) ));
 
-          Config::SetDefault("ns3::HeFrameExchangeManager::DisableEDCA", BooleanValue(false));
+          Config::SetDefault("ns3::HeFrameExchangeManager::HeDisableEDCA", BooleanValue(false));
         }
   }
 
@@ -439,7 +439,7 @@ int  main(int argc, char *argv[])
     {
       NS_FATAL_ERROR ("Wrong frequency value!");
     }
-  std::ostringstream oss;
+    std::ostringstream oss;
   oss << "HeMcs" << mcs;
   wifi.SetRemoteStationManager("ns3::ConstantRateWifiManager","DataMode", StringValue(oss.str()), "ControlMode", StringValue(oss.str()));
 
