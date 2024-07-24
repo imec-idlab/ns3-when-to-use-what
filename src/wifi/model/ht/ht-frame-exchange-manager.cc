@@ -720,9 +720,7 @@ HtFrameExchangeManager::NotifyReceivedNormalAck(Ptr<WifiMpdu> mpdu)
             edca->GetBaManager()->NotifyGotAck(m_linkId, mpdu);
         }
         if(val){
-          std::cout<<"we can disable now" <<std::endl;
           edca->StartMuEdcaTimerNow(m_linkId);
-          NS_ASSERT(0);
         }
     }
     else if (mpdu->GetHeader().IsAction())
