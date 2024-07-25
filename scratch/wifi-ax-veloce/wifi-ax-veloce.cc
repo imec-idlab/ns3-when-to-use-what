@@ -499,8 +499,8 @@ int  main(int argc, char *argv[])
                   "VO_BlockAckThreshold", UintegerValue(0));
 
       apNetDevice = wifi.Install (phy, wifimac, wifiApNode);
-      phy.EnablePcap("wifi-ax-ofdma-ap", apNetDevice); // enable pcap tracing
-      phy.EnablePcap("wifi-ax-ofdma-sta", staNetDevices);
+      //phy.EnablePcap("wifi-ax-ofdma-ap", apNetDevice); // enable pcap tracing
+      //phy.EnablePcap("wifi-ax-ofdma-sta", staNetDevices);
     }
   else
     {

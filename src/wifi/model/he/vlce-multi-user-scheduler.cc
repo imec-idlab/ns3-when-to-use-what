@@ -179,7 +179,7 @@ VlceMultiUserScheduler::SelectTxFormat()
         return SU_TX;
     }
 
-    if (m_enableUlOfdma && m_enableBsrp && (GetLastTxFormat(m_linkId) == DL_MU_TX || !mpdu))
+    if (m_enableUlOfdma && m_enableBsrp && (GetLastTxFormat(m_linkId) != UL_MU_TX || !mpdu))
     {
         TxFormat txFormat = TrySendingBsrpTf();
 
@@ -188,8 +188,8 @@ VlceMultiUserScheduler::SelectTxFormat()
             return txFormat;
         }
     }
-    else if (m_enableUlOfdma && ((GetLastTxFormat(m_linkId) == DL_MU_TX) ||
-                                 (m_trigger.GetType() == TriggerFrameType::BSRP_TRIGGER) || !mpdu))
+    else if (m_enableUlOfdma && ((GetLastTxFormat(m_linkId) != UL_MU_TX && !m_enableBsrp) ||
+                                 (GetLastTxFormat(m_linkId) == UL_MU_TX && m_trigger.GetType() == TriggerFrameType::BSRP_TRIGGER) || !mpdu))
     {
         TxFormat txFormat = TrySendingBasicTf();
 
