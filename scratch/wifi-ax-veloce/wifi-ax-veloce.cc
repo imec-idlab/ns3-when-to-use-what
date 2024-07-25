@@ -164,14 +164,14 @@ int  main(int argc, char *argv[])
   double timeToJoin {5}; //seconds
   double initStaJoinTime {2}; //seconds
   std::size_t scenario {1};
-  bool onOffFlag {false};
+  bool onOffFlag {true};
   std::string simType {"OFDMA_only"};
 
 
   std::string frequency {"5"}; //whether 2.4, 5 or 6 GHz
   uint32_t channelWidth {40}; //for 2.4 <= 40 MHz, for 5 <= 160 MHz
   uint32_t guardInterval {800}; //in ns
-  int mcs {11}; // 0..11
+  int mcs {8}; // 0..11
   std::string phyModel {"Yans"};
   bool enableShadowing = false;
   double txPowerStart = {16.0206};

@@ -2537,8 +2537,9 @@ HeFrameExchangeManager::ReceiveMpdu(Ptr<const WifiMpdu> mpdu,
                     // transmitted in response to a Basic Trigger Frame and at least one
                     // MPDU was acknowledged. Therefore, it needs to update the access
                     // parameters if it received an MU EDCA Parameter Set element.
-                    if (val)
+                    if (val) {
                       m_mac->GetQosTxop(tid)->StartMuEdcaTimerNow(m_linkId);
+                    }
                 }
             }
 
