@@ -179,11 +179,7 @@ VlceMultiUserScheduler::SelectTxFormat()
         return SU_TX;
     }
 
-    if (GetLastTxFormat(m_linkId) == UL_MU_TX && mpdu && m_trigger.GetType() != TriggerFrameType::BSRP_TRIGGER )
-    {
-      return TrySendingDlMuPpdu();
-    }
-    else if ( m_enableUlOfdma && m_enableBsrp && ( GetLastTxFormat(m_linkId) != UL_MU_TX || 
+    if ( m_enableUlOfdma && m_enableBsrp && ( GetLastTxFormat(m_linkId) != UL_MU_TX || 
           (GetLastTxFormat(m_linkId) == UL_MU_TX && m_trigger.GetType() != TriggerFrameType::BSRP_TRIGGER) ) )
     {
         TxFormat txFormat = TrySendingBsrpTf();
@@ -686,6 +682,16 @@ VlceMultiUserScheduler::TrySendingDlMuPpdu()
 {
     NS_LOG_FUNCTION(this);
 
+    Ptr<WifiMpdu> mpdu = m_edca->PeekNextMpdu(m_linkId);
+    if (!mpdu){
+      TxFormat txFormat = TrySendingBsrpTf();
+
+      if (txFormat != DL_MU_TX)
+      {
+        return txFormat;
+      }
+    }
+
     AcIndex primaryAc = m_edca->GetAccessCategory();
 
     if (m_staListDl[primaryAc].empty())
@@ -718,8 +724,6 @@ VlceMultiUserScheduler::TrySendingDlMuPpdu()
     }
 
     uint8_t currTid = wifiAcList.at(primaryAc).GetHighTid();
-
-    Ptr<WifiMpdu> mpdu = m_edca->PeekNextMpdu(m_linkId);
 
     if (mpdu && mpdu->GetHeader().IsQosData())
     {
