@@ -179,8 +179,7 @@ VlceMultiUserScheduler::SelectTxFormat()
         return SU_TX;
     }
 
-    if ( m_enableUlOfdma && m_enableBsrp && ( GetLastTxFormat(m_linkId) != UL_MU_TX || 
-          (GetLastTxFormat(m_linkId) == UL_MU_TX && m_trigger.GetType() != TriggerFrameType::BSRP_TRIGGER) ) )
+    if ( m_enableUlOfdma && m_enableBsrp && ( GetLastTxFormat(m_linkId) != UL_MU_TX ) )
     {
         TxFormat txFormat = TrySendingBsrpTf();
 
