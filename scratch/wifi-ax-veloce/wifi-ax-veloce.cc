@@ -737,7 +737,7 @@ int  main(int argc, char *argv[])
   Simulator::Run ();
 
   // Statistics
-  uint64_t rxBytes = 0;
+ /* uint64_t rxBytes = 0;
 
   for (uint32_t i = 0; i < apServerApp.GetN (); i++)
     {
@@ -748,10 +748,10 @@ int  main(int argc, char *argv[])
       rxBytes +=   DynamicCast<ApServer> (wifiStaNodes.Get(i)-> GetApplication(0) )->GetTotalRx ();
 
       //rxBytes += DynamicCast<ApServer> (staServerApp.Get (i))->GetTotalRx ();
-    }
+    } */
   Simulator::Destroy ();
-  
-    
+
+/*
   double throughput = (rxBytes * 8) / (simulationTime * 1000000.0); //Mbit/s
 
   std::ofstream totalStatsOutStream;
@@ -792,7 +792,6 @@ int  main(int argc, char *argv[])
     pktDistOutStream.close();
   }
 
-/*
   for (auto &staStats : g_statsMap) {
     std::ostringstream mac_str;
     mac_str << staStats.first;
@@ -804,6 +803,7 @@ int  main(int argc, char *argv[])
     pktDistOutStream.close();
   }
   */
+  std::ofstream pktDistOutStream;
   for (auto &staStats : g_statsMapAp) {
     //std::ostringstream mac_str;
     //mac_str << staStats.first ;

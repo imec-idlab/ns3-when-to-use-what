@@ -681,16 +681,7 @@ VlceMultiUserScheduler::TrySendingDlMuPpdu()
 {
     NS_LOG_FUNCTION(this);
 
-    Ptr<WifiMpdu> mpdu = m_edca->PeekNextMpdu(m_linkId);
-    if (!mpdu){
-      TxFormat txFormat = TrySendingBsrpTf();
-
-      if (txFormat != DL_MU_TX)
-      {
-        return txFormat;
-      }
-    }
-
+    
     AcIndex primaryAc = m_edca->GetAccessCategory();
 
     if (m_staListDl[primaryAc].empty())
@@ -724,6 +715,7 @@ VlceMultiUserScheduler::TrySendingDlMuPpdu()
 
     uint8_t currTid = wifiAcList.at(primaryAc).GetHighTid();
 
+    Ptr<WifiMpdu> mpdu = m_edca->PeekNextMpdu(m_linkId);
     if (mpdu && mpdu->GetHeader().IsQosData())
     {
         currTid = mpdu->GetHeader().GetQosTid();

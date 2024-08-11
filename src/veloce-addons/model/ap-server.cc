@@ -259,7 +259,7 @@ ApServer::HandleRead (Ptr<Socket> socket)
               //++m_nStations; Do nothing here
               //std::cout <<"first packet recieved from: " << InetSocketAddress::ConvertFrom(from).GetIpv4() << std::endl;
             }
-            else if(initTag.GetValue() == 2) {
+            else if(initTag.GetValue() == 2 && Simulator::Now().GetSeconds() > 5) {
              m_rxTraceWithAddressesWakeUp(packet_copy, from, m_localAddress, 0);
             }
             break;
