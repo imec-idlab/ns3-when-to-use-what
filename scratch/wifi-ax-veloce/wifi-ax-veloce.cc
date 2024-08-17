@@ -639,8 +639,10 @@ int  main(int argc, char *argv[])
       staUdpClient.SetAttribute("OnOffFlag", BooleanValue(onOffFlag));
 
       std::ostringstream intervalDistr;
-      double mean = (((simulationTime + startLogTime) - timeToJoin) - (startLogTime + timeToJoin) / 2);
-      double bound = ((simulationTime + startLogTime) - timeToJoin );
+      //double mean = (((simulationTime + startLogTime) - timeToJoin) - (startLogTime + timeToJoin) / 2);
+      //double bound = ((simulationTime + startLogTime) - timeToJoin );
+      double mean = poissonMean;
+      double bound = 29;
       intervalDistr << "ns3::ExponentialRandomVariable[Mean=" << mean  << "|Bound="<< bound <<"]";
       staUdpClient.SetAttribute ("IntervalRandomVariable", StringValue (intervalDistr.str()));
       staUdpClient.SetAttribute("InitPacketSentDelay", TimeValue(Seconds(staStartTime)));
