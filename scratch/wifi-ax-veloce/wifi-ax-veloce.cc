@@ -376,28 +376,28 @@ int  main(int argc, char *argv[])
 
         if (scheduler == "ns3::VlceMultiUserScheduler") {
           //STA timer (validity of set)
-          Config::SetDefault ("ns3::HeConfiguration::BkMuEdcaTimer", TimeValue (MicroSeconds(8192 * 5) ));
-          Config::SetDefault ("ns3::HeConfiguration::BeMuEdcaTimer", TimeValue (MicroSeconds(8192 * 5) ));
-          Config::SetDefault ("ns3::HeConfiguration::ViMuEdcaTimer", TimeValue (MicroSeconds(8192 * 5) ));
-          Config::SetDefault ("ns3::HeConfiguration::VoMuEdcaTimer", TimeValue (MicroSeconds(8192 * 5) ));
+          Config::SetDefault ("ns3::HeConfiguration::BkMuEdcaTimer", TimeValue (MicroSeconds(8192 * 5)));
+          Config::SetDefault ("ns3::HeConfiguration::BeMuEdcaTimer", TimeValue (MicroSeconds(8192 * 5)));
+          Config::SetDefault ("ns3::HeConfiguration::ViMuEdcaTimer", TimeValue (MicroSeconds(8192 * 5)));
+          Config::SetDefault ("ns3::HeConfiguration::VoMuEdcaTimer", TimeValue (MicroSeconds(8192 * 5)));
 
           Config::SetDefault("ns3::HtFrameExchangeManager::DisableEDCA", BooleanValue(true));
         }
         else if (scheduler == "ns3::RrMultiUserScheduler" && simType =="OFDMA_only" ){
           //STA timer (validity of set)
-          Config::SetDefault ("ns3::HeConfiguration::BkMuEdcaTimer", TimeValue (MicroSeconds(2088960) ));
-          Config::SetDefault ("ns3::HeConfiguration::BeMuEdcaTimer", TimeValue (MicroSeconds(2088960) ));
-          Config::SetDefault ("ns3::HeConfiguration::ViMuEdcaTimer", TimeValue (MicroSeconds(2088960) ));
-          Config::SetDefault ("ns3::HeConfiguration::VoMuEdcaTimer", TimeValue (MicroSeconds(2088960) ));
+          Config::SetDefault ("ns3::HeConfiguration::BkMuEdcaTimer", TimeValue (MicroSeconds(2088960)));
+          Config::SetDefault ("ns3::HeConfiguration::BeMuEdcaTimer", TimeValue (MicroSeconds(2088960)));
+          Config::SetDefault ("ns3::HeConfiguration::ViMuEdcaTimer", TimeValue (MicroSeconds(2088960)));
+          Config::SetDefault ("ns3::HeConfiguration::VoMuEdcaTimer", TimeValue (MicroSeconds(2088960)));
 
           Config::SetDefault("ns3::HtFrameExchangeManager::DisableEDCA", BooleanValue(true));
         }
         else if (scheduler == "ns3::RrMultiUserScheduler" && (simType =="OFDMA+MUEDCA" || simType =="OFDMA+EDCA") ){
           //STA timer (validity of set)
-          Config::SetDefault ("ns3::HeConfiguration::BkMuEdcaTimer", TimeValue (MicroSeconds(8192) ));
-          Config::SetDefault ("ns3::HeConfiguration::BeMuEdcaTimer", TimeValue (MicroSeconds(8192) ));
-          Config::SetDefault ("ns3::HeConfiguration::ViMuEdcaTimer", TimeValue (MicroSeconds(8192) ));
-          Config::SetDefault ("ns3::HeConfiguration::VoMuEdcaTimer", TimeValue (MicroSeconds(8192) ));
+          Config::SetDefault ("ns3::HeConfiguration::BkMuEdcaTimer", TimeValue (MicroSeconds(8192)));
+          Config::SetDefault ("ns3::HeConfiguration::BeMuEdcaTimer", TimeValue (MicroSeconds(8192)));
+          Config::SetDefault ("ns3::HeConfiguration::ViMuEdcaTimer", TimeValue (MicroSeconds(8192)));
+          Config::SetDefault ("ns3::HeConfiguration::VoMuEdcaTimer", TimeValue (MicroSeconds(8192)));
 
           Config::SetDefault("ns3::HeFrameExchangeManager::HeDisableEDCA", BooleanValue(false));
         }
@@ -640,9 +640,9 @@ int  main(int argc, char *argv[])
 
       std::ostringstream intervalDistr;
       //double mean = (((simulationTime + startLogTime) - timeToJoin) - (startLogTime + timeToJoin) / 2);
-      //double bound = ((simulationTime + startLogTime) - timeToJoin );
+      double bound = ((simulationTime + startLogTime) - timeToJoin );
       double mean = poissonMean;
-      double bound = 29;
+      std::cout <<"Poisson Mead " <<poissonMean <<std::endl;
       intervalDistr << "ns3::ExponentialRandomVariable[Mean=" << mean  << "|Bound="<< bound <<"]";
       staUdpClient.SetAttribute ("IntervalRandomVariable", StringValue (intervalDistr.str()));
       staUdpClient.SetAttribute("InitPacketSentDelay", TimeValue(Seconds(staStartTime)));

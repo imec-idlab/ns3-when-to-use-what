@@ -47,11 +47,13 @@ set(source_files
     model/he/he-ppdu.cc
     model/he/he-ru.cc
     model/he/mu-edca-parameter-set.cc
+    model/he/uora-parameter-set.cc
     model/he/mu-snr-tag.cc
     model/he/multi-user-scheduler.cc
     model/he/obss-pd-algorithm.cc
     model/he/rr-multi-user-scheduler.cc
     model/he/vlce-multi-user-scheduler.cc
+    model/he/uora-multi-user-scheduler.cc
     model/ht/ht-capabilities.cc
     model/ht/ht-configuration.cc
     model/ht/ht-frame-exchange-manager.cc
@@ -197,11 +199,13 @@ set(header_files
     model/he/he-ppdu.h
     model/he/he-ru.h
     model/he/mu-edca-parameter-set.h
+    model/he/uora-parameter-set.h
     model/he/mu-snr-tag.h
     model/he/multi-user-scheduler.h
     model/he/obss-pd-algorithm.h
     model/he/rr-multi-user-scheduler.h
     model/he/vlce-multi-user-scheduler.h
+    model/he/uora-multi-user-scheduler.h
     model/ht/ht-capabilities.h
     model/ht/ht-configuration.h
     model/ht/ht-frame-exchange-manager.h
