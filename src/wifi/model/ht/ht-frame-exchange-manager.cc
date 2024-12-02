@@ -361,6 +361,11 @@ HtFrameExchangeManager::StartFrameExchange(Ptr<QosTxop> edca, Time availableTime
         return true;
     }
 
+    if ( !m_mac->GetTypeOfStation() ) {
+    std::cout << "Ht at " << Simulator::Now().GetSeconds() <<" Type of stations is" << m_mac->GetTypeOfStation() << 
+      " address is"<< m_mac->GetAddress() << std::endl;
+  }
+
     Ptr<WifiMpdu> peekedItem = edca->PeekNextMpdu(m_linkId);
 
     // Even though channel access is requested when the queue is not empty, at
@@ -632,6 +637,10 @@ HtFrameExchangeManager::SendDataFrame(Ptr<WifiMpdu> peekedItem,
         NS_LOG_DEBUG("Not enough time to transmit a frame");
         return false;
     }
+    if ( !m_mac->GetTypeOfStation() ) {
+    std::cout << "Ht:SendDataFrame at " << Simulator::Now().GetSeconds() <<" Type of stations is" << m_mac->GetTypeOfStation() << 
+      " address is"<< m_mac->GetAddress() << std::endl;
+  }
 
     // try A-MPDU aggregation
     std::vector<Ptr<WifiMpdu>> mpduList =
@@ -720,6 +729,7 @@ HtFrameExchangeManager::NotifyReceivedNormalAck(Ptr<WifiMpdu> mpdu)
             edca->GetBaManager()->NotifyGotAck(m_linkId, mpdu);
         }
         if(val){
+          std::cout <<"HT DIsable now" <<std::endl;
           edca->StartMuEdcaTimerNow(m_linkId);
         }
     }

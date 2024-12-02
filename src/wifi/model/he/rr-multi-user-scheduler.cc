@@ -310,12 +310,6 @@ RrMultiUserScheduler::GetTxVectorForUlMu(Func canbeSolicited, bool isBasicTrigge
 
     if (txVector.GetHeMuUserInfoMap().empty())
     {
-      for (size_t i = 0; i < std::min<std::size_t>(m_nStations, count + nCentral26TonesRus); i++)
-      {
-        auto it = std::next(m_staListUl.begin(), i);
-        std::rotate (it, std::next(it), m_staListUl.end() );
-      }
-
       NS_LOG_DEBUG("No suitable station");
       return txVector;
     }
@@ -846,13 +840,13 @@ RrMultiUserScheduler::FinalizeTxVector(WifiTxVector& txVector, bool isBasicTrigg
 
     //Calculate number of random access RUs
     std::size_t nRandomAccessRus = 0;
-    if (isBasicTrigger)
-    {
+    //if (isBasicTrigger)
+    //{
         nRandomAccessRus = m_numRaRus;
         std::size_t totalRus = HeRu::GetNRus (m_allowedWidth, ruType);
         std::size_t _26tonesRus = (m_useCentral26TonesRus) ? nCentral26TonesRus : 0;
 
-        if (totalRus + _26tonesRus < nRusAssigned + nRandomAccessRus)
+        if (totalRus + _26tonesRus <= nRusAssigned + nRandomAccessRus)
         {
             if (_26tonesRus > 0 && _26tonesRus >= nRandomAccessRus)
             {
@@ -872,7 +866,7 @@ RrMultiUserScheduler::FinalizeTxVector(WifiTxVector& txVector, bool isBasicTrigg
                 }
             }
         }
-    }
+    //}
 
     if (!m_useCentral26TonesRus || m_candidates.size() + nRandomAccessRus == nRusAssigned)
     {

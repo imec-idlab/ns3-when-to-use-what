@@ -834,6 +834,7 @@ FrameExchangeManager::TransmissionSucceeded()
     // if any, or releases the channel, otherwise
     if (m_moreFragments)
     {
+      std::cout <<"first one" << std::endl;
         NS_LOG_DEBUG("Schedule transmission of next fragment in a SIFS");
         Simulator::Schedule(m_phy->GetSifs(),
                             &FrameExchangeManager::StartTransmission,
@@ -844,6 +845,7 @@ FrameExchangeManager::TransmissionSucceeded()
     }
     else
     {
+      std::cout <<"second one" << std::endl;
         m_dcf->NotifyChannelReleased(m_linkId);
         m_dcf = nullptr;
     }
