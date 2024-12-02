@@ -157,11 +157,6 @@ HeFrameExchangeManager::StartFrameExchange(Ptr<QosTxop> edca, Time availableTime
     MultiUserScheduler::TxFormat txFormat = MultiUserScheduler::SU_TX;
     Ptr<const WifiMpdu> mpdu;
 
-     if ( !m_mac->GetTypeOfStation() ) {
-    std::cout << "He at " << Simulator::Now().GetSeconds() <<" Type of stations is" << m_mac->GetTypeOfStation() << 
-      " address is"<< m_mac->GetAddress() << std::endl;
-  }
-
     /*
      * We consult the Multi-user Scheduler (if available) to know the type of transmission to make
      * if:
@@ -1861,7 +1856,7 @@ HeFrameExchangeManager::ReceiveBasicTrigger(CtrlTriggerHeader& trigger,
 }
 
 void
-HeFrameExchangeManager::SendQosNullFramesInTbPpdu(const CtrlTriggerHeader& trigger,
+HeFrameExchangeManager::SendQosNullFramesInTbPpdu(CtrlTriggerHeader& trigger,
                                                   const WifiMacHeader& hdr, bool isRandomAccess)
 {
     NS_LOG_FUNCTION(this << trigger << hdr);
@@ -2321,7 +2316,6 @@ HeFrameExchangeManager::ReceiveMpdu(Ptr<const WifiMpdu> mpdu,
         // Schedule the transmission of a Multi-STA BlockAck frame if needed
         if (!acknowledgment->stationsReceivingMultiStaBa.empty() && !m_multiStaBaEvent.IsRunning())
         {
-          //std::cout <<"called from here Second"<<std::endl;
             m_multiStaBaEvent = Simulator::Schedule(m_phy->GetSifs(),
                                                     &HeFrameExchangeManager::SendMultiStaBlockAck,
                                                     this,
@@ -2732,7 +2726,7 @@ HeFrameExchangeManager::ReceiveMpdu(Ptr<const WifiMpdu> mpdu,
                                     &HeFrameExchangeManager::SendQosNullFramesInTbPpdu,
                                     this,
                                     trigger,
-                                    hdr);
+                                    hdr,false);
             }
         }
         else
@@ -2813,7 +2807,6 @@ HeFrameExchangeManager::EndReceiveAmpdu(Ptr<const WifiPsdu> psdu,
         // Schedule the transmission of a Multi-STA BlockAck frame if needed
         if (!acknowledgment->stationsReceivingMultiStaBa.empty() && !m_multiStaBaEvent.IsRunning())
         {
-          std::cout <<"called from here "<<std::endl;
             m_multiStaBaEvent = Simulator::Schedule(m_phy->GetSifs(),
                                                     &HeFrameExchangeManager::SendMultiStaBlockAck,
                                                     this,
