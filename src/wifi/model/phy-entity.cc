@@ -1339,6 +1339,7 @@ PhyEntity::Transmit(Time txDuration,
     NS_LOG_DEBUG("Starting " << type << " with integrated spectrum power "
                              << WToDbm(Integral(*txPowerSpectrum)) << " dBm; spectrum model Uid: "
                              << txPowerSpectrum->GetSpectrumModel()->GetUid());
+
     auto spectrumWifiPhy = DynamicCast<SpectrumWifiPhy>(m_wifiPhy);
     NS_ASSERT(spectrumWifiPhy);
     spectrumWifiPhy->Transmit(txParams);

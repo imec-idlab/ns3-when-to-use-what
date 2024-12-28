@@ -209,6 +209,7 @@ HtFrameExchangeManager::SendAddBaResponse(const MgtAddBaRequestHeader* reqHdr,
                                           Mac48Address originator)
 {
     NS_LOG_FUNCTION(this << originator);
+    NS_LOG_DEBUG("Respond to ADDBA request " << originator);
     WifiMacHeader hdr;
     hdr.SetType(WIFI_MAC_MGT_ACTION);
     hdr.SetAddr1(originator);
@@ -719,7 +720,7 @@ HtFrameExchangeManager::NotifyReceivedNormalAck(Ptr<WifiMpdu> mpdu)
             // notify the BA manager that the MPDU was acknowledged
             edca->GetBaManager()->NotifyGotAck(m_linkId, mpdu);
         }
-        if(val){
+        if(m_mac->GetTypeOfStation() == STA && val){
           edca->StartMuEdcaTimerNow(m_linkId);
         }
     }
@@ -773,6 +774,7 @@ HtFrameExchangeManager::NotifyReceivedNormalAck(Ptr<WifiMpdu> mpdu)
     }
     QosFrameExchangeManager::NotifyReceivedNormalAck(mpdu);
 }
+
 
 void
 HtFrameExchangeManager::TransmissionSucceeded()

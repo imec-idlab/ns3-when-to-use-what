@@ -397,7 +397,7 @@ int  main(int argc, char *argv[])
           Config::SetDefault ("ns3::HeConfiguration::VoMuEdcaTimer", TimeValue (muEdcaTimer));
 
           Config::SetDefault("ns3::HtFrameExchangeManager::DisableEDCA", BooleanValue(true));
-       }/*
+       }
         else if (scheduler == "ns3::RrMultiUserScheduler" && simType =="OFDMA_only" ){
           //STA timer (validity of set)
           Config::SetDefault ("ns3::HeConfiguration::BkMuEdcaTimer", TimeValue (muEdcaTimer));
@@ -406,7 +406,7 @@ int  main(int argc, char *argv[])
           Config::SetDefault ("ns3::HeConfiguration::VoMuEdcaTimer", TimeValue (muEdcaTimer));
 
           Config::SetDefault("ns3::HtFrameExchangeManager::DisableEDCA", BooleanValue(true));
-        }
+        } /*
         else if (scheduler == "ns3::RrMultiUserScheduler" && (simType =="OFDMA+MUEDCA" || simType =="OFDMA+EDCA") ){
           //STA timer (validity of set)
           Config::SetDefault ("ns3::HeConfiguration::BkMuEdcaTimer", TimeValue (MicroSeconds(8192)));
