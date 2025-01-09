@@ -96,7 +96,7 @@ RrMultiUserScheduler::GetTypeId()
             .AddAttribute("NumRandomAccessRus",
                           "Number of RUs that are reserved for random access",
                           UintegerValue (0),
-                          MakeUintegerAccessor (&RrMultiUserScheduler::m_numRaRus),
+                          MakeUintegerAccessor (&RrMultiUserScheduler::m_nRaRus),
                           MakeUintegerChecker<uint16_t> ())
             .AddAttribute("RuAllocationType",
                           "The type of RUs allocated to STAs, if undefined - dynamically selected based on the number of STAs",
@@ -846,7 +846,7 @@ RrMultiUserScheduler::FinalizeTxVector(WifiTxVector& txVector, bool isBasicTrigg
 
     //Calculate number of random access RUs
     std::size_t nRandomAccessRus = 0;
-    nRandomAccessRus = m_numRaRus;
+    nRandomAccessRus = m_nRaRus;
     std::size_t totalRus = HeRu::GetNRus (m_allowedWidth, ruType);
     std::size_t _26tonesRus = (m_useCentral26TonesRus) ? nCentral26TonesRus : 0;
 
