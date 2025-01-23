@@ -39,6 +39,12 @@ NS_LOG_COMPONENT_DEFINE("VlceMultiUserScheduler");
 
 NS_OBJECT_ENSURE_REGISTERED(VlceMultiUserScheduler);
 
+void
+VlceMultiUserScheduler::SetBtfnRaRus (size_t num)
+{
+  m_nRaRusBtf = num;
+}
+
 TypeId
 VlceMultiUserScheduler::GetTypeId()
 {

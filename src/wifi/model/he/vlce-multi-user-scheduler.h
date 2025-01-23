@@ -53,6 +53,7 @@ class VlceMultiUserScheduler : public MultiUserScheduler
     ~VlceMultiUserScheduler() override;
 
     void UpdatePollList(Mac48Address address) override;
+    void SetBtfnRaRus (size_t) override;
   protected:
     void DoDispose() override;
     void DoInitialize() override;
@@ -176,6 +177,7 @@ class VlceMultiUserScheduler : public MultiUserScheduler
     WifiTxParameters m_txParams;           //!< TX parameters
 
     uint16_t m_numRaRus; //!< Number of RUs that are reserved for random access
+    uint16_t m_nRaRusBtf;
     HeRu::RuType m_ruAllocationType; //!< The type of RUs allocated to STAs
 };
 

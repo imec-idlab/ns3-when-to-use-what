@@ -131,6 +131,7 @@ class MultiUserScheduler : public Object
     void SetAccessReqInterval(Time interval);
 
     virtual void UpdatePollList(Mac48Address address) = 0;
+    virtual void SetBtfnRaRus (size_t) = 0;
 
   protected:
     /**
