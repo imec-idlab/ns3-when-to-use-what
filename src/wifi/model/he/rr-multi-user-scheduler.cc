@@ -932,7 +932,7 @@ RrMultiUserScheduler::FinalizeTxVector(WifiTxVector& txVector, bool isBasicTrigg
     for (auto &user : heMuUserInfoMap)
     {
         if (user.second.mcs < minMcs) minMcs = user.second.mcs;
-        if (user.second.nss < minMcs) minNss = user.second.nss;
+        if (user.second.nss < minNss) minNss = user.second.nss;
     }
     if(!isBasicTrigger)
     {
@@ -943,6 +943,8 @@ RrMultiUserScheduler::FinalizeTxVector(WifiTxVector& txVector, bool isBasicTrigg
         txVector.SetHeMuUserInfo(0, info); //AID 0 = RANDOM ACCESS RU
       }
     }
+
+
 }
 
 void
