@@ -96,6 +96,12 @@ QosTxop::GetTypeId()
                           UintegerValue(1),
                           MakeUintegerAccessor(&QosTxop::m_nMaxInflights),
                           MakeUintegerChecker<uint8_t>(1, 15))
+            .AddAttribute("LongerEDCADisable",
+                                "Disable EDCA longer than 2s",
+                                BooleanValue(false),
+                                MakeBooleanAccessor(&QosTxop::m_longerEDCADisable),
+                                MakeBooleanChecker())
+
             .AddTraceSource("TxopTrace",
                             "Trace source for TXOP start and duration times",
                             MakeTraceSourceAccessor(&QosTxop::m_txopTrace),
@@ -248,7 +254,8 @@ QosTxop::StartMuEdcaTimerNow(uint8_t linkId)
     link.muEdcaTimerStartTime = Simulator::Now();
     if (!EdcaDisabled(linkId))
     {
-        link.muEdcaTimer = MicroSeconds (link.muEdcaTimer.GetMicroSeconds() * 8192 );
+        if (m_longerEDCADisable)
+          link.muEdcaTimer = MicroSeconds (link.muEdcaTimer.GetMicroSeconds() * 8192 );
         NS_LOG_DEBUG("Disable EDCA for " << link.muEdcaTimer.As(Time::MS));
         m_mac->GetChannelAccessManager(linkId)->DisableEdcaFor(this, link.muEdcaTimer);
         m_muEdcaTimerRunning = true;

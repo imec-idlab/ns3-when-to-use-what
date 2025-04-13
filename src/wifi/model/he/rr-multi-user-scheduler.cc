@@ -451,7 +451,6 @@ RrMultiUserScheduler::TrySendingBasicTf()
     {
         //AID 0 is for Random Access RUs
         if (!candidate.first) {maxBufferSize = ((m_ulPsduSize + 511) / 512 ) * 512;
-          m_edca->GetAccessCategory();
         continue;}//TODO: set to max buf size among users
 
 

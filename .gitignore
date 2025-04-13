@@ -46,8 +46,12 @@ cmake-build-debug/
 cmake-build-relwithdebinfo/
 cmake-build-minsizerel/
 cmake-build-release/
-scratch/wifi-ax-simple1/results/
+uora_output
+output
 
+
+.cache/
+.clangd
 .vscode/*
 !.vscode/launch.json
 !.vscode/tasks.json

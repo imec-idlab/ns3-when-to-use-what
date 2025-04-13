@@ -558,6 +558,7 @@ class QosTxop : public Txop
                                               //!< an MPDU can be in-flight at the same
                                               //!< time
     bool m_muEdcaTimerRunning;
+    bool m_longerEDCADisable;
 
     /// TracedCallback for TXOP trace typedef
     typedef TracedCallback<Time /* start time */, Time /* duration */, uint8_t /* link ID*/>

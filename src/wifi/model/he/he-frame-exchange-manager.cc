@@ -1497,9 +1497,8 @@ HeFrameExchangeManager::GetTrigVector(const CtrlTriggerHeader& trigger) const
 WifiTxVector
 HeFrameExchangeManager::GetHeTbTxVector(CtrlTriggerHeader trigger, Mac48Address triggerSender) const
 {
-    NS_ASSERT(triggerSender !=
-              m_self); // TxPower information is used only by STAs, it is useless for the sending AP
-                       // (which can directly use CtrlTriggerHeader::GetHeTbTxVector)
+    NS_ASSERT(triggerSender != m_self); // TxPower information is used only by STAs, it is useless for the sending AP
+                                        //  (which can directly use CtrlTriggerHeader::GetHeTbTxVector)
     NS_ASSERT(m_staMac);
     uint16_t staId = m_staMac->GetAssociationId();
     auto userInfoIt = trigger.FindUserInfoWithAid(staId);
@@ -1978,7 +1977,7 @@ HeFrameExchangeManager::SendQosNullFramesInTbPpdu(CtrlTriggerHeader& trigger,
     NS_ASSERT(m_staMac && m_staMac->IsAssociated());
 
     NS_LOG_DEBUG("Requested to send QoS Null frames");
-     if (isRandomAccess && m_partakeInUora)
+     if (isRandomAccess)
     {
         std::vector<uint16_t> raRus;
         uint16_t idx = 0;
@@ -2517,6 +2516,7 @@ HeFrameExchangeManager::ReceiveMpdu(Ptr<const WifiMpdu> mpdu,
                 //received UORA psdu
                 m_staExpectTbPpduFrom.insert (sender);
                 m_numRaRus--;
+                m_muScheduler->UpdatePollList(sender);
             }
             else
             {
@@ -2959,7 +2959,7 @@ HeFrameExchangeManager::ReceiveMpdu(Ptr<const WifiMpdu> mpdu,
 
     if (m_muScheduler != nullptr && !hdr.IsCtl() && hdr.IsQosData() && hdr.HasData() &&
         hdr.GetAddr1() == m_self &&
-        m_muScheduler->GetInstanceTypeId().GetName() == "ns3::UoraMultiUserScheduler"
+        m_muScheduler->GetInstanceTypeId().GetName() == "ns3::VlceMultiUserScheduler"
         )
     {
       m_muScheduler->UpdatePollList(hdr.GetAddr2());

@@ -101,8 +101,8 @@ VlceMultiUserScheduler::GetTypeId()
                           MakeTimeChecker())
             .AddAttribute("NumRandomAccessRus",
                           "Number of RUs that are reserved for random access",
-                          UintegerValue (0.),
-                          MakeUintegerAccessor (&VlceMultiUserScheduler::m_numRaRus),
+                          UintegerValue (0),
+                          MakeUintegerAccessor (&VlceMultiUserScheduler::m_nRaRus),
                           MakeUintegerChecker<uint16_t> ())
             .AddAttribute("RuAllocationType",
                           "The type of RUs allocated to STAs, if undefined - dynamically selected based on the number of STAs",
@@ -346,7 +346,7 @@ VlceMultiUserScheduler::GetTxVectorForUlMu(Func canbeSolicited, bool isBasicTrig
         staIt++;
     }
 
-    if (txVector.GetHeMuUserInfoMap().empty())
+    if (txVector.GetHeMuUserInfoMap().empty() && !m_nRaRus)
     {
         NS_LOG_DEBUG("No suitable station");
         for (size_t i = 0; i < std::min<std::size_t>(m_nStations, count + nCentral26TonesRus); i++)
@@ -372,7 +372,7 @@ VlceMultiUserScheduler::TrySendingBsrpTf()
         return TxFormat::SU_TX;
     }
 
-    if (m_staListToPoll.empty()){
+    if (!m_nRaRus && m_staListToPoll.empty()){
       NS_LOG_DEBUG("No stations in in poll list: return DL_MU_TX");
       return TxFormat::DL_MU_TX;
     }
@@ -425,8 +425,9 @@ VlceMultiUserScheduler::TrySendingBsrpTf()
         // TryAddMpdu only considers the time to transmit the Trigger Frame
         NS_ASSERT(m_txParams.m_protection &&
                   m_txParams.m_protection->protectionTime != Time::Min());
-        NS_ASSERT(m_txParams.m_acknowledgment &&
-                  m_txParams.m_acknowledgment->acknowledgmentTime.IsZero());
+        NS_ASSERT(m_txParams.m_acknowledgment && (
+                  m_txParams.m_acknowledgment->acknowledgmentTime != Time::Min()
+                  || m_txParams.m_acknowledgment->acknowledgmentTime.IsZero()));
         NS_ASSERT(m_txParams.m_txDuration != Time::Min());
 
         if (m_txParams.m_protection->protectionTime + m_txParams.m_txDuration // BSRP TF tx time
@@ -468,7 +469,7 @@ VlceMultiUserScheduler::TrySendingBasicTf()
     WifiTxVector txVector = GetTxVectorForUlMu([this](const MasterInfo& info) {
         const auto& staList = m_apMac->GetStaList(m_linkId);
         return staList.find(info.aid) != staList.cend() &&
-               m_apMac->GetMaxBufferStatus(info.address) > 0;
+               (m_apMac->GetMaxBufferStatus(info.address) > 0  && m_apMac->GetMaxBufferStatus(info.address) < 255);
     }, true);
 
     if (txVector.GetHeMuUserInfoMap().empty())
@@ -484,7 +485,8 @@ VlceMultiUserScheduler::TrySendingBasicTf()
     for (const auto& candidate : txVector.GetHeMuUserInfoMap())
     {
         //AID 0 is for Random Access RUs
-        if (!candidate.first) {maxBufferSize = m_ulPsduSize;continue;}//TODO: set to max buf size among users
+        if (!candidate.first) {maxBufferSize = ((m_ulPsduSize + 511) / 512 ) * 512;
+          continue;}//TODO: set to max buf size among users
 
         // AID non-zero
         auto address = m_apMac->GetMldOrLinkAddressByAid(candidate.first);
@@ -891,11 +893,14 @@ VlceMultiUserScheduler::FinalizeTxVector(WifiTxVector& txVector, bool isBasicTri
 
     NS_LOG_DEBUG(nRusAssigned << " stations are being assigned a " << ruType << " RU");
 
-    //Calculate number of random access RUs
+    /*
+     * Calculate number of random access RUs
+     * and only used for bsrp reporting and reserv
+     */
     std::size_t nRandomAccessRus = 0;
-    if (isBasicTrigger)
+    if (!isBasicTrigger)
     {
-        nRandomAccessRus = m_numRaRus;
+        nRandomAccessRus = m_nRaRus;
         std::size_t totalRus = HeRu::GetNRus (m_allowedWidth, ruType);
         std::size_t _26tonesRus = (m_useCentral26TonesRus) ? nCentral26TonesRus : 0;
 
@@ -963,10 +968,28 @@ VlceMultiUserScheduler::FinalizeTxVector(WifiTxVector& txVector, bool isBasicTri
     for (auto &user : heMuUserInfoMap)
     {
         if (user.second.mcs < minMcs) minMcs = user.second.mcs;
-        if (user.second.nss < minMcs) minNss = user.second.nss;
+        if (user.second.nss < minNss) minNss = user.second.nss;
     }
     for (std::size_t i = 0; i < nRandomAccessRus; i++)
     {
+        if (minMcs == UINT8_MAX || minNss == UINT8_MAX)
+        {
+          /*
+           * At this point we just choose a random station to have its mcs and
+           * nss values.
+           */
+          auto staIt = m_staListUl.begin();
+          WifiMacHeader hdr(WIFI_MAC_QOSDATA);
+          hdr.SetAddr1(GetWifiRemoteStationManager(m_linkId)
+                         ->GetAffiliatedStaAddress(staIt->address)
+                         .value_or(staIt->address));
+          hdr.SetAddr2(m_apMac->GetFrameExchangeManager(m_linkId)->GetAddress());
+          WifiTxVector suTxVector =
+              GetWifiRemoteStationManager(m_linkId)->GetDataTxVector(hdr, m_allowedWidth);
+
+          minNss = suTxVector.GetNss();
+          minMcs = suTxVector.GetMode().GetMcsValue();
+        }
         HeMuUserInfo info = {(ruSetIt != ruSet.end () ? *ruSetIt++ : *central26TonesRusIt++), minMcs, minNss};
         info.ru.SetRandomAccessFlag (true);
         txVector.SetHeMuUserInfo(0, info); //AID 0 = RANDOM ACCESS RU

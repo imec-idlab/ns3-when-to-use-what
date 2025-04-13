@@ -234,9 +234,11 @@ StaClient::StartApplication (void)
   m_socket->SetRecvCallback (MakeNullCallback<void, Ptr<Socket> > ());
   m_socket->SetAllowBroadcast (true);
 
-  if (m_initPacketSentDelay.GetSeconds()){
+  if (m_initPacketSentDelay.GetSeconds())
+  {
     m_sendEvent = Simulator::Schedule(Seconds( m_initPacketSentDelay.GetSeconds() ), &StaClient::Send, this, "FirstPacket");
-  } else
+  } 
+  else
   {
     Ptr<UniformRandomVariable> rand = CreateObject <UniformRandomVariable> ();
     double delay = rand->GetValue (0, m_startSendIntval.GetSeconds ());
@@ -325,13 +327,15 @@ StaClient::Send (std::string PacketKind)
   OnOffTag initTag;
   seqTs.SetSeq (m_sent);
   Ptr<Packet> p = Create<Packet> ();
-  if (PacketKind == "FirstPacket") {
+  if (PacketKind == "FirstPacket")
+  {
     p = Create<Packet> (64-(8+4));
     p->AddHeader (seqTs);
     initTag.SetValue(1);
     p->AddPacketTag(initTag);
   }
-  else if (PacketKind == "JoinPolling") {
+  else if (PacketKind == "JoinPolling")
+  {
     p = Create<Packet> (m_size-(8+4));
     p->AddHeader (seqTs);
     initTag.SetValue(2);
@@ -362,7 +366,8 @@ StaClient::Send (std::string PacketKind)
                                           << m_peerAddressString);
     }
 #endif // NS3_LOG_ENABLE
-  if (m_initFlag && PacketKind == "FirstPacket") {
+  if (m_initFlag && PacketKind == "FirstPacket") 
+  {
     Ptr<UniformRandomVariable> rand = CreateObject <UniformRandomVariable> ();
     double delay = rand->GetValue (0, m_startSendIntval.GetSeconds ());
     delay += (m_initStaJoinTime.GetSeconds() - Simulator::Now().GetSeconds());
