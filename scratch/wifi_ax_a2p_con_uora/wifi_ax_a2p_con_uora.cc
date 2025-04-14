@@ -168,7 +168,7 @@ int  main(int argc, char *argv[])
 
 
   std::string frequency {"5"}; //whether 2.4, 5 or 6 GHz
-  uint32_t channelWidth {20}; //for 2.4 <= 40 MHz, for 5 <= 160 MHz
+  uint32_t channelWidth {40}; //for 2.4 <= 40 MHz, for 5 <= 160 MHz
   uint32_t guardInterval {800}; //in ns
   int mcs {8}; // 0..11
   std::string phyModel {"Spectrum"};
@@ -563,8 +563,8 @@ int  main(int argc, char *argv[])
                   "VO_BlockAckThreshold", UintegerValue(0));
 
       apNetDevice = wifi.Install (phy, wifimac, wifiApNode);
-      //phy.EnablePcap("wifi-ax-ofdma-ap", apNetDevice); // enable pcap tracing
-      //phy.EnablePcap("wifi-ax-ofdma-sta", staNetDevices);
+      phy.EnablePcap("wifi-ax-ofdma-ap", apNetDevice); // enable pcap tracing
+      phy.EnablePcap("wifi-ax-ofdma-sta", staNetDevices);
   }
   else
   {
@@ -833,8 +833,8 @@ int  main(int argc, char *argv[])
     for (size_t i = 0;  i < staStats.second.pktDelays.size(); i++) {
       pktDistOutStream << staStats.second.pktTag[i] <<"\t"<< staStats.second.src[i] <<"\t"<<staStats.second.genTime[i] * 1000 <<"\t"<<staStats.second.rxTime[i]* 1000<< "\t"<< staStats.second.pktDelays[i] * 1000 << std::endl;
     }
-    pktDistOutStream.close();
   }
+   pktDistOutStream.close();
 /*
   for (auto &staStats : g_statsMap) {
     std::ostringstream mac_str;
@@ -848,16 +848,16 @@ int  main(int argc, char *argv[])
   } */
 
   std::ofstream pktDistOutStreamwk;
+  pktDistOutStreamwk.open ("wakeup_packet_stats" ,std::ios::out);
   for (auto &staStats : g_statsMapAp) {
     //std::ostringstream mac_str;
     //mac_str << staStats.first ;
-    pktDistOutStreamwk.open ("wakeup_packet_stats" ,std::ios::out);
     pktDistOutStreamwk << "Packet_Tag\tReceived_from\tGeneration_time\tReception_time\tDelay_ms" << std::endl;
     for (size_t i = 0;  i < staStats.second.pktDelaysWakeUp.size(); i++) {
       pktDistOutStreamwk << staStats.second.pktTagWakeUp[i] <<"\t"<< staStats.second.srcWakeUp[i] <<"\t"<<staStats.second.genTimeWakeUp[i] * 1000 <<"\t"<<staStats.second.rxTimeWakeUp[i]* 1000<< "\t"<< staStats.second.pktDelaysWakeUp[i] * 1000 << std::endl;
     }
-    pktDistOutStreamwk.close();
   }
+  pktDistOutStreamwk.close();
 
 
   return 0;
