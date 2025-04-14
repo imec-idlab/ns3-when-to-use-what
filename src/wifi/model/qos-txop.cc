@@ -114,6 +114,7 @@ QosTxop::QosTxop(AcIndex ac)
       m_ac(ac)
 {
     NS_LOG_FUNCTION(this);
+    m_muEdcaTimerRunning = false;
     m_qosBlockedDestinations = Create<QosBlockedDestinations>();
     m_baManager = CreateObject<BlockAckManager>();
     m_baManager->SetQueue(m_queue);
