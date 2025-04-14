@@ -563,8 +563,8 @@ int  main(int argc, char *argv[])
                   "VO_BlockAckThreshold", UintegerValue(0));
 
       apNetDevice = wifi.Install (phy, wifimac, wifiApNode);
-      phy.EnablePcap("wifi-ax-ofdma-ap", apNetDevice); // enable pcap tracing
-      phy.EnablePcap("wifi-ax-ofdma-sta", staNetDevices);
+      //phy.EnablePcap("wifi-ax-ofdma-ap", apNetDevice); // enable pcap tracing
+      //phy.EnablePcap("wifi-ax-ofdma-sta", staNetDevices);
   }
   else
   {
@@ -835,7 +835,7 @@ int  main(int argc, char *argv[])
     }
     pktDistOutStream.close();
   }
-
+/*
   for (auto &staStats : g_statsMap) {
     std::ostringstream mac_str;
     mac_str << staStats.first;
@@ -845,7 +845,7 @@ int  main(int argc, char *argv[])
       pktDistOutStream << staStats.second.pktTagLate[i] <<"\t"<< staStats.second.srcLate[i] <<"\t"<<staStats.second.genTimeLate[i] * 1000 <<"\t"<<staStats.second.rxTimeLate[i]* 1000<< "\t"<< staStats.second.pktDelaysLate[i] * 1000 << std::endl;
     }
     pktDistOutStream.close();
-  }
+  } */
 
   std::ofstream pktDistOutStreamwk;
   for (auto &staStats : g_statsMapAp) {
