@@ -489,8 +489,6 @@ class QosTxop : public Txop
      */
     uint8_t GetOcw(uint8_t linkId) const;
 
-    void ToggleMuEdcaTimer(bool);
-
   protected:
     /**
      * Structure holding information specific to a single link. Here, the meaning of

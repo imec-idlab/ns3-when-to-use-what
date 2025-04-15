@@ -272,12 +272,6 @@ QosTxop::UpdateMuEdcaTimer(uint8_t linkId, Time timer)
   }
 }
 
-void
-QosTxop::ToggleMuEdcaTimer(bool value)
-{
-  m_muEdcaTimerRunning = value;
-}
-
 bool
 QosTxop::MuEdcaTimerRunning(uint8_t linkId) const
 {
