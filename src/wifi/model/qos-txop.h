@@ -557,7 +557,6 @@ class QosTxop : public Txop
     uint8_t m_nMaxInflights;                  //!< the maximum number of links on which
                                               //!< an MPDU can be in-flight at the same
                                               //!< time
-    bool m_muEdcaTimerRunning;
     bool m_longerEDCADisable;
 
     /// TracedCallback for TXOP trace typedef

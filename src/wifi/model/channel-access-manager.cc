@@ -345,10 +345,6 @@ ChannelAccessManager::RequestAccess(Ptr<Txop> txop)
     {
         return;
     }
-    if (StaticCast<QosTxop>(txop)->EdcaDisabled(m_linkId) )
-    {
-      return;
-    }
     /*
      * EDCAF operations shall be performed at slot boundaries (Sec. 10.22.2.4 of 802.11-2016)
      */

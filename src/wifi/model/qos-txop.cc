@@ -114,7 +114,6 @@ QosTxop::QosTxop(AcIndex ac)
       m_ac(ac)
 {
     NS_LOG_FUNCTION(this);
-    m_muEdcaTimerRunning = false;
     m_qosBlockedDestinations = Create<QosBlockedDestinations>();
     m_baManager = CreateObject<BlockAckManager>();
     m_baManager->SetQueue(m_queue);
@@ -244,7 +243,7 @@ void
 QosTxop::SetMuEdcaTimer(Time timer, uint8_t linkId)
 {
     NS_LOG_FUNCTION(this << timer << +linkId);
-    GetLink(linkId).muEdcaTimer = timer;
+    GetLink(linkId).muEdcaTimer = (m_longerEDCADisable) ? MicroSeconds (timer.GetMicroSeconds() * 8192 ) : timer;
 }
 
 void
@@ -253,14 +252,10 @@ QosTxop::StartMuEdcaTimerNow(uint8_t linkId)
     NS_LOG_FUNCTION(this << +linkId);
     auto& link = GetLink(linkId);
     link.muEdcaTimerStartTime = Simulator::Now();
-    if (!EdcaDisabled(linkId))
+    if (EdcaDisabled(linkId))
     {
-        if (m_longerEDCADisable)
-          link.muEdcaTimer = MicroSeconds (link.muEdcaTimer.GetMicroSeconds() * 8192 );
         NS_LOG_DEBUG("Disable EDCA for " << link.muEdcaTimer.As(Time::MS));
         m_mac->GetChannelAccessManager(linkId)->DisableEdcaFor(this, link.muEdcaTimer);
-        m_muEdcaTimerRunning = true;
-        Simulator::Schedule(link.muEdcaTimer, &QosTxop::ToggleMuEdcaTimer, this, false);
     }
 }
 
@@ -289,7 +284,7 @@ QosTxop::MuEdcaTimerRunning(uint8_t linkId) const
     auto& link = GetLink(linkId);
     return (link.muEdcaTimerStartTime.IsStrictlyPositive() &&
             link.muEdcaTimer.IsStrictlyPositive() &&
-            m_muEdcaTimerRunning);
+            link.muEdcaTimerStartTime + link.muEdcaTimer > Simulator::Now());//m_muEdcaTimerRunning);
 }
 
 bool

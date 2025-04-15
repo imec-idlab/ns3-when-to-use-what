@@ -223,7 +223,7 @@ Txop::GetWifiMacQueue() const
     return m_queue;
 }
 
-Ptr<WifiMac> 
+Ptr<WifiMac>
 Txop::GetMac() const
 {
   return m_mac;
@@ -550,7 +550,7 @@ void
 Txop::StartAccessIfNeeded(uint8_t linkId)
 {
     NS_LOG_FUNCTION(this << +linkId);
-    if (HasFramesToTransmit(linkId) && GetLink(linkId).access == NOT_REQUESTED && 
+    if (HasFramesToTransmit(linkId) && GetLink(linkId).access == NOT_REQUESTED &&
         GetLink(linkId).backoffStart <= Simulator::Now())
     {
         m_mac->GetChannelAccessManager(linkId)->RequestAccess(this);
