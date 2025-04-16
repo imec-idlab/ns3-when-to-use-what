@@ -439,7 +439,7 @@ int  main(int argc, char *argv[])
           Config::SetDefault ("ns3::HeConfiguration::VoMuEdcaTimer", TimeValue (MicroSeconds(muEdcaTimer)));
 
           Config::SetDefault("ns3::HtFrameExchangeManager::DisableEDCA", BooleanValue(true));
-          Config::SetDefault("ns3::HeFrameExchangeManager::MuTxStartTime", TimeValue(Seconds(startLogTime)));
+          Config::SetDefault("ns3::HeFrameExchangeManager::MuTxStartTime", TimeValue(Seconds(startLogTime - 1)));
 
         }
   }

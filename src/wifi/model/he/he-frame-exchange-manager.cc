@@ -1960,7 +1960,7 @@ HeFrameExchangeManager::ReceiveBasicTrigger(CtrlTriggerHeader& trigger,
     else if (!isRandomAccess)
     {
         // send QoS Null frames
-        SendQosNullFramesInTbPpdu(trigger, hdr, false);
+        //SendQosNullFramesInTbPpdu(trigger, hdr, false);
     }
     else
     {
