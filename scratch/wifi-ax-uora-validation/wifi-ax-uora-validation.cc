@@ -495,8 +495,8 @@ int main(int argc, char *argv[])
                   "BeaconInterval", TimeValue(MicroSeconds(102400)));
 
       apNetDevice = wifi.Install (phy, wifimac, wifiApNode);
-      phy.EnablePcap("wifi-ax-uora-ap", apNetDevice); // enable pcap tracing
-      phy.EnablePcap("wifi-ax-uora-sta", staNetDevices);
+      //phy.EnablePcap("wifi-ax-uora-ap", apNetDevice); // enable pcap tracing
+      //phy.EnablePcap("wifi-ax-uora-sta", staNetDevices);
     }
   else
     {
@@ -644,11 +644,6 @@ int main(int argc, char *argv[])
   Config::ConnectWithoutContext("/NodeList/*/ApplicationList/*/$ns3::PacketSink/RxWithAddresses", MakeBoundCallback(&RxTraceWithAddressParam, toLog));
 
 
-  Time delay = delayModel->GetDelay(apMobility, wifiStaNodes.Get(0)->GetObject<MobilityModel>());
-  std::cout << "Propagation Delay: " << delay.GetMicroSeconds() << " ms" << std::endl;
-
-  //FlowMonitorHelper flowmonHelper;
-  //Ptr<FlowMonitor> monitor = flowmonHelper.InstallAll();
   if (startLogTime){
     ProgressBar pg (Seconds(simulationTime + staStartTimeTwo ));
     Simulator::Stop (Seconds (simulationTime + staStartTimeTwo ));
@@ -659,7 +654,6 @@ int main(int argc, char *argv[])
   }
   Simulator::Run ();
 
-  //monitor->SerializeToXmlFile("results.xml", true, true);
 
   uint64_t rxBytes = 0;
 

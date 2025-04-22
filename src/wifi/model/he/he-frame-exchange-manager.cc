@@ -1998,7 +1998,7 @@ HeFrameExchangeManager::SendQosNullFramesInTbPpdu(CtrlTriggerHeader& trigger,
     NS_ASSERT(m_staMac && m_staMac->IsAssociated());
 
     NS_LOG_DEBUG("Requested to send QoS Null frames");
-     if (isRandomAccess)
+    if (isRandomAccess)
     {
         std::vector<uint16_t> raRus;
         uint16_t idx = 0;
@@ -2140,6 +2140,10 @@ HeFrameExchangeManager::SendQosNullFramesInTbPpdu(CtrlTriggerHeader& trigger,
       HeMuUserInfo info = txParams.m_txVector.GetHeMuUserInfo (staId);
       info.ru.SetRandomAccessFlag (true);
       psdu->AddRaRuUserInfo (info);
+    }
+    else 
+    {
+      m_partakeInUoraStartTime = Simulator::Now();
     }
 
     
@@ -2831,7 +2835,6 @@ HeFrameExchangeManager::ReceiveMpdu(Ptr<const WifiMpdu> mpdu,
                     else if (m_psduMap.at(staId)->GetHeader(0).HasData())
                     {
                       m_mac->GetQosTxop(tid)->StartMuEdcaTimerNow(m_linkId);
-                      m_partakeInUoraStartTime = Simulator::Now();
                     }
                     else {
                       m_mac->GetQosTxop(tid)->UpdateObo(false, m_linkId);
