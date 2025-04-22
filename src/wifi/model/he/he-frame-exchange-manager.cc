@@ -22,6 +22,8 @@
 #include "he-configuration.h"
 #include "he-phy.h"
 #include "multi-user-scheduler.h"
+#include "rr-multi-user-scheduler.h"
+
 
 #include "ns3/abort.h"
 #include "ns3/ap-wifi-mac.h"
@@ -77,6 +79,11 @@ HeFrameExchangeManager::GetTypeId()
                                 "Time at which to initite Multi-user transmissions",
                                 TimeValue(Seconds(0.0)),
                                 MakeTimeAccessor(&HeFrameExchangeManager::m_muTxStartTime),
+                                MakeTimeChecker())
+                            .AddAttribute("PartakeInUoraTimer",
+                                "Duration of which not to take part in UORA (Smaller for critical traffic)",
+                                TimeValue(Seconds(0.0)),
+                                MakeTimeAccessor(&HeFrameExchangeManager::m_partakeInUoraTimer),
                                 MakeTimeChecker());
 
     return tid;
@@ -115,6 +122,20 @@ HeFrameExchangeManager::GetSupportedBaBufferSize() const
         return 256;
     }
     return 64;
+}
+
+void
+HeFrameExchangeManager::StartPartakeInUoraTimerNow()
+{
+
+}
+
+bool
+HeFrameExchangeManager::IsPartakeInUoraTimerActive()
+{
+  return (m_partakeInUoraTimer.IsStrictlyPositive() &&
+      m_partakeInUoraStartTime.IsStrictlyPositive() &&
+      m_partakeInUoraStartTime + m_partakeInUoraTimer > Simulator::Now());
 }
 
 void
@@ -1960,7 +1981,7 @@ HeFrameExchangeManager::ReceiveBasicTrigger(CtrlTriggerHeader& trigger,
     else if (!isRandomAccess)
     {
         // send QoS Null frames
-        //SendQosNullFramesInTbPpdu(trigger, hdr, false);
+        SendQosNullFramesInTbPpdu(trigger, hdr, false);
     }
     else
     {
@@ -2012,7 +2033,7 @@ HeFrameExchangeManager::SendQosNullFramesInTbPpdu(CtrlTriggerHeader& trigger,
         uint8_t queueSize = edca->GetQosQueueSize(tid, hdr.GetAddr2());
 
         
-        if (!obo && queueSize){
+        if (!obo && queueSize && !IsPartakeInUoraTimerActive()){
           Ptr<UniformRandomVariable> rv = CreateObject<UniformRandomVariable> ();
           uint16_t selectedRu = raRus.at(rv->GetValue(0, raRus.size()));
           CtrlTriggerHeader::Iterator selectedRuIt = trigger.begin ();
@@ -2516,7 +2537,7 @@ HeFrameExchangeManager::ReceiveMpdu(Ptr<const WifiMpdu> mpdu,
                 //received UORA psdu
                 m_staExpectTbPpduFrom.insert (sender);
                 m_numRaRus--;
-                m_muScheduler->UpdatePollList(sender);
+                //m_muScheduler->UpdatePollList(sender);
             }
             else
             {
@@ -2559,6 +2580,11 @@ HeFrameExchangeManager::ReceiveMpdu(Ptr<const WifiMpdu> mpdu,
 
         NS_LOG_DEBUG("Received a QoS Null frame in a TB PPDU from " << sender);
 
+        /*if (m_muScheduler->GetInstanceTypeId().GetName() == "ns3::RrMultiUserScheduler")
+        {
+          Ptr<RrMultiUserScheduler> rrScheduler = DynamicCast<RrMultiUserScheduler>(m_muScheduler);
+          rrScheduler->RrStaList(sender);
+        }*/
 
         // remove the sender from the set of stations that are expected to send a TB PPDU
         m_staExpectTbPpduFrom.erase(sender);
@@ -2799,11 +2825,13 @@ HeFrameExchangeManager::ReceiveMpdu(Ptr<const WifiMpdu> mpdu,
                     {
                       m_mac->GetQosTxop(tid)->StartMuEdcaTimerNow(m_linkId);
                       m_mac->GetQosTxop(tid)->UpdateObo(false, m_linkId);
+                      m_partakeInUoraStartTime = Simulator::Now();
                       m_raAck = false;
                     }
                     else if (m_psduMap.at(staId)->GetHeader(0).HasData())
                     {
                       m_mac->GetQosTxop(tid)->StartMuEdcaTimerNow(m_linkId);
+                      m_partakeInUoraStartTime = Simulator::Now();
                     }
                     else {
                       m_mac->GetQosTxop(tid)->UpdateObo(false, m_linkId);

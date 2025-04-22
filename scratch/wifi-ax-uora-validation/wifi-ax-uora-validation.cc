@@ -364,6 +364,8 @@ int main(int argc, char *argv[])
 
       Config::SetDefault("ns3::HeFrameExchangeManager::MuTxStartTime", TimeValue(Seconds(startLogTime + 1)));
 
+      Config::SetDefault("ns3::QosTxop::LongerEDCADisable", BooleanValue(true));
+
     }
 
   if (activateNaiks)
@@ -387,7 +389,7 @@ int main(int argc, char *argv[])
   /*
    * Intrinsic Queue Size reporting
    */
-  Config::SetDefault("ns3::QosFrameExchangeManager::SetQueueSize", BooleanValue(false));
+  Config::SetDefault("ns3::QosFrameExchangeManager::SetQueueSize", BooleanValue(true));
 
   if (enableAggregation)
   {
@@ -489,7 +491,7 @@ int main(int argc, char *argv[])
                   "Ssid", SsidValue (ssid),
                   "VO_BlockAckThreshold", UintegerValue(0),
                   "BeaconGeneration", BooleanValue(true),
-                  "BsrLifetime", TimeValue(MilliSeconds(2000)),
+                  "BsrLifetime", TimeValue(MilliSeconds(2000000)),
                   "BeaconInterval", TimeValue(MicroSeconds(102400)));
 
       apNetDevice = wifi.Install (phy, wifimac, wifiApNode);
@@ -613,17 +615,23 @@ int main(int argc, char *argv[])
       staNetDevices.Get(i)->GetObject<WifiNetDevice>()->GetPhy()->GetPhyEntity(WIFI_MOD_CLASS_OFDM)->TraceConnectWithoutContext("SinrTrace", MakeBoundCallback (&SinrTrace, Mac48Address::ConvertFrom (staNetDevices.Get (i)->GetAddress ())));
       staNetDevices.Get(i)->GetObject<WifiNetDevice>()->GetPhy()->GetPhyEntity(WIFI_MOD_CLASS_HE)->TraceConnectWithoutContext("SinrTrace", MakeBoundCallback (&SinrTrace, Mac48Address::ConvertFrom (staNetDevices.Get (i)->GetAddress ())));
 
-      if (i >= typeOneNStations){
-
-        Ptr<FrameExchangeManager> fem = wifi_mac->GetFrameExchangeManager(0);
-        if (fem){
-          Ptr<HeFrameExchangeManager> heManager = DynamicCast<HeFrameExchangeManager>(fem);
-
-          if (heManager) {
-          heManager->SetAttribute("HePartakeInUora", BooleanValue(true)); // Enable UORA
+      Ptr<FrameExchangeManager> fem = wifi_mac->GetFrameExchangeManager(0);
+      if (fem)
+      {
+        Ptr<HeFrameExchangeManager> heManager = DynamicCast<HeFrameExchangeManager>(fem);
+        if (heManager)
+        {
+          if (i < typeOneNStations) 
+          {
+            //heManager->SetAttribute("HePartakeInUora", BooleanValue(true)); // Enable UORA
+            heManager->SetAttribute ("PartakeInUoraTimer", TimeValue(MilliSeconds(40) ));
+          }
+          else
+          {
+            heManager->SetAttribute ("PartakeInUoraTimer", TimeValue(MilliSeconds(10) ));
+          }
         }
       }
-    }
     }
   for (uint32_t i = 0; i < apNetDevice.GetN (); i++)
     {
