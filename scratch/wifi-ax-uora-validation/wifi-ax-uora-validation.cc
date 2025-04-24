@@ -157,7 +157,7 @@ int main(int argc, char *argv[])
   uint32_t ulPayloadSize = 93; // must fit in the max TX duration when transmitting at MCS 0 over an RU of 26 tones
   std::string trafficType {"CBR"}; //CBR or not
   double interval {0.005}; //seconds
-  bool randomStart {true};
+  bool randomStart {false};
   std::string accessCategory {"AC_VO"};
   bool enableAggregation {false};
 
@@ -362,7 +362,7 @@ int main(int argc, char *argv[])
 
       Config::SetDefault("ns3::HtFrameExchangeManager::DisableEDCA", BooleanValue(true));
 
-      Config::SetDefault("ns3::HeFrameExchangeManager::MuTxStartTime", TimeValue(Seconds(startLogTime + 1)));
+      Config::SetDefault("ns3::HeFrameExchangeManager::MuTxStartTime", TimeValue(Seconds(0)));
 
       Config::SetDefault("ns3::QosTxop::LongerEDCADisable", BooleanValue(true));
 
@@ -491,8 +491,8 @@ int main(int argc, char *argv[])
                   "Ssid", SsidValue (ssid),
                   "VO_BlockAckThreshold", UintegerValue(0),
                   "BeaconGeneration", BooleanValue(true),
-                  "BsrLifetime", TimeValue(MilliSeconds(2000000)),
-                  "BeaconInterval", TimeValue(MicroSeconds(102400)));
+                  "BsrLifetime", TimeValue(MilliSeconds(20000000)),
+                  "BeaconInterval", TimeValue(MicroSeconds(204800)));
 
       apNetDevice = wifi.Install (phy, wifimac, wifiApNode);
       //phy.EnablePcap("wifi-ax-uora-ap", apNetDevice); // enable pcap tracing
@@ -532,9 +532,6 @@ int main(int argc, char *argv[])
 
 
   double staStartTime = 0;
-  double staStartTimeTwo = 0;
-  if (startLogTime)
-    staStartTimeTwo = startLogTime + 1;
   
   for (size_t i = 0; i < typeOneNStations + typeTwoNStations; i++)
   {
@@ -545,60 +542,37 @@ int main(int argc, char *argv[])
     UdpClientHelper staUdpClientTwo (localAddress);
 
     staUdpClient.SetAttribute("MaxPackets", UintegerValue(0));
-    staUdpClient.SetAttribute("PacketSize", UintegerValue(700));
-
-    staUdpClientTwo.SetAttribute("MaxPackets", UintegerValue(0));
-    staUdpClientTwo.SetAttribute("PacketSize", UintegerValue(ulPayloadSize));
+    staUdpClient.SetAttribute("PacketSize", UintegerValue(ulPayloadSize));
 
     if (trafficType == "CBR" && i < typeOneNStations)
     {
       staUdpClient.SetAttribute ("EnableRandom", BooleanValue (false));
       staUdpClient.SetAttribute ("Interval", TimeValue (Seconds (interval)));
 
-      staUdpClientTwo.SetAttribute ("EnableRandom", BooleanValue (false));
-      staUdpClientTwo.SetAttribute ("Interval", TimeValue (Seconds (interval)));
-
     }
     else
     {
-      staUdpClient.SetAttribute ("EnableRandom", BooleanValue (true));
       staUdpClientTwo.SetAttribute ("EnableRandom", BooleanValue (true));
-
 
       std::ostringstream intervalDistr;
       intervalDistr << "ns3::ExponentialRandomVariable[Mean=" << 0.100 << "|Bound=0]";
       staUdpClient.SetAttribute ("IntervalRandomVariable", StringValue (intervalDistr.str()));
-      staUdpClientTwo.SetAttribute ("IntervalRandomVariable", StringValue (intervalDistr.str()));
 
     }
     ApplicationContainer staUdpclientApp = staUdpClient.Install (wifiStaNodes.Get(i));
-    ApplicationContainer staUdpclientAppTwo = staUdpClientTwo.Install (wifiStaNodes.Get(i));
 
     if (randomStart)
     {
       Ptr<UniformRandomVariable> rv = CreateObject<UniformRandomVariable> ();
       rv->SetAttribute("Max", DoubleValue(1.5));
       staUdpclientApp.StartWithJitter (Seconds (1.0), rv);
-      if(startLogTime){
-        Ptr<UniformRandomVariable> rv2 = CreateObject<UniformRandomVariable> ();
-        rv2->SetAttribute("Max", DoubleValue(staStartTimeTwo + 0.5));
-        staUdpclientAppTwo.StartWithJitter (Seconds (staStartTimeTwo), rv2);
-        //staUdpclientAppTwo.Start (Seconds (staStartTimeTwo));
-      }
-
     }
     else
     {
       staUdpclientApp.Start (Seconds (staStartTime));
-      if (startLogTime)
-      staUdpclientAppTwo.Start (Seconds (staStartTimeTwo));
     }
-    if(startLogTime){
-    staUdpclientApp.Stop (Seconds (startLogTime));
-    staUdpclientAppTwo.Stop (Seconds (simulationTime + staStartTimeTwo));
-    }
-    else
-      staUdpclientApp.Stop (Seconds (simulationTime + startLogTime));
+    
+    staUdpclientApp.Stop (Seconds (simulationTime + startLogTime));
   }
 
   Simulator::Schedule (Seconds (0), &Ipv4GlobalRoutingHelper::PopulateRoutingTables);
@@ -640,18 +614,12 @@ int main(int argc, char *argv[])
       wifi_mac->GetQosTxop(AC_VO)->SetTxopLimit(MicroSeconds(txOpLimits));
     }
 
-  double toLog = (startLogTime) ? staStartTimeTwo : 0;
-  Config::ConnectWithoutContext("/NodeList/*/ApplicationList/*/$ns3::PacketSink/RxWithAddresses", MakeBoundCallback(&RxTraceWithAddressParam, toLog));
+  Config::ConnectWithoutContext("/NodeList/*/ApplicationList/*/$ns3::PacketSink/RxWithAddresses", MakeBoundCallback(&RxTraceWithAddressParam, startLogTime));
 
 
-  if (startLogTime){
-    ProgressBar pg (Seconds(simulationTime + staStartTimeTwo ));
-    Simulator::Stop (Seconds (simulationTime + staStartTimeTwo ));
-  }
-  else {
-    ProgressBar pg (Seconds(simulationTime + startLogTime ));
-    Simulator::Stop (Seconds (simulationTime + startLogTime ));
-  }
+   
+  ProgressBar pg (Seconds(simulationTime + startLogTime ));
+  Simulator::Stop (Seconds (simulationTime + startLogTime ));
   Simulator::Run ();
 
 
@@ -662,7 +630,7 @@ int main(int argc, char *argv[])
       rxBytes += DynamicCast<PacketSink> (apServerApp.Get (i))->GetTotalRx ();
     }
 
-  simulationTime = (staStartTimeTwo) ? simulationTime - staStartTimeTwo : simulationTime;
+  //simulationTime = simulationTime + startLogTime;
   double throughput = (rxBytes * 8) / (simulationTime * 1000000.0); //Mbit/s
 
   std::ofstream totalStatsOutStream;
