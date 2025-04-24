@@ -526,7 +526,7 @@ int main(int argc, char *argv[])
   localAddress.SetTos (0xc0);
   PacketSinkHelper packetSinkHelper ("ns3::UdpSocketFactory", localAddress);
   ApplicationContainer apServerApp = packetSinkHelper.Install(wifiApNode);
-  apServerApp.Start(Seconds (0));
+  apServerApp.Start(Seconds (startLogTime));
   apServerApp.Stop (Seconds (simulationTime + startLogTime));
 
 
@@ -598,11 +598,11 @@ int main(int argc, char *argv[])
           if (i < typeOneNStations) 
           {
             //heManager->SetAttribute("HePartakeInUora", BooleanValue(true)); // Enable UORA
-            heManager->SetAttribute ("PartakeInUoraTimer", TimeValue(MilliSeconds(40) ));
+            heManager->SetAttribute ("PartakeInUoraTimer", TimeValue(MilliSeconds(5) ));
           }
           else
           {
-            heManager->SetAttribute ("PartakeInUoraTimer", TimeValue(MilliSeconds(10) ));
+            heManager->SetAttribute ("PartakeInUoraTimer", TimeValue(MilliSeconds(1) ));
           }
         }
       }
@@ -630,7 +630,7 @@ int main(int argc, char *argv[])
       rxBytes += DynamicCast<PacketSink> (apServerApp.Get (i))->GetTotalRx ();
     }
 
-  //simulationTime = simulationTime + startLogTime;
+  simulationTime = simulationTime - startLogTime;
   double throughput = (rxBytes * 8) / (simulationTime * 1000000.0); //Mbit/s
 
   std::ofstream totalStatsOutStream;
