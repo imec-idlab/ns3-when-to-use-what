@@ -167,6 +167,7 @@ RrMultiUserScheduler::DoDispose()
     NS_LOG_FUNCTION(this);
     m_staListDl.clear();
     m_staListUl.clear();
+    m_staListUlBsrp.clear();
     m_candidates.clear();
     m_txParams.Clear();
     m_apMac->TraceDisconnectWithoutContext(
@@ -232,8 +233,9 @@ RrMultiUserScheduler::GetTxVectorForUlMu(Func canbeSolicited, bool isBasicTrigge
 {
     NS_LOG_FUNCTION(this);
 
+    auto staListUl = (isBasicTrigger) ? m_staListUl : m_staListUlBsrp;
     // determine RUs to allocate to stations
-    auto count = std::min<std::size_t>(m_nStations, m_staListUl.size());
+    auto count = std::min<std::size_t>(m_nStations, staListUl.size());
     std::size_t nCentral26TonesRus;
     if (m_ruAllocationType == HeRu::RU_UNDEFINED)
     {
@@ -261,10 +263,10 @@ RrMultiUserScheduler::GetTxVectorForUlMu(Func canbeSolicited, bool isBasicTrigge
     txVector.SetBssColor(heConfiguration->GetBssColor());
 
     // iterate over the associated stations until an enough number of stations is identified
-    auto staIt = m_staListUl.begin();
+    auto staIt = staListUl.begin();
     m_candidates.clear();
 
-    while (staIt != m_staListUl.end() &&
+    while (staIt != staListUl.end() &&
            txVector.GetHeMuUserInfoMap().size() <
                std::min<std::size_t>(m_nStations, count + nCentral26TonesRus))
     {
@@ -340,7 +342,9 @@ RrMultiUserScheduler::GetTxVectorForUlMu(Func canbeSolicited, bool isBasicTrigge
       return txVector;
     }
 
+
     FinalizeTxVector(txVector, isBasicTrigger);
+
     return txVector;
 }
 
@@ -349,7 +353,7 @@ RrMultiUserScheduler::TrySendingBsrpTf()
 {
     NS_LOG_FUNCTION(this);
 
-    if (m_staListUl.empty())
+    if (m_staListUlBsrp.empty())
     {
         NS_LOG_DEBUG("No HE stations associated: return SU_TX");
         return TxFormat::SU_TX;
@@ -427,13 +431,15 @@ RrMultiUserScheduler::TrySendingBsrpTf()
     NS_LOG_DEBUG("Duration of QoS Null frames: " << qosNullTxDuration.As(Time::MS));
     m_trigger.SetUlLength(ulLength);
 
-    //round-robbin of 
-    auto it = m_staListUl.begin();
-    size_t nSaRUs = m_candidates.size();
-    std::advance(it, nSaRUs);
+    //round-robbin
+    if (m_candidates.size())
+    {
+      auto it = m_staListUlBsrp.begin();
+      size_t nSaRUs = m_candidates.size();
+      std::advance(it, nSaRUs);
 
-    m_staListUl.splice(m_staListUl.end(), m_staListUl, m_staListUl.begin(), it);
-
+      m_staListUlBsrp.splice(m_staListUlBsrp.end(), m_staListUlBsrp, m_staListUlBsrp.begin(), it);
+    }
 
     return UL_MU_TX;
 }
@@ -463,7 +469,6 @@ RrMultiUserScheduler::TrySendingBasicTf()
     if (txVector.GetHeMuUserInfoMap().empty())
     {
         NS_LOG_DEBUG("No suitable station found");
-        std::cout <<"No suitable station found" <<std::endl;
 
         // determine RUs to allocate to stations
         auto count = std::min<std::size_t>(m_nStations, m_staListUl.size());
@@ -541,6 +546,7 @@ RrMultiUserScheduler::TrySendingBasicTf()
     m_txParams.m_txVector =
         m_apMac->GetWifiRemoteStationManager(m_linkId)->GetRtsTxVector(m_triggerMacHdr.GetAddr1());
 
+
     if (!GetHeFem(m_linkId)->TryAddMpdu(item, m_txParams, m_availableTime))
     {
         // an UL OFDMA transmission is not possible, hence return NO_TX. In
@@ -570,6 +576,7 @@ RrMultiUserScheduler::TrySendingBasicTf()
         }
     }
 
+    
     // Compute the time taken by each station to transmit a frame of maxBufferSize size
     Time bufferTxTime = Seconds(0);
     for (const auto& userInfo : m_trigger)
@@ -625,7 +632,8 @@ RrMultiUserScheduler::TrySendingBasicTf()
         userInfo.SetBasicTriggerDepUserInfo(0, 0, m_edca->GetAccessCategory());
     }
 
-    //UpdateCredits(m_staListUl, maxDuration, txVector);
+
+    UpdateCredits(m_staListUl, maxDuration, txVector);
 
     return UL_MU_TX;
 }
@@ -663,6 +671,15 @@ RrMultiUserScheduler::NotifyStationAssociated(uint16_t aid, Mac48Address address
     {
         m_staListUl.push_back(MasterInfo{aid, *mldOrLinkAddress, 0.0});
     }
+
+    const auto staItB = std::find_if(m_staListUlBsrp.cbegin(), m_staListUlBsrp.cend(), [aid](auto&& info) {
+        return info.aid == aid;
+    });
+    if (staItB == m_staListUlBsrp.cend())
+    {
+        m_staListUlBsrp.push_back(MasterInfo{aid, *mldOrLinkAddress, 0.0});
+    }
+
 }
 
 void
@@ -689,6 +706,8 @@ RrMultiUserScheduler::NotifyStationDeassociated(uint16_t aid, Mac48Address addre
         staList.second.remove_if([&aid](const MasterInfo& info) { return info.aid == aid; });
     }
     m_staListUl.remove_if([&aid](const MasterInfo& info) { return info.aid == aid; });
+    m_staListUlBsrp.remove_if([&aid](const MasterInfo& info) { return info.aid == aid; });
+
 }
 
 MultiUserScheduler::TxFormat
@@ -1013,13 +1032,15 @@ RrMultiUserScheduler::UpdateCredits(std::list<MasterInfo>& staList,
 
     std::unordered_map<uint16_t, double> creditsSub;
     // subtract debits to the selected stations
-    for (auto& candidate : m_candidates)
+    for (auto& candidate : m_staListUl)
     {
-        auto mapIt = txVector.GetHeMuUserInfoMap().find(candidate.first->aid);
-        NS_ASSERT(mapIt != txVector.GetHeMuUserInfoMap().end());
+        auto mapIt = txVector.GetHeMuUserInfoMap().find(candidate.aid);
+        //NS_ASSERT(mapIt != txVector.GetHeMuUserInfoMap().end());
+        if (mapIt == txVector.GetHeMuUserInfoMap().end())
+          continue;
 
-        candidate.first->credits -= debitsPerMhz * HeRu::GetBandwidth(mapIt->second.ru.GetRuType());
-        creditsSub[candidate.first->aid] = debitsPerMhz * HeRu::GetBandwidth(mapIt->second.ru.GetRuType());
+        candidate.credits -= debitsPerMhz * HeRu::GetBandwidth(mapIt->second.ru.GetRuType());
+        creditsSub[candidate.aid] = debitsPerMhz * HeRu::GetBandwidth(mapIt->second.ru.GetRuType());
     }
 
     // assign credits to all stations
