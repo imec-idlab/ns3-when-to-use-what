@@ -178,6 +178,20 @@ RrMultiUserScheduler::DoDispose()
     MultiUserScheduler::DoDispose();
 }
 
+void
+RrMultiUserScheduler::RrStaList(Mac48Address address)
+{
+  auto it = std::find_if(m_staListUl.begin(), m_staListUl.end(),
+                       [address](const auto& s) { return s.address == address; });
+  
+  if (it != m_staListUl.end()) 
+  {
+    auto foundItem = *it;
+    m_staListUl.erase(it);
+    m_staListUl.push_back(foundItem);
+  }
+}
+
 MultiUserScheduler::TxFormat
 RrMultiUserScheduler::SelectTxFormat()
 {
@@ -413,6 +427,14 @@ RrMultiUserScheduler::TrySendingBsrpTf()
     NS_LOG_DEBUG("Duration of QoS Null frames: " << qosNullTxDuration.As(Time::MS));
     m_trigger.SetUlLength(ulLength);
 
+    //round-robbin of 
+    auto it = m_staListUl.begin();
+    size_t nSaRUs = m_candidates.size();
+    std::advance(it, nSaRUs);
+
+    m_staListUl.splice(m_staListUl.end(), m_staListUl, m_staListUl.begin(), it);
+
+
     return UL_MU_TX;
 }
 
@@ -441,6 +463,28 @@ RrMultiUserScheduler::TrySendingBasicTf()
     if (txVector.GetHeMuUserInfoMap().empty())
     {
         NS_LOG_DEBUG("No suitable station found");
+        std::cout <<"No suitable station found" <<std::endl;
+
+        // determine RUs to allocate to stations
+        auto count = std::min<std::size_t>(m_nStations, m_staListUl.size());
+        std::size_t nCentral26TonesRus;
+        if (m_ruAllocationType == HeRu::RU_UNDEFINED)
+        {
+          HeRu::GetEqualSizedRusForStations(m_allowedWidth, count, nCentral26TonesRus);
+          NS_ASSERT(count >= 1);
+        }
+        else
+        {
+          count = std::min(HeRu::GetRusOfType (m_allowedWidth, m_ruAllocationType).size (), count);
+          nCentral26TonesRus = HeRu::GetCentral26TonesRus (m_allowedWidth, m_ruAllocationType).size ();
+        }
+
+        size_t nSaRUs = count + nCentral26TonesRus;
+
+        auto it = m_staListUl.begin();
+        std::advance(it, nSaRUs);
+
+        m_staListUl.splice(m_staListUl.end(), m_staListUl, m_staListUl.begin(), it);
         return TrySendingBsrpTf();
     }
 
@@ -581,7 +625,7 @@ RrMultiUserScheduler::TrySendingBasicTf()
         userInfo.SetBasicTriggerDepUserInfo(0, 0, m_edca->GetAccessCategory());
     }
 
-    UpdateCredits(m_staListUl, maxDuration, txVector);
+    //UpdateCredits(m_staListUl, maxDuration, txVector);
 
     return UL_MU_TX;
 }

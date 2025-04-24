@@ -598,11 +598,11 @@ int main(int argc, char *argv[])
           if (i < typeOneNStations) 
           {
             //heManager->SetAttribute("HePartakeInUora", BooleanValue(true)); // Enable UORA
-            heManager->SetAttribute ("PartakeInUoraTimer", TimeValue(MilliSeconds(5) ));
+            heManager->SetAttribute ("PartakeInUoraTimer", TimeValue(MilliSeconds(10) ));
           }
           else
           {
-            heManager->SetAttribute ("PartakeInUoraTimer", TimeValue(MilliSeconds(1) ));
+            heManager->SetAttribute ("PartakeInUoraTimer", TimeValue(MilliSeconds(2) ));
           }
         }
       }

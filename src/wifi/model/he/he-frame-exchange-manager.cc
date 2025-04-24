@@ -1881,12 +1881,12 @@ HeFrameExchangeManager::ReceiveBasicTrigger(CtrlTriggerHeader& trigger,
           return;
         }
     }
-    /*else if (auto userInfoIt = trigger.FindUserInfoWithAid(m_staMac->GetAssociationId());
+    else if (auto userInfoIt = trigger.FindUserInfoWithAid(m_staMac->GetAssociationId());
               userInfoIt == trigger.end())
     {
       NS_LOG_DEBUG("No Random Access Ru");
       return;
-    }*/
+    }
 
     if (!UlMuCsMediumIdle(trigger))
     {
@@ -2584,11 +2584,11 @@ HeFrameExchangeManager::ReceiveMpdu(Ptr<const WifiMpdu> mpdu,
 
         NS_LOG_DEBUG("Received a QoS Null frame in a TB PPDU from " << sender);
 
-        /*if (m_muScheduler->GetInstanceTypeId().GetName() == "ns3::RrMultiUserScheduler")
-        {
+        if (isRandomAccess && m_muScheduler->GetInstanceTypeId().GetName() == "ns3::RrMultiUserScheduler")
+        { std::cout <<"this is called" <<std::endl;
           Ptr<RrMultiUserScheduler> rrScheduler = DynamicCast<RrMultiUserScheduler>(m_muScheduler);
           rrScheduler->RrStaList(sender);
-        }*/
+        }
 
         // remove the sender from the set of stations that are expected to send a TB PPDU
         m_staExpectTbPpduFrom.erase(sender);
