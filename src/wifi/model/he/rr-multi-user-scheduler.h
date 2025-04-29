@@ -52,7 +52,7 @@ class RrMultiUserScheduler : public MultiUserScheduler
     RrMultiUserScheduler();
     ~RrMultiUserScheduler() override;
 
-    void RrStaList(Mac48Address address);
+    void AddToStaListBasic(Mac48Address address);
 
     void UpdatePollList(Mac48Address address) override;
 
@@ -170,7 +170,7 @@ class RrMultiUserScheduler : public MultiUserScheduler
     uint32_t m_ulPsduSize;       //!< the size in byte of the solicited PSDU
     std::map<AcIndex, std::list<MasterInfo>>
         m_staListDl;                       //!< Per-AC list of stations (next to serve for DL first)
-    std::list<MasterInfo> m_staListUl, m_staListUlBsrp;     //!< List of stations to serve for UL
+    std::list<MasterInfo> m_staListUl, m_staListUlBasic;     //!< List of stations to serve for UL
     std::list<CandidateInfo> m_candidates; //!< Candidate stations for MU TX
     Time m_maxCredits;                     //!< Max amount of credits a station can have
     CtrlTriggerHeader m_trigger;           //!< Trigger Frame to send

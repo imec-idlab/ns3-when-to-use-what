@@ -1816,7 +1816,10 @@ HeFrameExchangeManager::ReceiveBasicTrigger(CtrlTriggerHeader& trigger,
 {
     NS_LOG_FUNCTION(this << trigger << hdr);
     NS_ASSERT(trigger.IsBasic());
-    NS_ASSERT(m_staMac && m_staMac->IsAssociated());
+    if (!m_staMac || !m_staMac->IsAssociated())
+    {
+      return;
+    }
 
     NS_LOG_DEBUG("Received a Trigger Frame (basic variant) soliciting a transmission");
 
@@ -1868,7 +1871,7 @@ HeFrameExchangeManager::ReceiveBasicTrigger(CtrlTriggerHeader& trigger,
         uint8_t obo = (_obo <= raRus.size() ) ? 0 : _obo - raRus.size();
         uint8_t queueSize = edca->GetQosQueueSize(tid, hdr.GetAddr2());
 
-        if (!obo && queueSize){
+        if (!obo && queueSize && !IsPartakeInUoraTimerActive()){
         //Change trigger: for randomly selected RA RU set AID to the STA AID
           Ptr<UniformRandomVariable> rv = CreateObject<UniformRandomVariable> ();
           uint16_t selectedRu = raRus.at(rv->GetValue(0, raRus.size()));
@@ -1954,6 +1957,7 @@ HeFrameExchangeManager::ReceiveBasicTrigger(CtrlTriggerHeader& trigger,
         if (auto mpdu = edca->PeekNextMpdu(m_linkId, tid, receiver))
         {
             mpdu = CreateAliasIfNeeded(mpdu);
+            
             if (auto item = edca->GetNextMpdu(m_linkId, mpdu, txParams, ppduDuration, false))
             {
                 // try A-MPDU aggregation
@@ -1963,7 +1967,9 @@ HeFrameExchangeManager::ReceiveBasicTrigger(CtrlTriggerHeader& trigger,
                                             : Create<WifiPsdu>(item, true));
                 break;
             }
+            //else {NS_ASSERT(0);}
         }
+        else {NS_ASSERT(0);}
     }
 
     if (psdu)
@@ -2143,10 +2149,9 @@ HeFrameExchangeManager::SendQosNullFramesInTbPpdu(CtrlTriggerHeader& trigger,
     }
     else 
     {
-      m_partakeInUoraStartTime = Simulator::Now();
+      //m_partakeInUoraStartTime = Simulator::Now();
     }
 
-    
     SendPsduMapWithProtection(WifiPsduMap{{staId, psdu}}, txParams);
 }
 
@@ -2480,6 +2485,19 @@ HeFrameExchangeManager::ReceiveMpdu(Ptr<const WifiMpdu> mpdu,
             acknowledgment->baType.m_bitmapLen.push_back(0);
             uint16_t staId = txVector.GetHeMuUserInfoMap().begin()->first;
             m_muSnrTag.Set(staId, rxSignalInfo.snr);
+
+        /*
+         * Update the BSR by subtracting the number of received 'queueSize' from
+         * the reported.
+         * */
+        uint32_t packetSize = mpdu->GetPacketSize();
+        uint8_t queueSize = static_cast<uint8_t>(std::ceil(std::min(packetSize, 64769U) / 256.0));
+        //uint8_t tid = hdr.GetQosTid();
+        uint8_t bufferStatus = m_apMac->GetBufferStatus(tid, sender);
+
+        bufferStatus = (bufferStatus == 255) ? 0 : (bufferStatus <= queueSize) ? 0 : bufferStatus - queueSize; 
+        m_apMac->SetBufferStatus(tid, sender, bufferStatus );
+
         }
         else if (!(hdr.IsQosData() && !hdr.HasData() && !inAmpdu))
         {
@@ -2553,8 +2571,7 @@ HeFrameExchangeManager::ReceiveMpdu(Ptr<const WifiMpdu> mpdu,
         if(hdr.GetQosAckPolicy() == WifiMacHeader::NORMAL_ACK)
         {
           uint8_t tid = hdr.GetQosTid();
-          //GetBaManager(tid)->NotifyGotMpdu(mpdu);
-
+          GetBaManager(tid)->NotifyGotMpdu(mpdu);
           // Acknowledgment context of Multi-STA Block Acks
           acknowledgment->stationsReceivingMultiStaBa.emplace(std::make_pair(sender, tid), index);
           acknowledgment->baType.m_bitmapLen.push_back(0);
@@ -2584,10 +2601,10 @@ HeFrameExchangeManager::ReceiveMpdu(Ptr<const WifiMpdu> mpdu,
 
         NS_LOG_DEBUG("Received a QoS Null frame in a TB PPDU from " << sender);
 
-        if (isRandomAccess && m_muScheduler->GetInstanceTypeId().GetName() == "ns3::RrMultiUserScheduler")
-        { std::cout <<"this is called" <<std::endl;
+        if (m_muScheduler->GetInstanceTypeId().GetName() == "ns3::RrMultiUserScheduler")
+        {
           Ptr<RrMultiUserScheduler> rrScheduler = DynamicCast<RrMultiUserScheduler>(m_muScheduler);
-          rrScheduler->RrStaList(sender);
+          rrScheduler->AddToStaListBasic(sender);
         }
 
         // remove the sender from the set of stations that are expected to send a TB PPDU

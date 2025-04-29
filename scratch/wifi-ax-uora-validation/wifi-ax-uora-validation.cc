@@ -119,7 +119,7 @@ int main(int argc, char *argv[])
   std::string logDir {"output"};
   double minDistance {1.0}; //meters
   double maxDistance {4.0}; //meters
-  std::size_t typeOneNStations {40};
+  std::size_t typeOneNStations {9};
   std::size_t typeTwoNStations {1};
   double apHeight {3}; //meters
   double staHeight {1}; //meters
@@ -316,13 +316,12 @@ int main(int argc, char *argv[])
    */
   if(nRaRus)
   {
-    Config::SetDefault ("ns3::HeConfiguration::OCwMin",UintegerValue(31));
+    Config::SetDefault ("ns3::HeConfiguration::OCwMin",UintegerValue(7));
     Config::SetDefault("ns3::HeConfiguration::OCwMax", UintegerValue(127));
-
+  }
     //prevent stations from explicitly sending BAR request
     Config::SetDefault("ns3::QosTxop::UseExplicitBarAfterMissedBlockAck", BooleanValue(false));
     Config::SetDefault("ns3::WifiDefaultAckManager::UseExplicitBar", BooleanValue(false));
-  }
 
   /*
    * To use specific MU-EDCA parameters for various AC
@@ -362,7 +361,7 @@ int main(int argc, char *argv[])
 
       Config::SetDefault("ns3::HtFrameExchangeManager::DisableEDCA", BooleanValue(true));
 
-      Config::SetDefault("ns3::HeFrameExchangeManager::MuTxStartTime", TimeValue(Seconds(0)));
+      Config::SetDefault("ns3::HeFrameExchangeManager::MuTxStartTime", TimeValue(Seconds(startLogTime)));
 
       Config::SetDefault("ns3::QosTxop::LongerEDCADisable", BooleanValue(true));
 
@@ -395,7 +394,7 @@ int main(int argc, char *argv[])
   {
     Config::SetDefault ("ns3::WifiRemoteStationManager::FragmentationThreshold", StringValue ("990000"));
     Config::SetDefault ("ns3::WifiMac::VO_MaxAmpduSize", UintegerValue (6500631)); //6500631
-    Config::SetDefault("ns3::WifiMac::VO_MaxAmsduSize", UintegerValue (0)); //11398
+    Config::SetDefault("ns3::WifiMac::VO_MaxAmsduSize", UintegerValue (11398)); //11398
   }
 
   /*
@@ -491,12 +490,12 @@ int main(int argc, char *argv[])
                   "Ssid", SsidValue (ssid),
                   "VO_BlockAckThreshold", UintegerValue(0),
                   "BeaconGeneration", BooleanValue(true),
-                  "BsrLifetime", TimeValue(MilliSeconds(20000000)),
-                  "BeaconInterval", TimeValue(MicroSeconds(204800)));
+                  "BsrLifetime", TimeValue(MilliSeconds(200000)),
+                  "BeaconInterval", TimeValue(MicroSeconds(102400)));
 
       apNetDevice = wifi.Install (phy, wifimac, wifiApNode);
-      //phy.EnablePcap("wifi-ax-uora-ap", apNetDevice); // enable pcap tracing
-      //phy.EnablePcap("wifi-ax-uora-sta", staNetDevices);
+      phy.EnablePcap("wifi-ax-uora-ap", apNetDevice); // enable pcap tracing
+      phy.EnablePcap("wifi-ax-uora-sta", staNetDevices);
     }
   else
     {
@@ -531,48 +530,63 @@ int main(int argc, char *argv[])
 
 
 
-  double staStartTime = 0;
+  //double staStartTime = 0;
+  double staStartTimeTwo = startLogTime;
   
   for (size_t i = 0; i < typeOneNStations + typeTwoNStations; i++)
   {
-    staStartTime += 0.00108;
-    //InetSocketAddress remoteAddress = InetSocketAddress (serverInterfaces.GetAddress (i), port);
+    //staStartTime += 0.00216;
+    staStartTimeTwo += 0.00108;
+
+    //InetSocketAddress remoteAddress = InetSocketAddress (staNodeInterfaces.GetAddress (i), port);
     //remoteAddress.SetTos (0xc0);
     UdpClientHelper staUdpClient (localAddress);
-    UdpClientHelper staUdpClientTwo (localAddress);
+    
+    staUdpClient.SetAttribute("MaxPackets", UintegerValue(1));
+    staUdpClient.SetAttribute("PacketSize", UintegerValue(1024));
+    staUdpClient.SetAttribute ("EnableRandom", BooleanValue (false));
+    staUdpClient.SetAttribute ("Interval", TimeValue (Seconds (1)));
 
-    staUdpClient.SetAttribute("MaxPackets", UintegerValue(0));
-    staUdpClient.SetAttribute("PacketSize", UintegerValue(ulPayloadSize));
+    ApplicationContainer staUdpclientApp = staUdpClient.Install (wifiStaNodes.Get(i));
+
+    Ptr<UniformRandomVariable> rv = CreateObject<UniformRandomVariable> ();
+    rv->SetAttribute("Max", DoubleValue(2));
+
+    staUdpclientApp.Start(Seconds(1)+Seconds(i * 0.001));
+    staUdpclientApp.Stop (Seconds (startLogTime-1));
+
+    UdpClientHelper staUdpClientTwo (localAddress);
+    staUdpClientTwo.SetAttribute("MaxPackets", UintegerValue(0));
+    staUdpClientTwo.SetAttribute("PacketSize", UintegerValue(ulPayloadSize));
+    staUdpClientTwo.SetAttribute("SendDelay", DoubleValue(0));
 
     if (trafficType == "CBR" && i < typeOneNStations)
     {
-      staUdpClient.SetAttribute ("EnableRandom", BooleanValue (false));
-      staUdpClient.SetAttribute ("Interval", TimeValue (Seconds (interval)));
+      staUdpClientTwo.SetAttribute ("EnableRandom", BooleanValue (false));
+      staUdpClientTwo.SetAttribute ("Interval", TimeValue (Seconds (interval)));
 
     }
     else
     {
       staUdpClientTwo.SetAttribute ("EnableRandom", BooleanValue (true));
-
       std::ostringstream intervalDistr;
-      intervalDistr << "ns3::ExponentialRandomVariable[Mean=" << 0.100 << "|Bound=0]";
-      staUdpClient.SetAttribute ("IntervalRandomVariable", StringValue (intervalDistr.str()));
+      intervalDistr << "ns3::ExponentialRandomVariable[Mean=" << 0.500 << "|Bound=0]";
+      staUdpClientTwo.SetAttribute ("IntervalRandomVariable", StringValue (intervalDistr.str()));
 
     }
-    ApplicationContainer staUdpclientApp = staUdpClient.Install (wifiStaNodes.Get(i));
-
+    ApplicationContainer staUdpclientAppTwo = staUdpClientTwo.Install (wifiStaNodes.Get(i));
     if (randomStart)
     {
       Ptr<UniformRandomVariable> rv = CreateObject<UniformRandomVariable> ();
       rv->SetAttribute("Max", DoubleValue(1.5));
-      staUdpclientApp.StartWithJitter (Seconds (1.0), rv);
+      //staUdpclientApp.StartWithJitter (Seconds (1.0), rv);
     }
     else
     {
-      staUdpclientApp.Start (Seconds (staStartTime));
+      staUdpclientAppTwo.Start (Seconds (staStartTimeTwo));
     }
     
-    staUdpclientApp.Stop (Seconds (simulationTime + startLogTime));
+    staUdpclientAppTwo.Stop (Seconds (simulationTime + startLogTime));
   }
 
   Simulator::Schedule (Seconds (0), &Ipv4GlobalRoutingHelper::PopulateRoutingTables);
@@ -598,11 +612,11 @@ int main(int argc, char *argv[])
           if (i < typeOneNStations) 
           {
             //heManager->SetAttribute("HePartakeInUora", BooleanValue(true)); // Enable UORA
-            heManager->SetAttribute ("PartakeInUoraTimer", TimeValue(MilliSeconds(10) ));
+            heManager->SetAttribute ("PartakeInUoraTimer", TimeValue(MilliSeconds(40) ));
           }
           else
           {
-            heManager->SetAttribute ("PartakeInUoraTimer", TimeValue(MilliSeconds(2) ));
+            heManager->SetAttribute ("PartakeInUoraTimer", TimeValue(MilliSeconds(0) ));
           }
         }
       }
