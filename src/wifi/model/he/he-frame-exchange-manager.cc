@@ -1969,7 +1969,7 @@ HeFrameExchangeManager::ReceiveBasicTrigger(CtrlTriggerHeader& trigger,
             }
             //else {NS_ASSERT(0);}
         }
-        else {NS_ASSERT(0);}
+        //else {NS_ASSERT(0);}
     }
 
     if (psdu)
@@ -2568,10 +2568,10 @@ HeFrameExchangeManager::ReceiveMpdu(Ptr<const WifiMpdu> mpdu,
             }
         }
 
-        if(hdr.GetQosAckPolicy() == WifiMacHeader::NORMAL_ACK)
+        if(isRandomAccess && hdr.GetQosAckPolicy() == WifiMacHeader::NORMAL_ACK)
         {
           uint8_t tid = hdr.GetQosTid();
-          GetBaManager(tid)->NotifyGotMpdu(mpdu);
+          //GetBaManager(tid)->NotifyGotMpdu(mpdu);
           // Acknowledgment context of Multi-STA Block Acks
           acknowledgment->stationsReceivingMultiStaBa.emplace(std::make_pair(sender, tid), index);
           acknowledgment->baType.m_bitmapLen.push_back(0);
@@ -2782,6 +2782,24 @@ HeFrameExchangeManager::ReceiveMpdu(Ptr<const WifiMpdu> mpdu,
                   m_staMac->GetQosTxop(tid)->UpdateFailedOcw(m_linkId);
 
                   m_raAck = false;
+                  /*
+                   *For Qos Null, no need to retransmit 
+                   * */
+                  if (!mpdu->GetHeader().GetSequenceNumber()) 
+                  {
+                    // cancel the timer
+                    m_txTimer.Cancel();
+                    m_channelAccessManager->NotifyAckTimeoutResetNow();
+                    // dequeue BlockAckReq frames included in acknowledged TB PPDUs (if any)
+                    for (const auto& [staId, psdu] : m_psduMap)
+                    {
+                      if (psdu->GetNMpdus() == 1 && psdu->GetHeader(0).IsBlockAckReq())
+                      {
+                        DequeuePsdu(psdu);
+                      }
+                    }
+                    m_psduMap.clear();
+                  }
                 }
                 return;
             }
@@ -2798,9 +2816,9 @@ HeFrameExchangeManager::ReceiveMpdu(Ptr<const WifiMpdu> mpdu,
                 {
                     // Acknowledgment context
                     NS_ABORT_IF(m_psduMap.empty() || m_psduMap.begin()->first != staId);
-                    if (m_raAck){}
-                    else{
-                      GetBaManager(tid)->NotifyGotAck(m_linkId, *m_psduMap.at(staId)->begin());
+                    if ( !(m_raAck && !mpdu->GetHeader().GetSequenceNumber())) //seqNum = 0 for qosNull
+                    {
+                      GetBaManager(tid)->NotifyGotAck(m_linkId, *m_psduMap.at(staId)->begin()); 
                     }
                 }
                 else

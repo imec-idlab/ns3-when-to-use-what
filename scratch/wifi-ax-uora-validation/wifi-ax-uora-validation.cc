@@ -107,9 +107,12 @@ int main(int argc, char *argv[])
   //LogComponentEnable("PhyEntity", LOG_LEVEL_DEBUG);
 
   //LogComponentEnable("WifiDefaultAckManager", LOG_LEVEL_DEBUG);
+  //LogComponentEnable("WifiRemoteStationManager", LOG_LEVEL_DEBUG);
   //LogComponentEnable("HeFrameExchangeManager", LOG_LEVEL_DEBUG);
   //LogComponentEnable("HtFrameExchangeManager", LOG_LEVEL_DEBUG);
   //LogComponentEnable("BlockAckManager", LOG_LEVEL_DEBUG);
+  //LogComponentEnable("OriginatorBlockAckAgreement", LOG_LEVEL_DEBUG);
+  //LogComponentEnable("RecipientBlockAckAgreement", LOG_LEVEL_DEBUG);
   //LogComponentEnable("ChannelAccessManager", LOG_LEVEL_DEBUG);
   //LogComponentEnable("QosTxop", LOG_LEVEL_DEBUG);
   //LogComponentEnable("MpduAggregator", LOG_LEVEL_DEBUG);
@@ -152,6 +155,8 @@ int main(int argc, char *argv[])
   double txOpLimits = {2080};  //AC_VO default value in microseconds 2080
   std::string ruAllocationType {"ru-undefined"};
   HeRu::RuType ruAllocType {HeRu::RU_UNDEFINED};
+  uint32_t OCwMin {7};
+  uint32_t OCwMax {127};
 
 
   uint32_t ulPayloadSize = 93; // must fit in the max TX duration when transmitting at MCS 0 over an RU of 26 tones
@@ -204,6 +209,8 @@ int main(int argc, char *argv[])
   cmd.AddValue ("nMpdus", "Number of aggregated MPDUs (=< 6500631/740 for HE PPDUs)", nMpdus);
   cmd.AddValue ("DelayAccessReqUponAccess", "Enable/Disable delay of access req only upon access grant", DelayAccessReqUponAccess);
   cmd.AddValue ("TxOPLimits", "TX Opportunity limits in microseconds", txOpLimits);
+  cmd.AddValue ("OCwMin", "Min OFDMA CW", OCwMin);
+  cmd.AddValue ("OCwMax", "Max OFDMA CW", OCwMax);
 
 
   //Traffic params
@@ -316,8 +323,8 @@ int main(int argc, char *argv[])
    */
   if(nRaRus)
   {
-    Config::SetDefault ("ns3::HeConfiguration::OCwMin",UintegerValue(7));
-    Config::SetDefault("ns3::HeConfiguration::OCwMax", UintegerValue(127));
+    Config::SetDefault ("ns3::HeConfiguration::OCwMin",UintegerValue(OCwMin));
+    Config::SetDefault("ns3::HeConfiguration::OCwMax", UintegerValue(OCwMax));
   }
     //prevent stations from explicitly sending BAR request
     Config::SetDefault("ns3::QosTxop::UseExplicitBarAfterMissedBlockAck", BooleanValue(false));
@@ -494,8 +501,8 @@ int main(int argc, char *argv[])
                   "BeaconInterval", TimeValue(MicroSeconds(102400)));
 
       apNetDevice = wifi.Install (phy, wifimac, wifiApNode);
-      phy.EnablePcap("wifi-ax-uora-ap", apNetDevice); // enable pcap tracing
-      phy.EnablePcap("wifi-ax-uora-sta", staNetDevices);
+      //phy.EnablePcap("wifi-ax-uora-ap", apNetDevice); // enable pcap tracing
+      //phy.EnablePcap("wifi-ax-uora-sta", staNetDevices);
     }
   else
     {
@@ -558,7 +565,6 @@ int main(int argc, char *argv[])
     UdpClientHelper staUdpClientTwo (localAddress);
     staUdpClientTwo.SetAttribute("MaxPackets", UintegerValue(0));
     staUdpClientTwo.SetAttribute("PacketSize", UintegerValue(ulPayloadSize));
-    staUdpClientTwo.SetAttribute("SendDelay", DoubleValue(0));
 
     if (trafficType == "CBR" && i < typeOneNStations)
     {
