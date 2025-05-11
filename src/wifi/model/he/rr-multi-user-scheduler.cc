@@ -167,7 +167,7 @@ RrMultiUserScheduler::DoDispose()
     NS_LOG_FUNCTION(this);
     m_staListDl.clear();
     m_staListUl.clear();
-    m_staListUlBasic.clear();
+    m_staListUlBsrp.clear();
     m_candidates.clear();
     m_txParams.Clear();
     m_apMac->TraceDisconnectWithoutContext(
@@ -180,7 +180,7 @@ RrMultiUserScheduler::DoDispose()
 }
 
 void
-RrMultiUserScheduler::AddToStaListBasic(Mac48Address address)
+RrMultiUserScheduler::RrStaList(Mac48Address address)
 {
   auto it = std::find_if(m_staListUl.begin(), m_staListUl.end(),
                        [address](const auto& s) { return s.address == address; });
@@ -188,7 +188,8 @@ RrMultiUserScheduler::AddToStaListBasic(Mac48Address address)
   if (it != m_staListUl.end()) 
   {
     auto foundItem = *it;
-    m_staListUlBasic.push_back(foundItem);
+    m_staListUl.erase(it);
+    m_staListUl.push_back(foundItem);
   }
 }
 
@@ -232,7 +233,7 @@ RrMultiUserScheduler::GetTxVectorForUlMu(Func canbeSolicited, bool isBasicTrigge
 {
     NS_LOG_FUNCTION(this);
 
-    auto staListUl = (isBasicTrigger) ? m_staListUlBasic : m_staListUl;
+    auto staListUl = (isBasicTrigger) ? m_staListUl : m_staListUlBsrp;
     // determine RUs to allocate to stations
     auto count = std::min<std::size_t>(m_nStations, staListUl.size());
     std::size_t nCentral26TonesRus;
@@ -341,6 +342,7 @@ RrMultiUserScheduler::GetTxVectorForUlMu(Func canbeSolicited, bool isBasicTrigge
       return txVector;
     }
 
+
     FinalizeTxVector(txVector, isBasicTrigger);
 
     return txVector;
@@ -351,13 +353,13 @@ RrMultiUserScheduler::TrySendingBsrpTf()
 {
     NS_LOG_FUNCTION(this);
 
-    if (m_staListUl.empty())
+    if (m_staListUlBsrp.empty())
     {
         NS_LOG_DEBUG("No HE stations associated: return SU_TX");
         return TxFormat::SU_TX;
     }
     m_nRaRusBtf = 0;
-    m_staListUlBasic.clear();
+
     // only consider stations that have setup the current link
     WifiTxVector txVector = GetTxVectorForUlMu([this](const MasterInfo& info) {
         const auto& staList = m_apMac->GetStaList(m_linkId);
@@ -427,17 +429,16 @@ RrMultiUserScheduler::TrySendingBsrpTf()
         m_trigger.GetHeTbTxVector(m_trigger.begin()->GetAid12()),
         m_apMac->GetWifiPhy(m_linkId)->GetPhyBand());
     NS_LOG_DEBUG("Duration of QoS Null frames: " << qosNullTxDuration.As(Time::MS));
-
     m_trigger.SetUlLength(ulLength);
 
     //round-robbin
     if (m_candidates.size())
     {
-      auto it = m_staListUl.begin();
+      auto it = m_staListUlBsrp.begin();
       size_t nSaRUs = m_candidates.size();
       std::advance(it, nSaRUs);
 
-      m_staListUl.splice(m_staListUl.end(), m_staListUl, m_staListUl.begin(), it);
+      m_staListUlBsrp.splice(m_staListUlBsrp.end(), m_staListUlBsrp, m_staListUlBsrp.begin(), it);
     }
 
     return UL_MU_TX;
@@ -448,7 +449,7 @@ RrMultiUserScheduler::TrySendingBasicTf()
 {
     NS_LOG_FUNCTION(this);
 
-    if (m_staListUlBasic.empty())
+    if (m_staListUl.empty())
     {
         NS_LOG_DEBUG("No HE stations associated: return SU_TX");
         return TxFormat::SU_TX;
@@ -485,12 +486,13 @@ RrMultiUserScheduler::TrySendingBasicTf()
 
         size_t nSaRUs = count + nCentral26TonesRus;
 
-        auto it = m_staListUlBasic.begin();
+        auto it = m_staListUl.begin();
         std::advance(it, nSaRUs);
 
-        m_staListUlBasic.splice(m_staListUlBasic.end(), m_staListUlBasic, m_staListUlBasic.begin(), it);
-        return TxFormat::DL_MU_TX;//TrySendingBsrpTf();
+        m_staListUl.splice(m_staListUl.end(), m_staListUl, m_staListUl.begin(), it);
+        return TrySendingBsrpTf();
     }
+
 
     uint32_t maxBufferSize = 0;
 
@@ -630,7 +632,9 @@ RrMultiUserScheduler::TrySendingBasicTf()
         userInfo.SetBasicTriggerDepUserInfo(0, 0, m_edca->GetAccessCategory());
     }
 
-    //UpdateCredits(m_staListUl, maxDuration, txVector);
+
+    UpdateCredits(m_staListUl, maxDuration, txVector);
+
     return UL_MU_TX;
 }
 
@@ -668,6 +672,14 @@ RrMultiUserScheduler::NotifyStationAssociated(uint16_t aid, Mac48Address address
         m_staListUl.push_back(MasterInfo{aid, *mldOrLinkAddress, 0.0});
     }
 
+    const auto staItB = std::find_if(m_staListUlBsrp.cbegin(), m_staListUlBsrp.cend(), [aid](auto&& info) {
+        return info.aid == aid;
+    });
+    if (staItB == m_staListUlBsrp.cend())
+    {
+        m_staListUlBsrp.push_back(MasterInfo{aid, *mldOrLinkAddress, 0.0});
+    }
+
 }
 
 void
@@ -694,6 +706,8 @@ RrMultiUserScheduler::NotifyStationDeassociated(uint16_t aid, Mac48Address addre
         staList.second.remove_if([&aid](const MasterInfo& info) { return info.aid == aid; });
     }
     m_staListUl.remove_if([&aid](const MasterInfo& info) { return info.aid == aid; });
+    m_staListUlBsrp.remove_if([&aid](const MasterInfo& info) { return info.aid == aid; });
+
 }
 
 MultiUserScheduler::TxFormat
@@ -904,16 +918,15 @@ RrMultiUserScheduler::FinalizeTxVector(WifiTxVector& txVector, bool isBasicTrigg
 
     NS_LOG_DEBUG(nRusAssigned << " stations are being assigned a " << ruType << " RU");
 
-
     //Calculate number of random access RUs
-    std::size_t totalRus = HeRu::GetNRus (m_allowedWidth, ruType);
-    std::size_t _26tonesRus = (m_useCentral26TonesRus) ? nCentral26TonesRus : 0;
     std::size_t nRandomAccessRus = 0;
     if (m_activateNaiks)
       nRandomAccessRus = (isBasicTrigger) ? m_nRaRusBtf : m_nRaRus;
-    else {
-      nRandomAccessRus = (isBasicTrigger) ? (totalRus + _26tonesRus ) - nRusAssigned : m_nRaRus;
-    }
+    else
+      nRandomAccessRus = (isBasicTrigger) ? 0 : m_nRaRus;
+    std::size_t totalRus = HeRu::GetNRus (m_allowedWidth, ruType);
+    std::size_t _26tonesRus = (m_useCentral26TonesRus) ? nCentral26TonesRus : 0;
+
       if (totalRus + _26tonesRus <= nRusAssigned + nRandomAccessRus)
       {
         if (_26tonesRus > 0 && _26tonesRus >= nRandomAccessRus)

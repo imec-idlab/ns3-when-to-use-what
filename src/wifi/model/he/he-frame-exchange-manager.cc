@@ -2601,11 +2601,11 @@ HeFrameExchangeManager::ReceiveMpdu(Ptr<const WifiMpdu> mpdu,
 
         NS_LOG_DEBUG("Received a QoS Null frame in a TB PPDU from " << sender);
 
-        if (m_muScheduler->GetInstanceTypeId().GetName() == "ns3::RrMultiUserScheduler")
+        /*if (m_muScheduler->GetInstanceTypeId().GetName() == "ns3::RrMultiUserScheduler")
         {
           Ptr<RrMultiUserScheduler> rrScheduler = DynamicCast<RrMultiUserScheduler>(m_muScheduler);
           rrScheduler->AddToStaListBasic(sender);
-        }
+        }*/
 
         // remove the sender from the set of stations that are expected to send a TB PPDU
         m_staExpectTbPpduFrom.erase(sender);
