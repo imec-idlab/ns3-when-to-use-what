@@ -117,6 +117,7 @@ int main(int argc, char *argv[])
   //LogComponentEnable("QosTxop", LOG_LEVEL_DEBUG);
   //LogComponentEnable("MpduAggregator", LOG_LEVEL_DEBUG);
   //LogComponentEnable("QosFrameExchangeManager", LOG_LEVEL_DEBUG);
+  //LogComponentEnable("WifiMacQueue", LOG_LEVEL_ALL);
 
   double simulationTime {10};//seconds
   std::string logDir {"output"};
@@ -329,6 +330,7 @@ int main(int argc, char *argv[])
     //prevent stations from explicitly sending BAR request
     Config::SetDefault("ns3::QosTxop::UseExplicitBarAfterMissedBlockAck", BooleanValue(false));
     Config::SetDefault("ns3::WifiDefaultAckManager::UseExplicitBar", BooleanValue(false));
+    Config::SetDefault("ns3::WifiMacQueue::MaxDelay", TimeValue (MilliSeconds(500)) );
 
   /*
    * To use specific MU-EDCA parameters for various AC
@@ -501,8 +503,8 @@ int main(int argc, char *argv[])
                   "BeaconInterval", TimeValue(MicroSeconds(102400)));
 
       apNetDevice = wifi.Install (phy, wifimac, wifiApNode);
-      //phy.EnablePcap("wifi-ax-uora-ap", apNetDevice); // enable pcap tracing
-      //phy.EnablePcap("wifi-ax-uora-sta", staNetDevices);
+      phy.EnablePcap("wifi-ax-uora-ap", apNetDevice); // enable pcap tracing
+      phy.EnablePcap("wifi-ax-uora-sta", staNetDevices);
     }
   else
     {
@@ -576,7 +578,7 @@ int main(int argc, char *argv[])
     {
       staUdpClientTwo.SetAttribute ("EnableRandom", BooleanValue (true));
       std::ostringstream intervalDistr;
-      intervalDistr << "ns3::ExponentialRandomVariable[Mean=" << 0.500 << "|Bound=0]";
+      intervalDistr << "ns3::ExponentialRandomVariable[Mean=" << 0.10 << "|Bound=0]";
       staUdpClientTwo.SetAttribute ("IntervalRandomVariable", StringValue (intervalDistr.str()));
 
     }
@@ -618,7 +620,7 @@ int main(int argc, char *argv[])
           if (i < typeOneNStations) 
           {
             //heManager->SetAttribute("HePartakeInUora", BooleanValue(true)); // Enable UORA
-            heManager->SetAttribute ("PartakeInUoraTimer", TimeValue(MilliSeconds(40) ));
+            heManager->SetAttribute ("PartakeInUoraTimer", TimeValue(MilliSeconds(0) ));
           }
           else
           {

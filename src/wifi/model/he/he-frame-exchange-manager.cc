@@ -812,9 +812,6 @@ HeFrameExchangeManager::SendPsduMap()
     {
         NS_ASSERT(m_psduMap.size() == 1);
         timerType = WifiTxTimer::WAIT_BLOCK_ACK_AFTER_TB_PPDU;
-        for (auto psdu : m_psduMap){
-          if (m_txParams.m_txVector.GetRu(m_staMac->GetAssociationId()).IsRandomAccess()) {m_raAck = true;}
-        }
         NS_ASSERT(m_staMac && m_staMac->IsAssociated());
         txVector = GetWifiRemoteStationManager()->GetBlockAckTxVector(
             m_psduMap.begin()->second->GetAddr1(),
@@ -1426,22 +1423,32 @@ HeFrameExchangeManager::BlockAckAfterTbPpduTimeout(Ptr<WifiPsdu> psdu, const Wif
     NS_LOG_FUNCTION(this << *psdu << txVector);
 
     bool resetCw;
+    HeMuUserInfo info;
 
-    if (m_raAck)
+    if (psdu->GetRaRuUserInfo(info))
     {
       uint16_t staId = m_staMac->GetAssociationId();
       std::set<uint8_t> tids = m_psduMap.at(staId)->GetTids();
       uint8_t tid = *tids.begin();
       Ptr<QosTxop> edca = m_staMac->GetQosTxop(tid);
       edca->UpdateFailedOcw(m_linkId);
-      m_raAck = false;
+      if (psdu->GetHeader(0).GetType() == WifiMacType::WIFI_MAC_QOSDATA )
+      {
+        //set the retry flag, to allow for the moving of SSN
+        for (auto it = psdu->begin(); it != psdu->end(); ++it)
+        {
+          (*it)->GetHeader().SetRetry();
+        }
+        GetWifiRemoteStationManager()->ReportDataFailed(*psdu->begin());
+        MissedBlockAck(psdu, m_txParams.m_txVector, resetCw);
+      }
     }
+    else {
+      // call ReportDataFailed to increase SRC/LRC
+      GetWifiRemoteStationManager()->ReportDataFailed(*psdu->begin());
 
-    // call ReportDataFailed to increase SRC/LRC
-    GetWifiRemoteStationManager()->ReportDataFailed(*psdu->begin());
-
-    MissedBlockAck(psdu, m_txParams.m_txVector, resetCw);
-
+      MissedBlockAck(psdu, m_txParams.m_txVector, resetCw);
+    }
     // This is a PSDU sent in a TB PPDU. An HE STA resumes the EDCA backoff procedure
     // without modifying CW or the backoff counter for the associated EDCAF, after
     // transmission of an MPDU in a TB PPDU regardless of whether the STA has received
@@ -1975,12 +1982,13 @@ HeFrameExchangeManager::ReceiveBasicTrigger(CtrlTriggerHeader& trigger,
     if (psdu)
     {
         psdu->SetDuration(hdr.GetDuration() - m_phy->GetSifs() - ppduDuration);
+        HeMuUserInfo info = txParams.m_txVector.GetHeMuUserInfo (staId);
         if (isRandomAccess)
         {
-            HeMuUserInfo info = txParams.m_txVector.GetHeMuUserInfo (staId);
             info.ru.SetRandomAccessFlag (true); //We have to set random access flag again because
                                                 //this information is not present in the packet
             psdu->AddRaRuUserInfo (info);
+            txParams.m_txVector.SetHeMuUserInfo(staId, info);
         }
         SendPsduMapWithProtection(WifiPsduMap{{staId, psdu}}, txParams);
     }
@@ -2766,11 +2774,13 @@ HeFrameExchangeManager::ReceiveMpdu(Ptr<const WifiMpdu> mpdu,
 
             uint16_t staId = m_staMac->GetAssociationId();
             std::vector<uint32_t> indices = blockAck.FindPerAidTidInfoWithAid(staId);
+            HeMuUserInfo info;
+            isRandomAccess = m_psduMap.at(staId)->GetRaRuUserInfo(info);
 
             if (indices.empty())
             {
                 NS_LOG_DEBUG("No Per AID TID Info subfield intended for me");
-                if (m_raAck){
+                if ( isRandomAccess ){
                   uint8_t tid = blockAck.GetTidInfo();
                   if (tid == 14)
                   {
@@ -2781,23 +2791,14 @@ HeFrameExchangeManager::ReceiveMpdu(Ptr<const WifiMpdu> mpdu,
                   }
                   m_staMac->GetQosTxop(tid)->UpdateFailedOcw(m_linkId);
 
-                  m_raAck = false;
                   /*
                    *For Qos Null, no need to retransmit 
                    * */
-                  if (!mpdu->GetHeader().GetSequenceNumber()) 
+                  if (m_psduMap.at(staId)->GetHeader(0).GetType() == WifiMacType::WIFI_MAC_QOSDATA_NULL) 
                   {
                     // cancel the timer
                     m_txTimer.Cancel();
                     m_channelAccessManager->NotifyAckTimeoutResetNow();
-                    // dequeue BlockAckReq frames included in acknowledged TB PPDUs (if any)
-                    for (const auto& [staId, psdu] : m_psduMap)
-                    {
-                      if (psdu->GetNMpdus() == 1 && psdu->GetHeader(0).IsBlockAckReq())
-                      {
-                        DequeuePsdu(psdu);
-                      }
-                    }
                     m_psduMap.clear();
                   }
                 }
@@ -2816,9 +2817,9 @@ HeFrameExchangeManager::ReceiveMpdu(Ptr<const WifiMpdu> mpdu,
                 {
                     // Acknowledgment context
                     NS_ABORT_IF(m_psduMap.empty() || m_psduMap.begin()->first != staId);
-                    if ( !(m_raAck && !mpdu->GetHeader().GetSequenceNumber())) //seqNum = 0 for qosNull
+                    if ( m_psduMap.at(staId)->GetHeader(0).GetType() != WifiMacType::WIFI_MAC_QOSDATA_NULL ) //seqNum = 0 for qosNull
                     {
-                      GetBaManager(tid)->NotifyGotAck(m_linkId, *m_psduMap.at(staId)->begin()); 
+                      GetBaManager(tid)->NotifyGotAck(m_linkId, *m_psduMap.at(staId)->begin());
                     }
                 }
                 else
@@ -2860,20 +2861,19 @@ HeFrameExchangeManager::ReceiveMpdu(Ptr<const WifiMpdu> mpdu,
                     // transmitted in response to a Basic Trigger Frame and at least one
                     // MPDU was acknowledged. Therefore, it needs to update the access
                     // parameters if it received an MU EDCA Parameter Set element.
-                    if (m_psduMap.at(staId)->GetHeader(0).HasData() && m_raAck)
+                    if (m_psduMap.at(staId)->GetHeader(0).HasData() && isRandomAccess)
                     {
                       m_mac->GetQosTxop(tid)->StartMuEdcaTimerNow(m_linkId);
                       m_mac->GetQosTxop(tid)->UpdateObo(false, m_linkId);
                       m_partakeInUoraStartTime = Simulator::Now();
-                      m_raAck = false;
                     }
                     else if (m_psduMap.at(staId)->GetHeader(0).HasData())
                     {
                       m_mac->GetQosTxop(tid)->StartMuEdcaTimerNow(m_linkId);
                     }
-                    else {
+                    else 
+                    {
                       m_mac->GetQosTxop(tid)->UpdateObo(false, m_linkId);
-                      m_raAck = false;
                     }
                 }
             }
@@ -2937,10 +2937,9 @@ HeFrameExchangeManager::ReceiveMpdu(Ptr<const WifiMpdu> mpdu,
              * isRandomAccess is false, else check if there are Random Access
              * Rus available then we have isRandomAccess true 
              * */
-            isRandomAccess = (trigger.FindUserInfoWithAid(m_staMac->GetAssociationId()) != trigger.end()) ? false : ( (trigger.FindUserInfoWithRaRuAssociated () != trigger.end ()) ? true : false);
-
-
             uint16_t staId = m_staMac->GetAssociationId();
+            isRandomAccess = (trigger.FindUserInfoWithAid(staId) != trigger.end()) ? false : ( (trigger.FindUserInfoWithRaRuAssociated () != trigger.end ()) ? true : false);
+
 
             if (trigger.IsMuRts())
             {
