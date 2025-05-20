@@ -1974,9 +1974,9 @@ HeFrameExchangeManager::ReceiveBasicTrigger(CtrlTriggerHeader& trigger,
                                             : Create<WifiPsdu>(item, true));
                 break;
             }
-            //else {NS_ASSERT(0);}
+            //else {if (Simulator::Now().GetSeconds() > 5) NS_ASSERT(0);}
         }
-        //else {NS_ASSERT(0);}
+        //else {if (Simulator::Now().GetSeconds() > 5)NS_ASSERT(0);}
     }
 
     if (psdu)
@@ -1995,7 +1995,7 @@ HeFrameExchangeManager::ReceiveBasicTrigger(CtrlTriggerHeader& trigger,
     else if (!isRandomAccess)
     {
         // send QoS Null frames
-        SendQosNullFramesInTbPpdu(trigger, hdr, false);
+        //SendQosNullFramesInTbPpdu(trigger, hdr, false);
     }
     else
     {
@@ -2497,14 +2497,14 @@ HeFrameExchangeManager::ReceiveMpdu(Ptr<const WifiMpdu> mpdu,
         /*
          * Update the BSR by subtracting the number of received 'queueSize' from
          * the reported.
-         * */
+         * 
         uint32_t packetSize = mpdu->GetPacketSize();
         uint8_t queueSize = static_cast<uint8_t>(std::ceil(std::min(packetSize, 64769U) / 256.0));
         //uint8_t tid = hdr.GetQosTid();
         uint8_t bufferStatus = m_apMac->GetBufferStatus(tid, sender);
 
         bufferStatus = (bufferStatus == 255) ? 0 : (bufferStatus <= queueSize) ? 0 : bufferStatus - queueSize; 
-        m_apMac->SetBufferStatus(tid, sender, bufferStatus );
+        m_apMac->SetBufferStatus(tid, sender, bufferStatus );*/
 
         }
         else if (!(hdr.IsQosData() && !hdr.HasData() && !inAmpdu))
