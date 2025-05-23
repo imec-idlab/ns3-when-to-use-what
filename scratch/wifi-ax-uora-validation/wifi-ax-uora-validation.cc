@@ -114,10 +114,11 @@ int main(int argc, char *argv[])
   //LogComponentEnable("OriginatorBlockAckAgreement", LOG_LEVEL_DEBUG);
   //LogComponentEnable("RecipientBlockAckAgreement", LOG_LEVEL_DEBUG);
   //LogComponentEnable("ChannelAccessManager", LOG_LEVEL_DEBUG);
-  //LogComponentEnable("QosTxop", LOG_LEVEL_DEBUG);
+  //LogComponentEnable("QosTxop", LOG_LEVEL_ALL);
   //LogComponentEnable("MpduAggregator", LOG_LEVEL_DEBUG);
   //LogComponentEnable("QosFrameExchangeManager", LOG_LEVEL_DEBUG);
   //LogComponentEnable("WifiMacQueue", LOG_LEVEL_ALL);
+  //LogComponentEnable("VlceMultiUserScheduler", LOG_LEVEL_ALL);
 
   double simulationTime {10};//seconds
   std::string logDir {"output"};
@@ -158,6 +159,12 @@ int main(int argc, char *argv[])
   HeRu::RuType ruAllocType {HeRu::RU_UNDEFINED};
   uint32_t OCwMin {7};
   uint32_t OCwMax {127};
+  bool LongerEdcaDisable {true};
+  std::string Scheduler {"ns3::RrMultiUserScheduler"};
+  double  muEdcaTimer {8192};
+  double maxCredit {1000000}; //amount credit a stations can have when using
+                        //RrMultiUserScheduler, and how long to disable edca for
+                        //in VlceMultiUserScheduler in MicroSeconds
 
 
   uint32_t ulPayloadSize = 93; // must fit in the max TX duration when transmitting at MCS 0 over an RU of 26 tones
@@ -212,6 +219,10 @@ int main(int argc, char *argv[])
   cmd.AddValue ("TxOPLimits", "TX Opportunity limits in microseconds", txOpLimits);
   cmd.AddValue ("OCwMin", "Min OFDMA CW", OCwMin);
   cmd.AddValue ("OCwMax", "Max OFDMA CW", OCwMax);
+  cmd.AddValue ("Scheduler", "Type resource scheduler to use", Scheduler);
+  cmd.AddValue ("LongerEdcaDisable", "if True, disable EDCA for the duration of simulation", LongerEdcaDisable);
+  cmd.AddValue ("muEdcaTimer", "How long to disable EDCA for and for VlceMultiUserScheduler, how long to stay in polling list without transmission (in Seconds)", muEdcaTimer);
+
 
 
   //Traffic params
@@ -355,12 +366,18 @@ int main(int argc, char *argv[])
       Config::SetDefault ("ns3::HeConfiguration::MuViCwMax", UintegerValue (32767));
       Config::SetDefault ("ns3::HeConfiguration::MuVoCwMax", UintegerValue (32767));
 
-      /* Disable EDCA for the duration of the entire simulation:
-       *    Calculate the ceiling multiple of
-       *    8192 from simulation time
-       */
-      int  simTime = Seconds(simulationTime).GetMicroSeconds();
-      double  muEdcaTimer =  (simTime % 8192 == 0) ? simTime : ( std::round( simTime / 8192.0) * 8192) ;
+      if (LongerEdcaDisable)
+      {
+        /* Disable EDCA for the duration of the entire simulation:
+         *    Calculate the ceiling multiple of
+         *    8192 from simulation time
+         */
+      int simTime = Seconds(simulationTime).GetMicroSeconds();
+      muEdcaTimer = (simTime % 8192 == 0) ? simTime : ( std::round( simTime / 8192.0) * 8192);
+      Config::SetDefault("ns3::QosTxop::LongerEDCADisable", BooleanValue(true));
+      }
+
+        
 
       //STA timer (validity of set)
       Config::SetDefault ("ns3::HeConfiguration::BkMuEdcaTimer", TimeValue (MicroSeconds(muEdcaTimer) ));
@@ -371,9 +388,6 @@ int main(int argc, char *argv[])
       Config::SetDefault("ns3::HtFrameExchangeManager::DisableEDCA", BooleanValue(true));
 
       Config::SetDefault("ns3::HeFrameExchangeManager::MuTxStartTime", TimeValue(Seconds(startLogTime)));
-
-      Config::SetDefault("ns3::QosTxop::LongerEDCADisable", BooleanValue(true));
-
     }
 
   if (activateNaiks)
@@ -478,9 +492,12 @@ int main(int argc, char *argv[])
 
       staNetDevices = wifi.Install (phy, wifimac, wifiStaNodes);
 
+      if (Scheduler == "ns3::VlceMultiUserScheduler")
+        maxCredit = muEdcaTimer;
+
       if (dlAckSeqType != "NO-OFDMA")
         {
-          wifimac.SetMultiUserScheduler ("ns3::RrMultiUserScheduler",
+          wifimac.SetMultiUserScheduler (Scheduler,
                                       "EnableUlOfdma", BooleanValue (enableUlOfdma),
                                       "EnableBsrp", BooleanValue (enableBsrp),
                                       "AccessReqInterval", TimeValue (MicroSeconds(accessReqInterval)),
@@ -490,7 +507,7 @@ int main(int argc, char *argv[])
                                       "AccessReqAc",EnumValue(AcIndex::AC_VO),
                                       "RuAllocationType", EnumValue(ruAllocType),
                                       "NumRandomAccessRus", UintegerValue(nRaRus),
-                                      "MaxCredits", TimeValue(Seconds(1)),
+                                      "MaxCredits", TimeValue(MicroSeconds(maxCredit)),
                                       "UlPsduSize", UintegerValue(ulPayloadSize)
                                       );
         }
@@ -561,7 +578,7 @@ int main(int argc, char *argv[])
     Ptr<UniformRandomVariable> rv = CreateObject<UniformRandomVariable> ();
     rv->SetAttribute("Max", DoubleValue(2));
 
-    staUdpclientApp.Start(Seconds(1)+Seconds(i * 0.001));
+    staUdpclientApp.Start(Seconds(1 + (i * 0.001)));
     staUdpclientApp.Stop (Seconds (startLogTime-1));
 
     UdpClientHelper staUdpClientTwo (localAddress);
@@ -578,7 +595,7 @@ int main(int argc, char *argv[])
     {
       staUdpClientTwo.SetAttribute ("EnableRandom", BooleanValue (true));
       std::ostringstream intervalDistr;
-      intervalDistr << "ns3::ExponentialRandomVariable[Mean=" << 0.10 << "|Bound=0]";
+      intervalDistr << "ns3::ExponentialRandomVariable[Mean=" << 0.05 << "|Bound=0]";
       staUdpClientTwo.SetAttribute ("IntervalRandomVariable", StringValue (intervalDistr.str()));
 
     }

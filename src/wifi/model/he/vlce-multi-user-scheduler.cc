@@ -447,6 +447,17 @@ VlceMultiUserScheduler::TrySendingBsrpTf()
     NS_LOG_DEBUG("Duration of QoS Null frames: " << qosNullTxDuration.As(Time::MS));
     m_trigger.SetUlLength(ulLength);
 
+    //round-robbin
+    if (m_candidates.size())
+    {
+      auto it = m_staListToPoll.begin();
+      size_t nSaRUs = m_candidates.size();
+      std::advance(it, nSaRUs);
+
+      m_staListToPoll.splice(m_staListToPoll.end(), m_staListToPoll, m_staListToPoll.begin(), it);
+    }
+
+
     return UL_MU_TX;
 }
 
@@ -617,7 +628,7 @@ VlceMultiUserScheduler::TrySendingBasicTf()
         userInfo.SetBasicTriggerDepUserInfo(0, 0, m_edca->GetAccessCategory());
     }
 
-    UpdateCredits(m_staListToPoll, maxDuration, txVector);
+    //UpdateCredits(m_staListToPoll, maxDuration, txVector);
 
     return UL_MU_TX;
 }
