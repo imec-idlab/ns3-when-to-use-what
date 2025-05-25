@@ -290,11 +290,11 @@ int main(int argc, char *argv[])
       NS_ABORT_MSG ("Invalid PHY model (must be Yans or Spectrum)");
     }
 
-  if (dlAckSeqType != "NO-OFDMA")
+  /*if (dlAckSeqType != "NO-OFDMA")
     {
       // SpectrumWifiPhy is required for OFDMA
       phyModel = "Spectrum";
-    }
+    }*/
 
   /*
    * Type of resource unit tones
@@ -389,6 +389,10 @@ int main(int argc, char *argv[])
 
       Config::SetDefault("ns3::HeFrameExchangeManager::MuTxStartTime", TimeValue(Seconds(startLogTime)));
     }
+  else 
+  {
+    Config::SetDefault("ns3::HeFrameExchangeManager::MuTxStartTime", TimeValue(Seconds(simulationTime + startLogTime)));
+  }
 
   if (activateNaiks)
   {
@@ -416,7 +420,7 @@ int main(int argc, char *argv[])
   if (enableAggregation)
   {
     Config::SetDefault ("ns3::WifiRemoteStationManager::FragmentationThreshold", StringValue ("990000"));
-    Config::SetDefault ("ns3::WifiMac::VO_MaxAmpduSize", UintegerValue (6500631)); //6500631
+    Config::SetDefault ("ns3::WifiMac::VO_MaxAmpduSize", UintegerValue (0)); //6500631
     Config::SetDefault("ns3::WifiMac::VO_MaxAmsduSize", UintegerValue (11398)); //11398
   }
 
@@ -520,12 +524,32 @@ int main(int argc, char *argv[])
                   "BeaconInterval", TimeValue(MicroSeconds(102400)));
 
       apNetDevice = wifi.Install (phy, wifimac, wifiApNode);
-      phy.EnablePcap("wifi-ax-uora-ap", apNetDevice); // enable pcap tracing
-      phy.EnablePcap("wifi-ax-uora-sta", staNetDevices);
+      //phy.EnablePcap("wifi-ax-uora-ap", apNetDevice); // enable pcap tracing
+      //phy.EnablePcap("wifi-ax-uora-sta", staNetDevices);
     }
   else
     {
-      NS_ABORT_MSG("Invalid PHY model (must be Spectrum)");
+      Ptr<YansWifiChannel> channel = CreateObject<YansWifiChannel> ();
+      channel->SetPropagationLossModel (propModel);
+      channel->SetPropagationDelayModel (delayModel);
+
+      YansWifiPhyHelper YansPhy;
+      YansPhy.SetPcapDataLinkType (WifiPhyHelper::DLT_IEEE802_11_RADIO);
+      YansPhy.SetChannel (channel); //channel.Create ()
+      wifimac.SetType ("ns3::StaWifiMac", "Ssid", SsidValue (ssid));
+
+      YansPhy.Set ("ChannelSettings", StringValue (channelStr));
+      YansPhy.Set("TxPowerStart", DoubleValue(txPowerStart ));
+      YansPhy.Set("TxPowerEnd", DoubleValue(txPowerEnd ));
+      staNetDevices = wifi.Install (YansPhy, wifimac, wifiStaNodes);
+
+      wifimac.SetType ("ns3::ApWifiMac",
+                       "EnableBeaconJitter", BooleanValue (false),
+                       "Ssid", SsidValue (ssid),
+                       "VO_BlockAckThreshold", UintegerValue(0));
+      apNetDevice = wifi.Install (YansPhy, wifimac, wifiApNode);
+      YansPhy.EnablePcap("wifi-ax-edca-ap", apNetDevice); // enable pcap tracing
+      YansPhy.EnablePcap("wifi-ax-edca-sta", staNetDevices);
     }
 
   /*
