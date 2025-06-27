@@ -173,7 +173,7 @@ int main(int argc, char *argv[])
   bool randomStart {false};
   std::string accessCategory {"AC_VO"};
   bool enableAggregation {false};
-
+  double pMean {0.001};
 
   CommandLine cmd (__FILE__);
 
@@ -230,6 +230,7 @@ int main(int argc, char *argv[])
   cmd.AddValue ("interval", "Average inter-packet interval [s]", interval);
   cmd.AddValue ("accessCategory", "Access category for traffic: AC_BE, AC_BK, AC_VO, AC_VI", accessCategory);
   cmd.AddValue ("enableAggregation", "Enable/disable mpdu/msdu aggregation", enableAggregation);
+  cmd.AddValue ("pMean", "Exponential Mean for how often stations generate packets in Seconds", pMean);
 
 
 
@@ -377,8 +378,6 @@ int main(int argc, char *argv[])
       Config::SetDefault("ns3::QosTxop::LongerEDCADisable", BooleanValue(true));
       }
 
-        
-
       //STA timer (validity of set)
       Config::SetDefault ("ns3::HeConfiguration::BkMuEdcaTimer", TimeValue (MicroSeconds(muEdcaTimer) ));
       Config::SetDefault ("ns3::HeConfiguration::BeMuEdcaTimer", TimeValue (MicroSeconds(muEdcaTimer) ));
@@ -389,7 +388,7 @@ int main(int argc, char *argv[])
 
       Config::SetDefault("ns3::HeFrameExchangeManager::MuTxStartTime", TimeValue(Seconds(startLogTime)));
     }
-  else 
+  else
   {
     Config::SetDefault("ns3::HeFrameExchangeManager::MuTxStartTime", TimeValue(Seconds(simulationTime + startLogTime)));
   }
@@ -582,7 +581,7 @@ int main(int argc, char *argv[])
 
   //double staStartTime = 0;
   double staStartTimeTwo = startLogTime;
-  
+
   for (size_t i = 0; i < typeOneNStations + typeTwoNStations; i++)
   {
     //staStartTime += 0.00216;
@@ -591,7 +590,7 @@ int main(int argc, char *argv[])
     //InetSocketAddress remoteAddress = InetSocketAddress (staNodeInterfaces.GetAddress (i), port);
     //remoteAddress.SetTos (0xc0);
     UdpClientHelper staUdpClient (localAddress);
-    
+
     staUdpClient.SetAttribute("MaxPackets", UintegerValue(1));
     staUdpClient.SetAttribute("PacketSize", UintegerValue(1024));
     staUdpClient.SetAttribute ("EnableRandom", BooleanValue (false));
@@ -622,7 +621,7 @@ int main(int argc, char *argv[])
       intervalDistr << "ns3::ExponentialRandomVariable[Mean=" << 0.05 << "|Bound=0]";
       staUdpClientTwo.SetAttribute ("IntervalRandomVariable", StringValue (intervalDistr.str()));
 
-    }
+        }
     ApplicationContainer staUdpclientAppTwo = staUdpClientTwo.Install (wifiStaNodes.Get(i));
     if (randomStart)
     {
@@ -634,7 +633,7 @@ int main(int argc, char *argv[])
     {
       staUdpclientAppTwo.Start (Seconds (staStartTimeTwo));
     }
-    
+
     staUdpclientAppTwo.Stop (Seconds (simulationTime + startLogTime));
   }
 
@@ -658,7 +657,7 @@ int main(int argc, char *argv[])
         Ptr<HeFrameExchangeManager> heManager = DynamicCast<HeFrameExchangeManager>(fem);
         if (heManager)
         {
-          if (i < typeOneNStations) 
+          if (i < typeOneNStations)
           {
             //heManager->SetAttribute("HePartakeInUora", BooleanValue(true)); // Enable UORA
             heManager->SetAttribute ("PartakeInUoraTimer", TimeValue(MilliSeconds(0) ));
@@ -680,7 +679,7 @@ int main(int argc, char *argv[])
   Config::ConnectWithoutContext("/NodeList/*/ApplicationList/*/$ns3::PacketSink/RxWithAddresses", MakeBoundCallback(&RxTraceWithAddressParam, startLogTime));
 
 
-   
+
   ProgressBar pg (Seconds(simulationTime + startLogTime ));
   Simulator::Stop (Seconds (simulationTime + startLogTime ));
   Simulator::Run ();
