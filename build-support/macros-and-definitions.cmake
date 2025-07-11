@@ -437,6 +437,12 @@ macro(process_options)
       endif()
     else()
       add_compile_options(-Wall) # -Wextra
+      # Suppress specific warnings entirely
+      add_compile_options(
+        -Wno-deprecated-declarations
+        -Wno-unused-result
+        -Wno-template-id-cdtor
+      )
       if(${NS3_WARNINGS_AS_ERRORS})
         add_compile_options(-Werror -Wno-error=deprecated-declarations)
       endif()
