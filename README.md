@@ -1,3 +1,24 @@
+# OUR README
+
+To configure and build use these commands
+```shell
+./ns3 configure -d debug --disable-static --disable-gtk --disable-tests --disable-examples --cxx-standard=17
+```
+```shell
+./ns3 build
+```
+To run, move to the directory `when2usewhat_output` and run with the command
+```shell
+./run_experiment.sh
+```
+The above to run locally, testing that everything works well. Ensure that the
+variables are properly set up.
+
+Files in the `gnu-parallel` are to be used on the HPC cluster.
+
+
+
+
 # The Network Simulator, Version 3
 
 
