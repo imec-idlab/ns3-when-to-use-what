@@ -2,12 +2,6 @@
 /*
 !.gitignore
 !subdir/
-!scratch-simulator.cc
 !CMakeLists.txt
-#wifi-ax-simple
-#wifi-ax-simple1
-#wifi-ax-veloce
-#wifi-ax-uora
-!wifi-ax-uora-validation
-!wifi_ax_a2p_con_uora
+!wifi-ax-when2usewhat
 
