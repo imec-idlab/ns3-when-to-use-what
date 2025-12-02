@@ -161,6 +161,7 @@ int main(int argc, char *argv[])
   uint32_t OCwMax {127};
   bool LongerEdcaDisable {true};
   std::string Scheduler {"ns3::RrMultiUserScheduler"};
+  bool useA2Pv2 {false}; // Set value to use A2Pv2, uses VlceMultiUserSchedulerNoBsrp with no BSRP instead of the usual VlceMultiUserSchedulerN
   double  muEdcaTimer {8192};
   double maxCredit {1000000}; //amount credit a stations can have when using
                         //RrMultiUserScheduler, and how long to disable edca for
@@ -221,8 +222,14 @@ int main(int argc, char *argv[])
   cmd.AddValue ("OCwMin", "Min OFDMA CW", OCwMin);
   cmd.AddValue ("OCwMax", "Max OFDMA CW", OCwMax);
   cmd.AddValue ("Scheduler", "Type resource scheduler to use", Scheduler);
+
+  cmd.AddValue ("useA2Pv2",
+              "If true, use A2Pv2 (VlceMultiUserSchedulerNoBsrp: no BSRP, direct BasicTF).",
+              useA2Pv2); // New, use A2Pv2
+
+  // Todo : is this for uora?
   cmd.AddValue ("LongerEdcaDisable", "if True, disable EDCA for the duration of simulation", LongerEdcaDisable);
-  cmd.AddValue ("muEdcaTimer", "How long to disable EDCA for and for VlceMultiUserScheduler, how long to stay in polling list without transmission (in Seconds)", muEdcaTimer);
+  cmd.AddValue ("muEdcaTimer", "How long to disable EDCA for and for VlceMultiUserScheduler, how long to stay in polling list without transmission (in Seconds)", muEdcaTimer);  // todo : multi user scedualer for A2P?
 
 
 
@@ -236,6 +243,13 @@ int main(int argc, char *argv[])
 
 
   cmd.Parse (argc, argv);
+
+  if (useA2Pv2)
+  {
+    Scheduler = "ns3::VlceMultiUserSchedulerNoBsrp";
+    enableBsrp = false;   // be explicit: A2Pv2 does not use BSRP
+  }
+
 
 
   /*
@@ -500,11 +514,12 @@ int main(int argc, char *argv[])
 
       staNetDevices = wifi.Install (phy, wifimac, wifiStaNodes);
 
-      if (Scheduler == "ns3::VlceMultiUserScheduler")
+      if (Scheduler == "ns3::VlceMultiUserScheduler")  // Todo : do something with A2P?
         maxCredit = muEdcaTimer;
 
       if (dlAckSeqType != "NO-OFDMA")
         {
+          // Todo : what is happening here?
           wifimac.SetMultiUserScheduler (Scheduler,
                                       "EnableUlOfdma", BooleanValue (enableUlOfdma),
                                       "EnableBsrp", BooleanValue (enableBsrp),

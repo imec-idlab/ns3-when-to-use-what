@@ -53,6 +53,7 @@ set(source_files
     model/he/obss-pd-algorithm.cc
     model/he/rr-multi-user-scheduler.cc
     model/he/vlce-multi-user-scheduler.cc
+        model/he/vlce-multi-user-scheduler-no-bsrp.cc
     model/he/uora-multi-user-scheduler.cc
     model/ht/ht-capabilities.cc
     model/ht/ht-configuration.cc
@@ -205,6 +206,7 @@ set(header_files
     model/he/obss-pd-algorithm.h
     model/he/rr-multi-user-scheduler.h
     model/he/vlce-multi-user-scheduler.h
+        model/he/vlce-multi-user-scheduler-no-bsrp.h
     model/he/uora-multi-user-scheduler.h
     model/ht/ht-capabilities.h
     model/ht/ht-configuration.h
