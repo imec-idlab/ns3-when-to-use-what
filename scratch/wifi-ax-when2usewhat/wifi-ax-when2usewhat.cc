@@ -162,7 +162,7 @@ int main(int argc, char *argv[])
   bool LongerEdcaDisable {true};
   std::string Scheduler {"ns3::RrMultiUserScheduler"};
   bool useA2Pv2 {false}; // Set value to use A2Pv2, uses VlceMultiUserSchedulerNoBsrp with no BSRP instead of the usual VlceMultiUserSchedulerN
-  double  muEdcaTimer {8192};
+  double  muEdcaTimer {8192 * 5};
   double maxCredit {1000000}; //amount credit a stations can have when using
                         //RrMultiUserScheduler, and how long to disable edca for
                         //in VlceMultiUserScheduler in MicroSeconds

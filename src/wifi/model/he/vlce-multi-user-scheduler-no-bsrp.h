@@ -72,6 +72,10 @@ class VlceMultiUserSchedulerNoBsrp : public MultiUserScheduler
      *
      * \return UL_MU_TX if it is possible to send a BSRP TF, NO_TX otherwise
      */
+    /*
+    Changes made for A2Pv2
+
+    */
     virtual TxFormat TrySendingBsrpTf();
 
     /**
@@ -82,10 +86,7 @@ class VlceMultiUserSchedulerNoBsrp : public MultiUserScheduler
      *         to send a DL MU PPDU and NO_TX if the remaining time is too short
      */
 
-    /*
-    Changes made for A2Pv2
 
-    */
     virtual TxFormat TrySendingBasicTf();
 
     /**

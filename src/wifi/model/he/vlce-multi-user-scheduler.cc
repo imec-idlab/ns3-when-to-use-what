@@ -479,8 +479,7 @@ VlceMultiUserScheduler::TrySendingBasicTf()
     // reported a null queue size
     WifiTxVector txVector = GetTxVectorForUlMu([this](const MasterInfo& info) {
         const auto& staList = m_apMac->GetStaList(m_linkId);
-        return staList.find(info.aid) != staList.cend() &&
-               (m_apMac->GetMaxBufferStatus(info.address) > 0  && m_apMac->GetMaxBufferStatus(info.address) < 255);
+        return staList.find(info.aid) != staList.cend();
     }, true);
 
     if (txVector.GetHeMuUserInfoMap().empty())

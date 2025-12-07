@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH -A ap_idlab
+#SBATCH -A ap_idlab_thesis
 #SBATCH --nodes=1 --exclusive
 #SBATCH --time=10:50:00
 

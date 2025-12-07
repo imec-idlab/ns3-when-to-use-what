@@ -384,25 +384,12 @@ VlceMultiUserSchedulerNoBsrp::TrySendingBasicTf()
     // check if an UL OFDMA transmission is possible after a DL OFDMA transmission
     NS_ABORT_MSG_IF(m_ulPsduSize == 0, "The UlPsduSize attribute must be set to a non-null value");
 
-    // only consider stations
+    // only consider stations that have setup the current link and do not have
+    // reported a null queue size
     WifiTxVector txVector = GetTxVectorForUlMu([this](const MasterInfo& info) {
         const auto& staList = m_apMac->GetStaList(m_linkId);
-        // must be associated
-        if (staList.find(info.aid) == staList.cend())
-        {
-            return false;
-        }
-
-        // In A2Pv2: ignore buffer status completely.
-        // We only schedule STAs that are in the polling list (m_staListToPoll).
-        auto it = std::find_if(m_staListToPoll.begin(),
-                               m_staListToPoll.end(),
-                               [&info](const MasterInfo& m) {
-                                   return m.aid == info.aid;
-                               });
-        return it != m_staListToPoll.end();
+        return staList.find(info.aid) != staList.cend();
     }, true);
-
 
     if (txVector.GetHeMuUserInfoMap().empty())
     {
@@ -412,22 +399,42 @@ VlceMultiUserSchedulerNoBsrp::TrySendingBasicTf()
 
 
 
-    // In A2Pv2, we no longer rely on per-STA buffer status.
-    // We just assume each scheduled STA can send at least m_ulPsduSize bytes.
-    // basically, if you are on the list, just send data if you can
+    uint32_t maxBufferSize = 0;
 
-    uint32_t maxBufferSize = m_ulPsduSize;
-
-    // todo : GetHEMUUserInfoMap?
     for (const auto& candidate : txVector.GetHeMuUserInfoMap())
     {
-        if (!candidate.first)
+        //AID 0 is for Random Access RUs
+        if (!candidate.first) {maxBufferSize = ((m_ulPsduSize + 511) / 512 ) * 512;
+          continue;}//TODO: set to max buf size among users
+
+        // AID non-zero
+        auto address = m_apMac->GetMldOrLinkAddressByAid(candidate.first);
+        NS_ASSERT_MSG(address, "AID " << candidate.first << " not found");
+
+        uint8_t queueSize = m_apMac->GetMaxBufferStatus(*address);
+        if (queueSize == 255)
         {
-            // AID 0 is for Random Access RUs, keep the original alignment trick
-            maxBufferSize = std::max(maxBufferSize, ((m_ulPsduSize + 511) / 512) * 512);
+            NS_LOG_DEBUG("Buffer status of station " << *address << " is unknown");
+            maxBufferSize = std::max(maxBufferSize, m_ulPsduSize);
+        }
+        else if (queueSize == 254)
+        {
+            NS_LOG_DEBUG("Buffer status of station " << *address << " is not limited");
+            maxBufferSize = 0xffffffff;
+        }
+        else
+        {
+            NS_LOG_DEBUG("Buffer status of station " << *address << " is " << +queueSize);
+            maxBufferSize = std::max(maxBufferSize, static_cast<uint32_t>(queueSize * 256));
         }
     }
 
+
+
+    if (maxBufferSize == 0)
+    {
+        return DL_MU_TX;
+    }
 
     m_trigger = CtrlTriggerHeader(TriggerFrameType::BASIC_TRIGGER, txVector);
     txVector.SetGuardInterval(m_trigger.GetGuardInterval());
