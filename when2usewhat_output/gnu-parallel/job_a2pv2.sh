@@ -4,7 +4,6 @@
 set -e
 
 module purge
-ml calcua/supported
 ml GCC/13.3.0
 
 read $(echo "$1" | tr ',' ' ') < <(echo $2 | tr ',' ' ')
