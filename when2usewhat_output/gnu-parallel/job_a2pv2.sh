@@ -3,9 +3,6 @@
 
 set -e
 
-module purge
-ml GCC/13.3.0
-
 read $(echo "$1" | tr ',' ' ') < <(echo $2 | tr ',' ' ')
 
 NS3_BIN="$VSC_DATA/ns-3/ns3-when2usewhat/ns3"

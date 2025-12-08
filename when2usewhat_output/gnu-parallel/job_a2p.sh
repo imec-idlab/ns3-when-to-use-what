@@ -3,9 +3,6 @@
 
 set -e
 
-module purge
-ml GCC/13.3.0
-
 # Read header ($1) and data row ($2: "run,nSta")
 read $(echo "$1" | tr ',' ' ') < <(echo $2 | tr ',' ' ')
 
