@@ -5,8 +5,8 @@ set -e
 
 read $(echo "$1" | tr ',' ' ') < <(echo $2 | tr ',' ' ')
 
-NS3_BIN="$VSC_DATA/ns-3/ns3-when2usewhat/ns3"
-OUT_BASE="$VSC_DATA/ns-3/ns3-when2usewhat/when2usewhat_output/data"
+NS3_BIN="$VSC_DATA/ns3/ns3-when2usewhat/ns3"
+OUT_BASE="$VSC_DATA/ns3/ns3-when2usewhat/when2usewhat_output/data"
 
 typeTwoNStations=${nSta}
 typeOneNStations=8
