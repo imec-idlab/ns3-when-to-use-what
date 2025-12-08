@@ -4,7 +4,6 @@
 set -e
 
 module purge
-ml calcua/supported
 ml GCC/13.3.0
 
 # Read header ($1) and data row ($2: "run,nSta")
