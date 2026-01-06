@@ -23,128 +23,158 @@
 #include "ns3/ipv4-address.h"
 #include "ns3/ap-server.h"
 #include "ns3/sta-client.h"
+#include "ns3/xr-client.h"
+#include "ns3/xr-server.h"
 #include "veloce-app-container.h"
 
 namespace ns3 {
-/**
- * \ingroup udpclientserver
- * \brief Create a server application which waits for input UDP packets
- *        and uses the information carried into their payload to compute
- *        delay and to determine if some packets are lost.
- */
-class ApServerHelper
-{
-public:
-  /**
-   * Create UdpServerHelper which will make life easier for people trying
-   * to set up simulations with udp-client-server application.
-   *
-   */
-  ApServerHelper ();
-
-  /**
-   * Create UdpServerHelper which will make life easier for people trying
-   * to set up simulations with udp-client-server application.
-   *
-   * \param port The port the server will wait on for incoming packets
-   */
-  ApServerHelper (uint16_t port);
-
-
-  /**
-   * Record an attribute to be set in each Application after it is is created.
-   *
-   * \param name the name of the attribute to set
-   * \param value the value of the attribute to set
-   */
-  void SetAttribute (std::string name, const AttributeValue &value);
-
-  /**
-   * Create one UDP server application on each of the Nodes in the
-   * NodeContainer.
-   *
-   * \param c The nodes on which to create the Applications.  The nodes
-   *          are specified by a NodeContainer.
-   * \returns The applications created, one Application per Node in the
-   *          NodeContainer.
-   */
-  VeloceAppContainer Install (NodeContainer c);
-
-  /**
-   * \brief Return the last created server.
-   *
-   * This function is mainly used for testing.
-   *
-   * \returns a Ptr to the last created server application
-   */
-  Ptr<ApServer> GetServer (void);
-private:
-  ObjectFactory m_factory; //!< Object factory.
-  Ptr<ApServer> m_server; //!< The last created server application
-};
-
-
-/**
- * \ingroup udpclientserver
- * \brief Create a client application which sends UDP packets carrying
- *  a 32bit sequence number and a 64 bit time stamp.
- *
- */
-class StaClientHelper
-{
-
-public:
-  /**
-   * Create UdpClientHelper which will make life easier for people trying
-   * to set up simulations with udp-client-server.
-   *
-   */
-  StaClientHelper ();
-
-  /**
-   *  Create UdpClientHelper which will make life easier for people trying
-   * to set up simulations with udp-client-server. Use this variant with
-   * addresses that do not include a port value (e.g., Ipv4Address and
-   * Ipv6Address).
-   *
-   * \param ip The IP address of the remote UDP server
-   * \param port The port number of the remote UDP server
-   */
-
-  StaClientHelper (Address ip, uint16_t port);
-  /**
-   *  Create UdpClientHelper which will make life easier for people trying
-   * to set up simulations with udp-client-server. Use this variant with
-   * addresses that do include a port value (e.g., InetSocketAddress and
-   * Inet6SocketAddress).
-   *
-   * \param addr The address of the remote UDP server
-   */
-
-  StaClientHelper (Address addr);
-
-  /**
-   * Record an attribute to be set in each Application after it is is created.
-   *
-   * \param name the name of the attribute to set
-   * \param value the value of the attribute to set
-   */
-  void SetAttribute (std::string name, const AttributeValue &value);
-
-  /**
-     * \param c the nodes
-     *
-     * Create one UDP client application on each of the input nodes
-     *
-     * \returns the applications created, one application per input node.
+    /**
+     * \ingroup udpclientserver
+     * \brief Create a server application which waits for input UDP packets
+     *        and uses the information carried into their payload to compute
+     *        delay and to determine if some packets are lost.
      */
-  VeloceAppContainer Install (NodeContainer c);
+    class ApServerHelper {
+    public:
+        /**
+         * Create UdpServerHelper which will make life easier for people trying
+         * to set up simulations with udp-client-server application.
+         *
+         */
+        ApServerHelper();
 
-private:
-  ObjectFactory m_factory; //!< Object factory.
-};
+        /**
+         * Create UdpServerHelper which will make life easier for people trying
+         * to set up simulations with udp-client-server application.
+         *
+         * \param port The port the server will wait on for incoming packets
+         */
+        ApServerHelper(uint16_t port);
 
 
+        /**
+         * Record an attribute to be set in each Application after it is is created.
+         *
+         * \param name the name of the attribute to set
+         * \param value the value of the attribute to set
+         */
+        void SetAttribute(std::string name, const AttributeValue &value);
+
+        /**
+         * Create one UDP server application on each of the Nodes in the
+         * NodeContainer.
+         *
+         * \param c The nodes on which to create the Applications.  The nodes
+         *          are specified by a NodeContainer.
+         * \returns The applications created, one Application per Node in the
+         *          NodeContainer.
+         */
+        VeloceAppContainer Install(NodeContainer c);
+
+        /**
+         * \brief Return the last created server.
+         *
+         * This function is mainly used for testing.
+         *
+         * \returns a Ptr to the last created server application
+         */
+        Ptr<ApServer> GetServer(void);
+
+    private:
+        ObjectFactory m_factory; //!< Object factory.
+        Ptr<ApServer> m_server; //!< The last created server application
+    };
+
+
+    /**
+     * \ingroup udpclientserver
+     * \brief Create a client application which sends UDP packets carrying
+     *  a 32bit sequence number and a 64 bit time stamp.
+     *
+     */
+    class StaClientHelper {
+    public:
+        /**
+         * Create UdpClientHelper which will make life easier for people trying
+         * to set up simulations with udp-client-server.
+         *
+         */
+        StaClientHelper();
+
+        /**
+         *  Create UdpClientHelper which will make life easier for people trying
+         * to set up simulations with udp-client-server. Use this variant with
+         * addresses that do not include a port value (e.g., Ipv4Address and
+         * Ipv6Address).
+         *
+         * \param ip The IP address of the remote UDP server
+         * \param port The port number of the remote UDP server
+         */
+
+        StaClientHelper(Address ip, uint16_t port);
+
+        /**
+         *  Create UdpClientHelper which will make life easier for people trying
+         * to set up simulations with udp-client-server. Use this variant with
+         * addresses that do include a port value (e.g., InetSocketAddress and
+         * Inet6SocketAddress).
+         *
+         * \param addr The address of the remote UDP server
+         */
+
+        StaClientHelper(Address addr);
+
+        /**
+         * Record an attribute to be set in each Application after it is is created.
+         *
+         * \param name the name of the attribute to set
+         * \param value the value of the attribute to set
+         */
+        void SetAttribute(std::string name, const AttributeValue &value);
+
+        /**
+           * \param c the nodes
+           *
+           * Create one UDP client application on each of the input nodes
+           *
+           * \returns the applications created, one application per input node.
+           */
+        VeloceAppContainer Install(NodeContainer c);
+
+    private:
+        ObjectFactory m_factory; //!< Object factory.
+    };
+
+
+    class XrClientHelper {
+    public:
+        XrClientHelper();
+
+        XrClientHelper(Address ip, uint16_t port); // for Ipv4Address/Ipv6Address without port
+        XrClientHelper(Address addr); // for InetSocketAddress/Inet6SocketAddress with port
+
+        void SetAttribute(std::string name, const AttributeValue &value);
+
+        XrAppContainer Install(NodeContainer c) const;
+
+    private:
+        ObjectFactory m_factory;
+    };
+
+    class XrServerHelper
+    {
+    public:
+        XrServerHelper();
+        XrServerHelper(Address ip, uint16_t port); // without port
+        XrServerHelper(Address addr);              // with port
+
+        void SetAttribute(std::string name, const AttributeValue& value);
+
+        XrAppContainer Install(NodeContainer c) const;
+
+    private:
+        ObjectFactory m_factory;
+    };
 } // namespace ns3
 
 #endif /* AP_SERVER_HELPER_H */

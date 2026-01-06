@@ -20,89 +20,141 @@
 #include "ns3/log.h"
 #include "ns3/names.h"
 
-namespace ns3
-{
+namespace ns3 {
+    NS_LOG_COMPONENT_DEFINE("VeloceAppContainer");
 
-NS_LOG_COMPONENT_DEFINE("VeloceAppContainer");
-
-VeloceAppContainer::VeloceAppContainer()
-{
-}
-
-VeloceAppContainer::VeloceAppContainer(Ptr<Application> app)
-{
-    m_applications.push_back(app);
-}
-
-VeloceAppContainer::Iterator
-VeloceAppContainer::Begin() const
-{
-    return m_applications.begin();
-}
-
-VeloceAppContainer::Iterator
-VeloceAppContainer::End() const
-{
-    return m_applications.end();
-}
-
-uint32_t
-VeloceAppContainer::GetN() const
-{
-    return m_applications.size();
-}
-
-Ptr<Application>
-VeloceAppContainer::Get(uint32_t i) const
-{
-    return m_applications[i];
-}
-
-void
-VeloceAppContainer::Add(VeloceAppContainer other)
-{
-    for (Iterator i = other.Begin(); i != other.End(); i++)
-    {
-        m_applications.push_back(*i);
+    VeloceAppContainer::VeloceAppContainer() {
     }
-}
 
-void
-VeloceAppContainer::Add(Ptr<Application> application)
-{
-    m_applications.push_back(application);
-}
-
-void
-VeloceAppContainer::Start(Time start) const
-{
-    for (Iterator i = Begin(); i != End(); ++i)
-    {
-        Ptr<Application> app = *i;
-        app->SetStartTime(start);
+    VeloceAppContainer::VeloceAppContainer(Ptr<Application> app) {
+        m_applications.push_back(app);
     }
-}
 
-void
-VeloceAppContainer::StartWithJitter(Time start, Ptr<RandomVariableStream> rv) const
-{
-    for (Iterator i = Begin(); i != End(); ++i)
-    {
-        Ptr<Application> app = *i;
-        double value = rv->GetValue();
-        NS_LOG_DEBUG("Start application at time " << start.GetSeconds() + value << "s");
-        app->SetStartTime(start + Seconds(value));
+    VeloceAppContainer::Iterator
+    VeloceAppContainer::Begin() const {
+        return m_applications.begin();
     }
-}
 
-void
-VeloceAppContainer::Stop(Time stop) const
-{
-    for (Iterator i = Begin(); i != End(); ++i)
-    {
-        Ptr<Application> app = *i;
-        app->SetStopTime(stop);
+    VeloceAppContainer::Iterator
+    VeloceAppContainer::End() const {
+        return m_applications.end();
     }
-}
 
+    uint32_t
+    VeloceAppContainer::GetN() const {
+        return m_applications.size();
+    }
+
+    Ptr<Application>
+    VeloceAppContainer::Get(uint32_t i) const {
+        return m_applications[i];
+    }
+
+    void
+    VeloceAppContainer::Add(VeloceAppContainer other) {
+        for (Iterator i = other.Begin(); i != other.End(); i++) {
+            m_applications.push_back(*i);
+        }
+    }
+
+    void
+    VeloceAppContainer::Add(Ptr<Application> application) {
+        m_applications.push_back(application);
+    }
+
+    void
+    VeloceAppContainer::Start(Time start) const {
+        for (Iterator i = Begin(); i != End(); ++i) {
+            Ptr<Application> app = *i;
+            app->SetStartTime(start);
+        }
+    }
+
+    void
+    VeloceAppContainer::StartWithJitter(Time start, Ptr<RandomVariableStream> rv) const {
+        for (Iterator i = Begin(); i != End(); ++i) {
+            Ptr<Application> app = *i;
+            double value = rv->GetValue();
+            NS_LOG_DEBUG("Start application at time " << start.GetSeconds() + value << "s");
+            app->SetStartTime(start + Seconds(value));
+        }
+    }
+
+    void
+    VeloceAppContainer::Stop(Time stop) const {
+        for (Iterator i = Begin(); i != End(); ++i) {
+            Ptr<Application> app = *i;
+            app->SetStopTime(stop);
+        }
+    }
+
+
+    XrAppContainer::XrAppContainer() = default;
+
+    XrAppContainer::XrAppContainer(Ptr<Application> app) {
+        m_applications.push_back(app);
+    }
+
+    XrAppContainer::Iterator
+    XrAppContainer::Begin() const {
+        return m_applications.begin();
+    }
+
+    XrAppContainer::Iterator
+    XrAppContainer::End() const {
+        return m_applications.end();
+    }
+
+    uint32_t
+    XrAppContainer::GetN() const {
+        return static_cast<uint32_t>(m_applications.size());
+    }
+
+    Ptr<Application>
+    XrAppContainer::Get(uint32_t i) const {
+        return m_applications.at(i);
+    }
+
+    void
+    XrAppContainer::SetAttributeAll(std::string name, const AttributeValue& value)
+    {
+        for (auto it = Begin(); it != End(); ++it)
+        {
+            (*it)->SetAttribute(name, value);
+        }
+    }
+
+    void
+    XrAppContainer::Add(XrAppContainer other) {
+        for (Iterator i = other.Begin(); i != other.End(); ++i) {
+            m_applications.push_back(*i);
+        }
+    }
+
+    void
+    XrAppContainer::Add(Ptr<Application> application) {
+        m_applications.push_back(application);
+    }
+
+    void
+    XrAppContainer::Start(Time start) const {
+        for (Iterator i = Begin(); i != End(); ++i) {
+            (*i)->SetStartTime(start);
+        }
+    }
+
+    void
+    XrAppContainer::StartWithJitter(Time start, Ptr<RandomVariableStream> rv) const {
+        for (Iterator i = Begin(); i != End(); ++i) {
+            double value = rv->GetValue();
+            (*i)->SetStartTime(start + Seconds(value));
+        }
+    }
+
+    void
+    XrAppContainer::Stop(Time stop) const {
+        for (Iterator i = Begin(); i != End(); ++i) {
+            (*i)->SetStopTime(stop);
+        }
+    }
 } //ns3 namespace
