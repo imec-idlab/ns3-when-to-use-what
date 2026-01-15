@@ -820,7 +820,7 @@ int  main(int argc, char *argv[])
     }
     pktDistOutStream.close();
   }
-
+  /* No need to log individual delayed packets, we calculated it earlier
   for (auto &staStats : g_statsMap) {
     std::ostringstream mac_str;
     mac_str << staStats.first;
@@ -830,7 +830,7 @@ int  main(int argc, char *argv[])
       pktDistOutStream << staStats.second.pktTagLate[i] <<"\t"<< staStats.second.srcLate[i] <<"\t"<<staStats.second.genTimeLate[i] * 1000 <<"\t"<<staStats.second.rxTimeLate[i]* 1000<< "\t"<< staStats.second.pktDelaysLate[i] * 1000 << std::endl;
     }
     pktDistOutStream.close();
-  }
+  } */
   
   //std::ofstream pktDistOutStream;
   for (auto &staStats : g_statsMapAp) {
