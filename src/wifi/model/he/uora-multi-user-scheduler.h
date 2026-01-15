@@ -52,8 +52,8 @@ class UoraMultiUserScheduler : public MultiUserScheduler
     UoraMultiUserScheduler();
     ~UoraMultiUserScheduler() override;
 
-    void UpdatePollList(Mac48Address address) override;
-    void SetBtfnRaRus (size_t) override;
+    void UpdatePollList(Mac48Address address);
+    void SetBtfnRaRus (size_t);
 
   protected:
     void DoDispose() override;

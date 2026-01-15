@@ -655,15 +655,15 @@ QosFrameExchangeManager::PreProcessFrame(Ptr<const WifiPsdu> psdu, const WifiTxV
             {
                 uint8_t queueSize = 0;
                 /*if (hdr.HasData()){
-                  queueSize = hdr.GetQosQueueSize() - static_cast<uint8_t>(std::ceil(std::min(mpdu->GetPacketSize(), 64769U) / 256.0));
-                //} else {*/
+                  uint8_t dec = static_cast<uint8_t>(std::ceil(std::min(mpdu->GetPacketSize(), 64769U) / 256.0));
+                  queueSize = ( hdr.GetQosQueueSize() > dec ) ? hdr.GetQosQueueSize() - dec : 0;
+                } else {*/ 
                   queueSize = hdr.GetQosQueueSize();
                 //}
                 NS_LOG_DEBUG("Station " << hdr.GetAddr2() << " reported a buffer status of "
                                         << +hdr.GetQosQueueSize()
                                         << " actual queueSize saved by AP " << +queueSize
                                         << " for tid=" << +hdr.GetQosTid());
-
 
                 StaticCast<ApWifiMac>(m_mac)->SetBufferStatus(
                     hdr.GetQosTid(),

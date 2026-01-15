@@ -274,13 +274,15 @@ ApServer::HandleRead (Ptr<Socket> socket)
           m_received++;
 
           // check for delayed packet
-          if (!m_sentTags.empty() && std::find(m_sentTags.begin(), m_sentTags.end(),
+          // Tag Values are not unique enough so this checks may return true
+          /*if (!m_sentTags.empty() && std::find(m_sentTags.begin(), m_sentTags.end(),
                   m_tagValue ) !=  m_sentTags.end() )
           {
             latePacket = true;
           }
-          else if( m_strictWindow && ( ( (Simulator::Now() - seqTs.GetTs ()).GetMilliSeconds() ) >= m_interval.GetMilliSeconds()
-              || !(seqTs.GetTs().GetMilliSeconds() + m_interval.GetMilliSeconds() > Simulator::Now().GetMilliSeconds() ) )) {
+          else*/
+          if( m_strictWindow &&  ( (Simulator::Now() - seqTs.GetTs ()) ) >= m_interval) {
+              //|| !(seqTs.GetTs().GetMilliSeconds() + m_interval.GetMilliSeconds() > Simulator::Now().GetMilliSeconds() ) )) { NS_ASSERT(0);
             // outdated packets
             latePacket = true;
             m_sentTags.push_back(m_tagValue);

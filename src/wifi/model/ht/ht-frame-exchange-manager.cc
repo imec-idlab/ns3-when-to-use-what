@@ -51,8 +51,13 @@ HtFrameExchangeManager::GetTypeId()
                             .AddAttribute("DisableEDCA",
                                 "Disable edca or not by starting MUEDCA timer after a successful EDCA transmission",
                                 BooleanValue(false),
-                                MakeBooleanAccessor(&HtFrameExchangeManager::val),
-                                MakeBooleanChecker());
+                                MakeBooleanAccessor(&HtFrameExchangeManager::m_disableEdca),
+                                MakeBooleanChecker())
+                            .AddAttribute("HtMuTxStartTime",
+                                "Time when MU-TX starts and need to disable EDCA",
+                                TimeValue(Seconds(0.0)),
+                                MakeTimeAccessor(&HtFrameExchangeManager::m_muTxStartTime),
+                                MakeTimeChecker());
     return tid;
 }
 
@@ -720,7 +725,7 @@ HtFrameExchangeManager::NotifyReceivedNormalAck(Ptr<WifiMpdu> mpdu)
             // notify the BA manager that the MPDU was acknowledged
             edca->GetBaManager()->NotifyGotAck(m_linkId, mpdu);
         }
-        if(m_mac->GetTypeOfStation() == STA && val){
+        if(m_mac->GetTypeOfStation() == STA && m_disableEdca && Simulator::Now().GetSeconds() > m_muTxStartTime.GetSeconds()){
           edca->StartMuEdcaTimerNow(m_linkId);
         }
     }

@@ -120,6 +120,24 @@ class WifiMacHelper
     void SetMultiUserScheduler(std::string type, Args&&... args);
 
     /**
+     * Helper function used to set the Multi User Scheduler that can be aggregated
+     * to an HE AP's MAC.
+     *
+     * \param type the type of Multi User Scheduler
+     */
+    void SetMultiUserSchedulerNoAttr(std::string type);
+
+    /**
+     * Helper function used to set the attributes of a multi user scheduler
+     * objeat.
+     *
+     * \tparam name string name of the attribute.
+     * \param value value of the attribute to set.
+     */
+    void SetMultiUserSchedulerAttribute(std::string name, const AttributeValue &value);
+    
+
+    /**
      * \param device the device within which the MAC object will reside
      * \param standard the standard to configure during installation
      * \returns a new MAC object.

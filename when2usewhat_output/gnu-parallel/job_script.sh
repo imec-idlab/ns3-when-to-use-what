@@ -1,20 +1,112 @@
-#!/bin/bash
-#--nRaRus=${nRaRus} --pMean=${pMean} --OCwMin=${OCwMin}
+#!/usr/bin/env bash
 
-module purge
-ml calcua/supported
-ml GCC/13.3.0
+set -euo pipefail
 
-read $(echo "$1" | tr ',' ' ') < <(echo $2 | tr ',' ' ')
+MODE="$1"
+HEADER="$2"
+ROW="$3"
 
-$VSC_DATA/ns3-veloce/ns3 run --no-build "scratch/wifi-ax-when2usewhat/wifi-ax-when2usewhat \
-  --simulationTime=30 --typeTwoNStations=${nSta} --RngRun=${run} \
-  --accessCategory=AC_VO --phyModel=Yans --channelWidth=20 --mcs=8 \
-  --enableUlOfdma=true --enableBsrp=true --useRts=false \
-  --logDir=/data/antwerpen/208/vsc20879/edca_output_2/${run}_run-${nSta}_sta \
-  --ulPayloadSize=1700 --interval=0.00208 --maxDistance=40 --OCwMin=3 \
-  --useMuEdca=false --muSchedAccessReqInterval=16 --txPowerStart=40.0412 \
-  --txPowerEnd=40.0412 --UseCentral26TonesRus=true --TxOPLimits=2080 \
-  --startLogTime=5 --DelayAccessReqUponAccess=true  #--nRaRus=0 --pMean=5 \
-  --enableAggregation=true --ruAllocationType=ru-26-tone --activateNaiks=false \
-  --LongerEdcaDisable=true --Scheduler=ns3::RrMultiUserScheduler --muEdcaTimer=8192"
+read $(echo "$HEADER" | tr ',' ' ') < <(echo "$ROW" | tr ',' ' ')
+
+export NS_LOG=""
+
+BASE_ARGS="
+    --simulationTime=30
+    --RngRun=${run}
+    --logDir=/data/antwerpen/208/vsc20879/${MODE}/${run}_run-${nSta}_sta
+    --enableAggregation=true
+    --nMpdus=0
+    --nMsdus=10
+    --ruAllocationType=ru-26-tone
+    --startLogTime=5
+    "
+    
+BASE_OFDMA="
+    --phyModel=Spectrum
+    --dlAckType=AGGR-MU-BAR
+    --enableUlOfdma=true
+    --UseCentral26TonesRus=true
+    --DelayAccessReqUponAccess=true
+    "
+
+BASE_A2P="
+    ${BASE_OFDMA}
+    --useMuEdca=true
+    --muSchedAccessReqInterval=128
+    --scheduler=ns3::VlceMultiUserScheduler
+    "
+
+run_simulation() {
+  local extra_args="$1"
+
+  $VSC_DATA/ns3-veloce/ns3 run --no-build \
+                    "scratch/conference_when2usewhat/conference_when2usewhat \
+                    --nStationsToJoin=${nStationsToJoin} \
+                    ${BASE_ARGS} \
+                    ${extra_args}"
+}
+
+edca() {
+  run_simulation "
+    --phyModel=Yans
+    --simType=EDCA
+    --dlAckType=NO-OFDMA
+    --useMuEdca=false
+  "
+}
+
+
+ofdma() {
+    run_simulation "
+        ${BASE_OFDMA}
+        --simType=OFDMA
+        --useMuEdca=true
+        --muSchedAccessReqInterval=128
+        --scheduler=ns3::rrMultiUserScheduler
+    "
+}
+
+a2p() {
+    run_simulation "a2p" "
+        ${BASE_A2P}
+        --simType=A2P
+    "
+}
+
+a2pv2() {
+    run_simulation "a2pv2" "
+         ${BASE_A2P}
+         --enableBsrp=false
+         --simType=A2PV2
+    "
+}
+
+uora() {
+    run_simulation "uora" "
+        ${BASE_OFDMA}
+        --simType=EDCA \
+        --useMuEdca=true \
+        --muSchedAccessReqInterval=34 \
+        --DelayAccessReqUponAccess=true \
+        --LongerEdcaDisable=true \
+        --muEdcaTimer=8192 \
+        --scheduler=ns3::uoraMultiUserScheduler
+    "
+}
+
+# -
+#
+usage() {
+    echo "Usage: {edca|ofdma|a2p|a2pv2|uora} | Unknown mode: ${MODE}"
+    exit 1
+}
+
+
+case "${MODE}" in
+    edca|ofdma|a2p|a2pv2|uora)
+        "${MODE}"
+        ;;
+    *)
+        usage
+        ;;
+esac

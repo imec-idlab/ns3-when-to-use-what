@@ -54,9 +54,9 @@ class RrMultiUserScheduler : public MultiUserScheduler
 
     void RrStaList(Mac48Address address);
 
-    void UpdatePollList(Mac48Address address) override;
+    void UpdatePollList(Mac48Address address);
 
-    void SetBtfnRaRus (size_t) override;
+    void SetBtfnRaRus (size_t);
 
   protected:
     void DoDispose() override;

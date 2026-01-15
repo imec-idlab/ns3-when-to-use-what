@@ -116,4 +116,16 @@ WifiMacHelper::Create(Ptr<WifiNetDevice> device, WifiStandard standard) const
     return mac;
 }
 
+void
+WifiMacHelper::SetMultiUserSchedulerAttribute(std::string name, const AttributeValue &value)
+{
+  m_muScheduler.Set(name,value);
+}
+
+void
+WifiMacHelper::SetMultiUserSchedulerNoAttr(std::string name)
+{
+  m_muScheduler.SetTypeId(name);
+}
+
 } // namespace ns3

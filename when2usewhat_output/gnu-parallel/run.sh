@@ -1,4 +1,14 @@
 #!/bin/bash
 
-sbatch --nodes=1 --partition=zen3 wrapper.slurm params/a2p_validation.csv
+usage() {
+    echo "Usage: $0 {edca|ofdma|a2p|a2pv2|uora}"
+    exit 1
+}
 
+if [[ $# -ne 1 ]]; then
+    usage
+fi
+
+MODE="$1"
+
+MODE=${MODE} sbatch --nodes=1 --partition=zen3 wrapper.slurm params/${MODE}_input.csv

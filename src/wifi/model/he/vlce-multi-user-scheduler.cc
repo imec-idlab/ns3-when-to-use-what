@@ -39,12 +39,6 @@ NS_LOG_COMPONENT_DEFINE("VlceMultiUserScheduler");
 
 NS_OBJECT_ENSURE_REGISTERED(VlceMultiUserScheduler);
 
-void
-VlceMultiUserScheduler::SetBtfnRaRus (size_t num)
-{
-  m_nRaRusBtf = num;
-}
-
 TypeId
 VlceMultiUserScheduler::GetTypeId()
 {
@@ -90,20 +84,11 @@ VlceMultiUserScheduler::GetTypeId()
                           BooleanValue(false),
                           MakeBooleanAccessor(&VlceMultiUserScheduler::m_useCentral26TonesRus),
                           MakeBooleanChecker())
-            .AddAttribute("MaxCredits",
-                          "Maximum amount of credits a station can have. When transmitting a DL MU PPDU, "
-                          "the amount of credits received by each station equals the TX duration (in "
-                          "microseconds) divided by the total number of stations. Stations that are the "
-                          "recipient of the DL MU PPDU have to pay a number of credits equal to the TX "
-                          "duration (in microseconds) times the allocated bandwidth share",
+            .AddAttribute("MaxTimeInList", "How long a STA can be in the list without having any"
+                          "data sent accross",
                           TimeValue(MicroSeconds(8192*5)),
-                          MakeTimeAccessor(&VlceMultiUserScheduler::m_maxCredits),
+                          MakeTimeAccessor(&VlceMultiUserScheduler::m_maxTimeInList),
                           MakeTimeChecker())
-            .AddAttribute("NumRandomAccessRus",
-                          "Number of RUs that are reserved for random access",
-                          UintegerValue (0),
-                          MakeUintegerAccessor (&VlceMultiUserScheduler::m_nRaRus),
-                          MakeUintegerChecker<uint16_t> ())
             .AddAttribute("RuAllocationType",
                           "The type of RUs allocated to STAs, if undefined - dynamically selected based on the number of STAs",
                           EnumValue (HeRu::RU_UNDEFINED),
@@ -185,25 +170,57 @@ VlceMultiUserScheduler::SelectTxFormat()
         return SU_TX;
     }
 
-    if ( m_enableUlOfdma && m_enableBsrp && ( GetLastTxFormat(m_linkId) != UL_MU_TX ) )
+    auto ResetUlState = [&]() {
+      m_ulIdleState = m_enableBsrp ? UlIdleState::SEND_BSRP
+                                    : UlIdleState::SEND_BASIC;
+    };
+
+    if (mpdu || !m_enableUlOfdma)
     {
-        TxFormat txFormat = TrySendingBsrpTf();
+      ResetUlState();
+      return TrySendingDlMuPpdu();
+    }
+
+    if (m_enableBsrp)
+    {
+      TxFormat txFormat;
+
+      if (m_ulIdleState == UlIdleState::SEND_BSRP)
+      {
+        txFormat = TrySendingBsrpTf();
 
         if (txFormat != DL_MU_TX)
         {
-            return txFormat;
+          m_ulIdleState = UlIdleState::SEND_BASIC;
+          return txFormat;
         }
+      }
+      else if (m_ulIdleState == UlIdleState::SEND_BASIC)
+      {
+        txFormat = TrySendingBasicTf();
+
+        if (txFormat != DL_MU_TX)
+        {
+          m_ulIdleState = UlIdleState::SEND_BSRP;
+          return txFormat;
+        }
+      }
     }
-    else if (m_enableUlOfdma && ((GetLastTxFormat(m_linkId) != UL_MU_TX && !m_enableBsrp) ||
-                                 (GetLastTxFormat(m_linkId) == UL_MU_TX && m_trigger.GetType() == TriggerFrameType::BSRP_TRIGGER) ))
+    else
     {
+      if (m_ulIdleState == UlIdleState::SEND_BASIC)
+      {
         TxFormat txFormat = TrySendingBasicTf();
 
         if (txFormat != DL_MU_TX)
         {
-            return txFormat;
+          m_ulIdleState = UlIdleState::SEND_DLMU;
+          return txFormat;
         }
+      }
     }
+
+    ResetUlState();
     return TrySendingDlMuPpdu();
 }
 
@@ -213,24 +230,21 @@ void VlceMultiUserScheduler::UpdatePollList(Mac48Address address)
   NS_LOG_FUNCTION(this);
 
   auto it = std::find_if( m_staListUl.begin(), m_staListUl.end(),
-      [address](auto s){ return s.address == address;});
+      [address](const auto s){ return s.address == address;});
 
-  if (it != m_staListUl.end() ){
-    auto b = std::find_if(m_staListToPoll.begin(), m_staListToPoll.end(), [address](auto s){
+  if (it != m_staListUl.end() ) {
+    auto b = std::find_if(m_staListToPoll.begin(), m_staListToPoll.end(), [address](const auto s){
         return address == s.address;
         });
-    if (b == m_staListToPoll.end())
-        {
-          it->initCredit = Simulator::Now().ToDouble(Time::US);
-          it->credits = m_staListToPoll.front().credits;
+
+    if (b == m_staListToPoll.end()) {
+          it->inListTime = Simulator::Now();
           m_staListToPoll.emplace_front(*it);
         }
     else {
-      it->initCredit = Simulator::Now().ToDouble(Time::US);
+      b->inListTime = Simulator::Now();
     }
-
   }
-
 }
 
 
@@ -278,13 +292,15 @@ VlceMultiUserScheduler::GetTxVectorForUlMu(Func canbeSolicited, bool isBasicTrig
     {
         NS_LOG_DEBUG("Next candidate STA (MAC=" << staIt->address << ", AID=" << staIt->aid << ")");
 
+        if ( staIt->inListTime + m_maxTimeInList <= Simulator::Now())
+        {
+            staIt = m_staListToPoll.erase(staIt);
+            continue;
+        }
+
         if (!canbeSolicited(*staIt))
         {
             NS_LOG_DEBUG("Skipping station based on provided function object");
-            if ( staIt->initCredit + m_maxCredits.ToDouble(Time::US) <= Simulator::Now().ToDouble(Time::US)){
-              staIt = m_staListToPoll.erase(staIt);
-              continue;
-            }
             staIt++;
             continue;
         }
@@ -346,7 +362,7 @@ VlceMultiUserScheduler::GetTxVectorForUlMu(Func canbeSolicited, bool isBasicTrig
         staIt++;
     }
 
-    if (txVector.GetHeMuUserInfoMap().empty() && !m_nRaRus)
+    if (txVector.GetHeMuUserInfoMap().empty())
     {
         NS_LOG_DEBUG("No suitable station");
         for (size_t i = 0; i < std::min<std::size_t>(m_nStations, count + nCentral26TonesRus); i++)
@@ -372,7 +388,7 @@ VlceMultiUserScheduler::TrySendingBsrpTf()
         return TxFormat::SU_TX;
     }
 
-    if (!m_nRaRus && m_staListToPoll.empty()){
+    if (m_staListToPoll.empty()){
       NS_LOG_DEBUG("No stations in in poll list: return DL_MU_TX");
       return TxFormat::DL_MU_TX;
     }
@@ -448,14 +464,14 @@ VlceMultiUserScheduler::TrySendingBsrpTf()
     m_trigger.SetUlLength(ulLength);
 
     //round-robbin
-    if (m_candidates.size())
+    /*if (m_candidates.size())
     {
       auto it = m_staListToPoll.begin();
       size_t nSaRUs = m_candidates.size();
       std::advance(it, nSaRUs);
 
       m_staListToPoll.splice(m_staListToPoll.end(), m_staListToPoll, m_staListToPoll.begin(), it);
-    }
+    }*/
 
 
     return UL_MU_TX;
@@ -479,7 +495,8 @@ VlceMultiUserScheduler::TrySendingBasicTf()
     // reported a null queue size
     WifiTxVector txVector = GetTxVectorForUlMu([this](const MasterInfo& info) {
         const auto& staList = m_apMac->GetStaList(m_linkId);
-        return staList.find(info.aid) != staList.cend();
+        return staList.find(info.aid) != staList.cend() &&
+        m_apMac->GetMaxBufferStatus(info.address) > 0;
     }, true);
 
     if (txVector.GetHeMuUserInfoMap().empty())
@@ -496,7 +513,7 @@ VlceMultiUserScheduler::TrySendingBasicTf()
     {
         //AID 0 is for Random Access RUs
         if (!candidate.first) {maxBufferSize = ((m_ulPsduSize + 511) / 512 ) * 512;
-          continue;}//TODO: set to max buf size among users
+          continue; }//TODO: set to max buf size among users
 
         // AID non-zero
         auto address = m_apMac->GetMldOrLinkAddressByAid(candidate.first);
@@ -536,7 +553,7 @@ VlceMultiUserScheduler::TrySendingBasicTf()
     // compute the maximum amount of time that can be granted to stations.
     // This value is limited by the max PPDU duration
     Time maxDuration = GetPpduMaxTime(txVector.GetPreambleType());
-
+   
     m_txParams.Clear();
     // set the TXVECTOR used to send the Trigger Frame
     m_txParams.m_txVector =
@@ -557,8 +574,9 @@ VlceMultiUserScheduler::TrySendingBasicTf()
         // TryAddMpdu only considers the time to transmit the Trigger Frame
         NS_ASSERT(m_txParams.m_protection &&
                   m_txParams.m_protection->protectionTime != Time::Min());
-        NS_ASSERT(m_txParams.m_acknowledgment &&
-                  m_txParams.m_acknowledgment->acknowledgmentTime != Time::Min());
+        NS_ASSERT(m_txParams.m_acknowledgment && (
+                  m_txParams.m_acknowledgment->acknowledgmentTime != Time::Min()
+                  || m_txParams.m_acknowledgment->acknowledgmentTime.IsZero()));
         NS_ASSERT(m_txParams.m_txDuration != Time::Min());
 
         maxDuration = Min(maxDuration,
@@ -628,6 +646,15 @@ VlceMultiUserScheduler::TrySendingBasicTf()
     }
 
     //UpdateCredits(m_staListToPoll, maxDuration, txVector);
+
+    if (m_candidates.size())
+    {
+      auto it = m_staListToPoll.begin();
+      size_t nSaRUs = m_candidates.size();
+      std::advance(it, nSaRUs);
+
+      m_staListToPoll.splice(m_staListToPoll.end(), m_staListToPoll, m_staListToPoll.begin(), it);
+    }
 
     return UL_MU_TX;
 }
@@ -903,46 +930,14 @@ VlceMultiUserScheduler::FinalizeTxVector(WifiTxVector& txVector, bool isBasicTri
 
     NS_LOG_DEBUG(nRusAssigned << " stations are being assigned a " << ruType << " RU");
 
-    /*
-     * Calculate number of random access RUs
-     * and only used for bsrp reporting and reserv
-     */
-    std::size_t nRandomAccessRus = 0;
-    if (!isBasicTrigger)
-    {
-        nRandomAccessRus = m_nRaRus;
-        std::size_t totalRus = HeRu::GetNRus (m_allowedWidth, ruType);
-        std::size_t _26tonesRus = (m_useCentral26TonesRus) ? nCentral26TonesRus : 0;
 
-        if (totalRus + _26tonesRus < nRusAssigned + nRandomAccessRus)
-        {
-            if (_26tonesRus > 0 && _26tonesRus >= nRandomAccessRus)
-            {
-                nCentral26TonesRus -= nRandomAccessRus;
-            }
-            else
-            {
-                nCentral26TonesRus = 0;
-                std::size_t neededRus = nRandomAccessRus - _26tonesRus;
-                if (totalRus < neededRus)
-                {
-                    nRandomAccessRus = totalRus + _26tonesRus;
-                }
-                else
-                {
-                    nRusAssigned -= neededRus - (totalRus - nRusAssigned);
-                }
-            }
-        }
-    }
-
-    if (!m_useCentral26TonesRus || m_candidates.size() + nRandomAccessRus == nRusAssigned)
+    if (!m_useCentral26TonesRus || m_candidates.size() == nRusAssigned)
     {
         nCentral26TonesRus = 0;
     }
     else
     {
-        nCentral26TonesRus = std::min(m_candidates.size() + nRandomAccessRus - nRusAssigned, nCentral26TonesRus);
+        nCentral26TonesRus = std::min(m_candidates.size() - nRusAssigned, nCentral26TonesRus);
         NS_LOG_DEBUG(nCentral26TonesRus << " stations are being assigned a 26-tones RU");
     }
 
@@ -972,38 +967,6 @@ VlceMultiUserScheduler::FinalizeTxVector(WifiTxVector& txVector, bool isBasicTri
     // remove candidates that will not be served
     m_candidates.erase(candidateIt, m_candidates.end());
 
-    //assign random access RUs
-    uint8_t minMcs = UINT8_MAX;
-    uint8_t minNss = UINT8_MAX;
-    for (auto &user : heMuUserInfoMap)
-    {
-        if (user.second.mcs < minMcs) minMcs = user.second.mcs;
-        if (user.second.nss < minNss) minNss = user.second.nss;
-    }
-    for (std::size_t i = 0; i < nRandomAccessRus; i++)
-    {
-        if (minMcs == UINT8_MAX || minNss == UINT8_MAX)
-        {
-          /*
-           * At this point we just choose a random station to have its mcs and
-           * nss values.
-           */
-          auto staIt = m_staListUl.begin();
-          WifiMacHeader hdr(WIFI_MAC_QOSDATA);
-          hdr.SetAddr1(GetWifiRemoteStationManager(m_linkId)
-                         ->GetAffiliatedStaAddress(staIt->address)
-                         .value_or(staIt->address));
-          hdr.SetAddr2(m_apMac->GetFrameExchangeManager(m_linkId)->GetAddress());
-          WifiTxVector suTxVector =
-              GetWifiRemoteStationManager(m_linkId)->GetDataTxVector(hdr, m_allowedWidth);
-
-          minNss = suTxVector.GetNss();
-          minMcs = suTxVector.GetMode().GetMcsValue();
-        }
-        HeMuUserInfo info = {(ruSetIt != ruSet.end () ? *ruSetIt++ : *central26TonesRusIt++), minMcs, minNss};
-        info.ru.SetRandomAccessFlag (true);
-        txVector.SetHeMuUserInfo(0, info); //AID 0 = RANDOM ACCESS RU
-    }
 }
 
 void
@@ -1053,7 +1016,7 @@ VlceMultiUserScheduler::UpdateCredits(std::list<MasterInfo>& staList,
     // transmitting
     staList.sort([](const MasterInfo& a, const MasterInfo& b) { return a.credits < b.credits; });
 
-    staList.remove_if([&](const MasterInfo& a) { return a.initCredit + m_maxCredits.ToDouble(Time::US) <= Simulator::Now().ToDouble(Time::US); });
+    staList.remove_if([&](const MasterInfo& a) { return a.initCredit + m_maxTimeInList.ToDouble(Time::US) <= Simulator::Now().ToDouble(Time::US); });
 }
 
 MultiUserScheduler::DlMuInfo

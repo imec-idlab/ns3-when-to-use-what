@@ -21,8 +21,8 @@
 
 #include "he-configuration.h"
 #include "he-phy.h"
-#include "multi-user-scheduler.h"
-#include "rr-multi-user-scheduler.h"
+//#include "multi-user-scheduler.h"
+#include "vlce-multi-user-scheduler.h"
 
 
 #include "ns3/abort.h"
@@ -208,7 +208,7 @@ HeFrameExchangeManager::StartFrameExchange(Ptr<QosTxop> edca, Time availableTime
                                                        mpdu->GetHeader().GetQosTid()))))
     {
         if (m_val){
-          m_muScheduler->SetBtfnRaRus(m_numRaRus);
+          //m_muScheduler->SetBtfnRaRus(m_numRaRus);
         }
         txFormat = m_muScheduler->NotifyAccessGranted(edca,
                                                       availableTime,
@@ -1974,9 +1974,9 @@ HeFrameExchangeManager::ReceiveBasicTrigger(CtrlTriggerHeader& trigger,
                                             : Create<WifiPsdu>(item, true));
                 break;
             }
-            //else {if (Simulator::Now().GetSeconds() > 5) NS_ASSERT(0);}
+            //else {if (Simulator::Now().GetSeconds() > 3) NS_ASSERT(0);}
         }
-        //else {if (Simulator::Now().GetSeconds() > 5)NS_ASSERT(0);}
+        //else {if (Simulator::Now().GetSeconds() > 3)NS_ASSERT(0);}
     }
 
     if (psdu)
@@ -2527,6 +2527,12 @@ HeFrameExchangeManager::ReceiveMpdu(Ptr<const WifiMpdu> mpdu,
                                                     std::cref(m_txParams),
                                                     mpdu->GetHeader().GetDuration());
         }
+        if (auto vlce = DynamicCast<VlceMultiUserScheduler> (m_muScheduler);
+            vlce != nullptr)
+        {
+          vlce->UpdatePollList(hdr.GetAddr2());
+        }
+
 
         // remove the sender from the set of stations that are expected to send a TB PPDU
         m_staExpectTbPpduFrom.erase(sender);
@@ -3022,12 +3028,12 @@ HeFrameExchangeManager::ReceiveMpdu(Ptr<const WifiMpdu> mpdu,
         return;
     }
 
-    if (m_muScheduler != nullptr && !hdr.IsCtl() && hdr.IsQosData() && hdr.HasData() &&
-        hdr.GetAddr1() == m_self &&
-        m_muScheduler->GetInstanceTypeId().GetName() == "ns3::VlceMultiUserScheduler"
+    if (auto vlce = DynamicCast<VlceMultiUserScheduler> (m_muScheduler);
+        vlce != nullptr && !hdr.IsCtl() && hdr.IsQosData() && hdr.HasData()
+        && hdr.GetAddr1() == m_self
         )
     {
-      m_muScheduler->UpdatePollList(hdr.GetAddr2());
+      vlce->UpdatePollList(hdr.GetAddr2());
     }
     // the received frame cannot be handled here
     VhtFrameExchangeManager::ReceiveMpdu(mpdu, rxSignalInfo, txVector, inAmpdu);

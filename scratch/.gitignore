@@ -4,4 +4,7 @@
 !subdir/
 !CMakeLists.txt
 !wifi-ax-when2usewhat
+!IIoT_when2usewhat
+!conference_when2usewhat
+!xr_when2usewhat
 

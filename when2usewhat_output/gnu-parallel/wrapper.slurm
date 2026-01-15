@@ -39,14 +39,14 @@ echo "# Run script: ${RUN}"
 echo "# Log file: ${LOG}"
 
 HEADER=$(head -1 "${CSV}")
-parallel -P $((${SLURM_NNODES}*${SLURM_CPUS_ON_NODE})) -a ${CSV} --resume-failed --ungroup --tag --joblog ${LOG} --header '.*\n' srun --exclusive -N1 -n1 -c1 ${RUN} "${HEADER}"
+parallel -P $((${SLURM_NNODES}*${SLURM_CPUS_ON_NODE})) -a ${CSV} --resume-failed --ungroup --tag --joblog ${LOG} --header '.*\n' srun --exclusive -N1 -n1 -c1 ${RUN} "${MODE}" "${HEADER}"
 
 exitcode=$?
 
 if [[ $exitcode == 0 ]] ; then
   echo "# Result: all $(($(wc -l ${CSV} | awk '{print $1}') - 1)) job steps ran successfully"
 else
-  missing=$(parallel --dry-run -a ${CSV} --resume-failed --joblog ${LOG} --header : {} | wc -l)
+  missing=$(parallel --dry-run -a ${CSV} --resume-failed --joblog ${LOG} --header '.*\n' srun --exclusive -N1 -n1 -c1 ${RUN} "${MODE}" "${HEADER}" | wc -l)
   echo "# Result: some jobs failed, still need to run $missing job steps"
   exit $exitcode
 fi

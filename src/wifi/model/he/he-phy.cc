@@ -1865,7 +1865,7 @@ HePhy::GetRxPpduFromTxPpdu(Ptr<const WifiPpdu> ppdu)
         HeMuUserInfo info;
         Ptr<const WifiPsdu> psdu = hePpdu->GetPsdu (ppdu->GetTxVector ().GetBssColor (), ppdu->GetStaId ());
         bool found = psdu->GetRaRuUserInfo (info);
-        if (m_trigVector->IsUlMu () && found)
+        if (m_trigVector.has_value() && m_trigVector->IsUlMu () && found)
         {
             m_trigVector->SetHeMuUserInfo (ppdu->GetStaId (), info); //No need to delete corresponding HeMuUserInfo with staId=0
         }

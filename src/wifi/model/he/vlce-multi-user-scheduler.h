@@ -52,8 +52,7 @@ class VlceMultiUserScheduler : public MultiUserScheduler
     VlceMultiUserScheduler();
     ~VlceMultiUserScheduler() override;
 
-    void UpdatePollList(Mac48Address address) override;
-    void SetBtfnRaRus (size_t) override;
+    void UpdatePollList(Mac48Address address);
   protected:
     void DoDispose() override;
     void DoInitialize() override;
@@ -127,6 +126,13 @@ class VlceMultiUserScheduler : public MultiUserScheduler
         Mac48Address address; //!< station's MAC Address
         double credits;       //!< credits accumulated by the station
         double initCredit;
+        Time inListTime;
+    };
+    enum class UlIdleState
+    {
+      SEND_BSRP,
+      SEND_BASIC,
+      SEND_DLMU
     };
 
     /**
@@ -171,14 +177,13 @@ class VlceMultiUserScheduler : public MultiUserScheduler
         m_staListDl;                       //!< Per-AC list of stations (next to serve for DL first)
     std::list<MasterInfo> m_staListUl, m_staListToPoll;     //!< List of stations to serve for UL
     std::list<CandidateInfo> m_candidates; //!< Candidate stations for MU TX
-    Time m_maxCredits;                     //!< Max amount of credits a station can have
+    Time m_maxTimeInList;                   //!< How long a STA can be in list without sending a data accross
     CtrlTriggerHeader m_trigger;           //!< Trigger Frame to send
     WifiMacHeader m_triggerMacHdr;         //!< MAC header for Trigger Frame
     WifiTxParameters m_txParams;           //!< TX parameters
 
-    uint16_t m_nRaRus; //!< Number of RUs that are reserved for random access
-    uint16_t m_nRaRusBtf;
     HeRu::RuType m_ruAllocationType; //!< The type of RUs allocated to STAs
+    UlIdleState m_ulIdleState = UlIdleState::SEND_BSRP;
 };
 
 } // namespace ns3
