@@ -2,13 +2,18 @@
 
 set -euo pipefail
 
-MODE="$1"
-HEADER="$2"
-ROW="$3"
+MODE="${1:?MODE not set}"
+HEADER="${2:?HEADER missing}"
+ROW="${3:?ROW missing}"
 
 read $(echo "$HEADER" | tr ',' ' ') < <(echo "$ROW" | tr ',' ' ')
 
 export NS_LOG=""
+
+: "${run:?Missing run}"
+: "${nStationsToJoin:?Missing nStationsToJoin}"
+
+nSta=$((8 + nStationsToJoin))
 
 BASE_ARGS="
     --simulationTime=30
@@ -39,7 +44,7 @@ BASE_A2P="
 run_simulation() {
   local extra_args="$1"
 
-  $VSC_DATA/ns3-veloce/ns3 run --no-build \
+  $VSC_DATA/ns3-when2usewhat/ns3 run --no-build \
                     "scratch/conference_when2usewhat/conference_when2usewhat \
                     --nStationsToJoin=${nStationsToJoin} \
                     ${BASE_ARGS} \

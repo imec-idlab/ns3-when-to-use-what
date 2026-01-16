@@ -11,4 +11,4 @@ fi
 
 MODE="$1"
 
-MODE=${MODE} sbatch --nodes=1 --partition=zen3 wrapper.slurm params/${MODE}_input.csv
+sbatch --nodes=4 --partition=zen3 --export=ALL,MODE="$MODE" wrapper.slurm params/${MODE}_input.csv

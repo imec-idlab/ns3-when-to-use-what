@@ -158,8 +158,8 @@ int  main(int argc, char *argv[])
   std::string logDir {"output"};
   double minDistance {1.0}; //meters
   double maxDistance {40}; //meters
-  std::size_t totalNStations {1};
-  std::size_t initNStations = {0};
+  std::size_t totalNStations {100};
+  std::size_t initNStations = {8};
   std::size_t nStationsToJoin = {0};
   double apHeight {3}; //meters
   double staHeight {1}; //meters
