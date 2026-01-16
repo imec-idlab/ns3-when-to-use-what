@@ -52,12 +52,6 @@ class RrMultiUserScheduler : public MultiUserScheduler
     RrMultiUserScheduler();
     ~RrMultiUserScheduler() override;
 
-    void RrStaList(Mac48Address address);
-
-    void UpdatePollList(Mac48Address address);
-
-    void SetBtfnRaRus (size_t);
-
   protected:
     void DoDispose() override;
     void DoInitialize() override;
@@ -132,6 +126,13 @@ class RrMultiUserScheduler : public MultiUserScheduler
         double credits;       //!< credits accumulated by the station
     };
 
+    enum class UlIdleState
+    {
+      SEND_BSRP,
+      SEND_BASIC,
+      SEND_DLMU
+    };
+
     /**
      * Finalize the given TXVECTOR by only including the largest subset of the
      * current set of candidate stations that can be allocated equal-sized RUs
@@ -170,20 +171,15 @@ class RrMultiUserScheduler : public MultiUserScheduler
     uint32_t m_ulPsduSize;       //!< the size in byte of the solicited PSDU
     std::map<AcIndex, std::list<MasterInfo>>
         m_staListDl;                       //!< Per-AC list of stations (next to serve for DL first)
-    std::list<MasterInfo> m_staListUl, m_staListUlBsrp;     //!< List of stations to serve for UL
+    std::list<MasterInfo> m_staListUl;     //!< List of stations to serve for UL
     std::list<CandidateInfo> m_candidates; //!< Candidate stations for MU TX
     Time m_maxCredits;                     //!< Max amount of credits a station can have
     CtrlTriggerHeader m_trigger;           //!< Trigger Frame to send
     WifiMacHeader m_triggerMacHdr;         //!< MAC header for Trigger Frame
     WifiTxParameters m_txParams;           //!< TX parameters
 
-    uint16_t m_nRaRus; //!< Number of RUs that are reserved for random access
-    uint16_t m_nRaRusBtf; //!< Number of RUs that are reserved for random access
-                          //after BsrpTF.... This is to simulates Naik's approach
-    bool m_activateNaiks; //!< To use collided or idle RUs from Bsrp in Basic or
-                          //not
-    
     HeRu::RuType m_ruAllocationType; //!< The type of RUs allocated to STAs
+    UlIdleState m_ulIdleState = UlIdleState::SEND_BSRP;
 };
 
 } // namespace ns3

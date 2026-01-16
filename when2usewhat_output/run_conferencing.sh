@@ -62,9 +62,9 @@ ofdma() {
     run_simulation "ofdma" "
         ${BASE_OFDMA}
         --simType=OFDMA
-        --useMuEdca=false
+        --useMuEdca=true
         --muSchedAccessReqInterval=128
-        --scheduler=ns3::rrMultiUserScheduler
+        --scheduler=ns3::RrMultiUserScheduler
     "
 }
 
