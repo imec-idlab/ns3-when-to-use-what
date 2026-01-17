@@ -67,7 +67,7 @@ ofdma() {
         --simType=OFDMA
         --useMuEdca=true
         --muSchedAccessReqInterval=128
-        --scheduler=ns3::rrMultiUserScheduler
+        --scheduler=ns3::RrMultiUserScheduler
     "
 }
 
@@ -95,7 +95,7 @@ uora() {
         --DelayAccessReqUponAccess=true \
         --LongerEdcaDisable=true \
         --muEdcaTimer=8192 \
-        --scheduler=ns3::uoraMultiUserScheduler
+        --scheduler=ns3::UoraMultiUserScheduler
     "
 }
 
