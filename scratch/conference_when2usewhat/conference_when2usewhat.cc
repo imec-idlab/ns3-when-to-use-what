@@ -382,12 +382,13 @@ int  main(int argc, char *argv[])
           muEdcaTimer = 8192 * 5;
           maxTimeInList = muEdcaTimer;
 
+          Config::SetDefault("ns3::HtFrameExchangeManager::HtMuTxStartTime", TimeValue(Seconds(startLogTime)));
         }
-        else if (simType == "OFDMA") {
+        /*else if (simType == "OFDMA") {
           muEdcaTimer = 2088960;
 
-        }
-        else if (simType =="UORA") {
+        }*/
+        else if (simType =="UORA" || simType == "OFDMA") {
           //STA timer (validity of set)
           /* Disable EDCA for the duration of the entire simulation:
            *    Calculate the ceiling multiple of
@@ -409,8 +410,7 @@ int  main(int argc, char *argv[])
 
         Config::SetDefault("ns3::HtFrameExchangeManager::DisableEDCA", BooleanValue(true));
         Config::SetDefault("ns3::HeFrameExchangeManager::MuTxStartTime", TimeValue(Seconds(startLogTime)));
-        Config::SetDefault("ns3::HtFrameExchangeManager::HtMuTxStartTime", TimeValue(Seconds(startLogTime)));
-
+        
   }
 
   //sifs and slot time
