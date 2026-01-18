@@ -72,14 +72,14 @@ ofdma() {
 }
 
 a2p() {
-    run_simulation "a2p" "
+    run_simulation "
         ${BASE_A2P}
         --simType=A2P
     "
 }
 
 a2pv2() {
-    run_simulation "a2pv2" "
+    run_simulation "
          ${BASE_A2P}
          --enableBsrp=false
          --simType=A2PV2
@@ -87,7 +87,7 @@ a2pv2() {
 }
 
 uora() {
-    run_simulation "uora" "
+    run_simulation "
         ${BASE_OFDMA}
         --simType=EDCA \
         --useMuEdca=true \
