@@ -40,6 +40,11 @@ namespace ns3 {
                               AddressValue(),
                               MakeAddressAccessor(&XrPacketGenerationUdpApp::m_peer),
                               MakeAddressChecker())
+                .AddAttribute("RemotePort",
+                      "The destination port of the outbound packets",
+                      UintegerValue(0),
+                      MakeUintegerAccessor(&XrPacketGenerationUdpApp::m_port),
+                      MakeUintegerChecker<uint16_t>())
                 /*.AddAttribute ("PacketSize",
                                "Size of packets generated. The minimum packet size is 12 \
                                bytes which is the size of the header carrying the sequence \
@@ -49,13 +54,18 @@ namespace ns3 {
                                MakeUintegerChecker<uint32_t> (12,65507))*/
                 .AddAttribute("EnableRandom",
                               "For random traffic instead of CBR",
-                              BooleanValue(false),
+                              BooleanValue(true),
                               MakeBooleanAccessor(&XrPacketGenerationUdpApp::m_enableRandom),
                               MakeBooleanChecker())
                 .AddAttribute("InitPacketSentDelay",
                               "Time to start sending initial packets", TimeValue(Seconds(0.0)),
                               MakeTimeAccessor(&XrPacketGenerationUdpApp::m_initPacketSentDelay),
                               MakeTimeChecker())
+                .AddAttribute ("Tos",
+                       "Value of type of service",
+                       UintegerValue (0),
+                       MakeUintegerAccessor (&XrPacketGenerationUdpApp::m_tos),
+                       MakeUintegerChecker<uint8_t> ())
 
 
                 // todo : do we need this?
@@ -98,17 +108,6 @@ namespace ns3 {
         return tid;
     }
 
-    /*XrPacketGenerationUdpApp::StaClient ()
-    {
-        NS_LOG_FUNCTION (this);
-        m_sent = 0;
-        m_totalTx = 0;
-        m_socket = 0;
-        m_sendEvent = EventId ();
-        m_tagValue = 0;
-    }*/
-
-
     void
     XrPacketGenerationUdpApp::DoDispose(void) {
         Application::DoDispose();
@@ -119,6 +118,7 @@ namespace ns3 {
         : m_socket(nullptr),
           m_rng(nullptr),
           m_interval(Seconds(1.0)),
+          m_tos(0),
           m_cycleEvent(),
           m_count(0),
           m_intervalRandomVariable(nullptr),
@@ -134,6 +134,7 @@ namespace ns3 {
           m_onOffFlag(false),
           m_sent(0),
           m_totalTx(0),
+          m_port(0),
           m_sendEvent(),
           m_tagValue(0) {
     }
@@ -150,7 +151,13 @@ namespace ns3 {
         NS_LOG_FUNCTION(this);
         if (m_socket == nullptr) {
             m_socket = Socket::CreateSocket(GetNode(), UdpSocketFactory::GetTypeId());
-            m_socket->Connect(m_peer);
+            if (InetSocketAddress::IsMatchingType(m_peer)) {
+                Ipv4Address addr = InetSocketAddress::ConvertFrom(m_peer).GetIpv4();
+                m_socket->Connect(InetSocketAddress(addr, m_port));
+            } else {
+                m_socket->Connect(m_peer);
+            }
+            m_socket->SetIpTos(m_tos);
         }
         m_socket->SetRecvCallback(MakeNullCallback<void, Ptr<Socket> >());
         m_socket->SetAllowBroadcast(true);
@@ -210,9 +217,6 @@ namespace ns3 {
 
         if (m_enableRandom) {
             double t = m_rng->GetValue(0.0, m_interval.GetSeconds());
-            if (t >= m_interval.GetSeconds()) {
-                t = std::nextafter(m_interval.GetSeconds(), 0.0);
-            }
             offset = Seconds(t);
         }
 

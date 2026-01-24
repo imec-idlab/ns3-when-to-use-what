@@ -10,10 +10,13 @@
 namespace ns3 {
     class XrPacketGenerationUdpApp : public Application {
     public:
+        /**
+        * \brief Get the type ID.
+        * \return the object TypeId
+        */
         static TypeId GetTypeId(void);
 
         XrPacketGenerationUdpApp();
-
         ~XrPacketGenerationUdpApp() override;
 
         void Setup(Address addr, Time interval);
@@ -26,6 +29,9 @@ namespace ns3 {
 
         void StopApplication() override;
 
+        /**
+        * \brief Schedule 4 packets uniformly within [0, m_interval), 3 x 106B, 1 x 212B
+        */
         void ScheduleNextCycle();
 
         void ScheduleSendInCycle(uint32_t sizeBytes);
@@ -35,6 +41,7 @@ namespace ns3 {
         Ptr<Socket> m_socket;
         Ptr<UniformRandomVariable> m_rng;
         Time m_interval;
+        uint8_t m_tos;
 
         EventId m_cycleEvent;
         std::vector<EventId> m_sendEvents;
@@ -59,6 +66,7 @@ namespace ns3 {
         uint32_t m_sent; //!< Counter for sent packets
         uint64_t m_totalTx; //!< Total bytes sent
         Address m_peer; //!< Remote peer address
+        uint16_t    m_port;
         EventId m_sendEvent; //!< Event to send the next packet
 #ifdef NS3_LOG_ENABLE
         std::string m_peerAddressString; //!< Remote peer address string

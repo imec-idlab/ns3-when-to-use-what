@@ -188,7 +188,6 @@ int main(int argc, char *argv[]) {
 
 
     if (useA2Pv2) Scheduler = "ns3::VlceMultiUserSchedulerNoBsrp";
-
     /*
     * make and change into the lodDir
     */
@@ -432,8 +431,8 @@ int main(int argc, char *argv[]) {
                         "BeaconInterval", TimeValue(MicroSeconds(102400)));
 
         apNetDevice = wifi.Install(phy, wifimac, wifiApNode);
-        //phy.EnablePcap("wifi-ax-uora-ap", apNetDevice); // enable pcap tracing
-        //phy.EnablePcap("wifi-ax-uora-sta", staNetDevices);
+        //phy.EnablePcap("xr-ap", apNetDevice.Get(0), true);
+        //phy.EnablePcap("xr-sta", staNetDevices, true);
     } else {
         Ptr<YansWifiChannel> channel = CreateObject<YansWifiChannel>();
         channel->SetPropagationLossModel(propModel);
@@ -455,8 +454,8 @@ int main(int argc, char *argv[]) {
                         "VO_BlockAckThreshold", UintegerValue(0),
                         "BE_BlockAckThreshold", UintegerValue(0));
         apNetDevice = wifi.Install(YansPhy, wifimac, wifiApNode);
-        //YansPhy.EnablePcap("wifi-ax-edca-ap", apNetDevice); // enable pcap tracing
-        //YansPhy.EnablePcap("wifi-ax-edca-sta", staNetDevices);
+        //YansPhy.EnablePcap("xr-ap", apNetDevice.Get(0), true);
+        //YansPhy.EnablePcap("xr-sta", staNetDevices, true);
     }
 
     /*
@@ -491,7 +490,6 @@ int main(int argc, char *argv[]) {
 
     ArpCache::PopulateArpCache();
 
-
     uint16_t dlVideoPort = 9;
     uint16_t dlAudioPort = 10;
     uint16_t ulTrackingPort = 11;
@@ -499,62 +497,84 @@ int main(int argc, char *argv[]) {
     uint8_t tosVo = 0xc0; // Voice
     uint8_t tosVi = 0xb8; // Video
 
-    XrAppContainer xrClientApps, xrServerApps;
-    ApplicationContainer sinks;
+    XrAppContainer xrServerApps;
+    XrAppContainer xrClientApps;
 
-    // todo : need custom sink?
-    InetSocketAddress ulSinkAddr(Ipv4Address::GetAny(), ulTrackingPort);
-    PacketSinkHelper ulSink("ns3::UdpSocketFactory", ulSinkAddr);
-    sinks.Add(ulSink.Install(wifiApNode.Get(0)));
+    // Helpers
+    XrServerHelper videoHelper;
+    XrServerHelper audioHelper;
+    XrClientHelper trackingHelper(apNodeInterface.GetAddress(0), ulTrackingPort);
+
+
+    XrServerHelper trackingSinkHelper;
+    trackingSinkHelper.SetAttribute("SinkFlag", BooleanValue(true));
+    trackingSinkHelper.SetAttribute("LocalPort", UintegerValue(ulTrackingPort));
+
+
+    xrServerApps.Add(
+        trackingSinkHelper.Install(wifiApNode.Get(0))
+    );
 
     for (uint32_t i = 0; i < nStations; ++i) {
         double staggeredStart = startLogTime + (i * 0.00108);
 
-        InetSocketAddress videoDst(staNodeInterfaces.GetAddress(i), dlVideoPort);
-        videoDst.SetTos(tosVi);
+        // DOWNLINK
+        InetSocketAddress videoAddr(staNodeInterfaces.GetAddress(i), dlVideoPort);
+        videoHelper.SetAttribute("Tos", UintegerValue(tosVi));
+        videoHelper.SetAttribute("RemoteAddress", AddressValue(videoAddr));
+        videoHelper.SetAttribute("RemotePort", UintegerValue(dlVideoPort));
+        videoHelper.SetAttribute("Interval", TimeValue(Seconds(0.01111)));
+        videoHelper.SetAttribute("PacketsPerBatch", UintegerValue(96));
+        videoHelper.SetAttribute("PacketSize", UintegerValue(1448));
 
-        Ptr<XrServerUdpApp> videoApp = CreateObject<XrServerUdpApp>();
-        videoApp->Setup(videoDst, Seconds(0.01111), 96, 1448);
-        videoApp->SetStartTime(Seconds(staggeredStart));
-        wifiApNode.Get(0)->AddApplication(videoApp);
-        xrServerApps.Add(videoApp);
+        XrAppContainer vApp = videoHelper.Install(wifiApNode.Get(0));
+        vApp.Start(Seconds(staggeredStart));
+        xrServerApps.Add(vApp);
 
-        InetSocketAddress audioDst(staNodeInterfaces.GetAddress(i), dlAudioPort);
-        audioDst.SetTos(tosVo);
+        InetSocketAddress audioAddr(staNodeInterfaces.GetAddress(i), dlAudioPort);
+        audioHelper.SetAttribute("Tos", UintegerValue(tosVo));
+        audioHelper.SetAttribute("RemoteAddress", AddressValue(audioAddr));
+        audioHelper.SetAttribute("RemotePort", UintegerValue(dlAudioPort));
+        audioHelper.SetAttribute("Interval", TimeValue(MilliSeconds(25)));
+        audioHelper.SetAttribute("PacketsPerBatch", UintegerValue(4));
+        audioHelper.SetAttribute("PacketSize", UintegerValue(1448));
 
-        Ptr<XrServerUdpApp> audioApp = CreateObject<XrServerUdpApp>();
-        audioApp->Setup(audioDst, MilliSeconds(25.0), 4, 1448);
-        audioApp->SetStartTime(Seconds(staggeredStart));
-        wifiApNode.Get(0)->AddApplication(audioApp);
-        xrServerApps.Add(audioApp);
+        XrAppContainer aApp = audioHelper.Install(wifiApNode.Get(0));
+        aApp.Start(Seconds(staggeredStart));
+        xrServerApps.Add(aApp);
 
-        InetSocketAddress ulDst(apNodeInterface.GetAddress(0), ulTrackingPort);
-        ulDst.SetTos(tosVo);
+        // DL VIDEO SINK
+        XrServerHelper videoSinkHelper;
+        videoSinkHelper.SetAttribute("SinkFlag", BooleanValue(true));
+        videoSinkHelper.SetAttribute("LocalPort", UintegerValue(dlVideoPort));
+        xrServerApps.Add(
+            videoSinkHelper.Install(wifiStaNodes.Get(i))
+        );
 
-        Ptr<XrPacketGenerationUdpApp> ulApp = CreateObject<XrPacketGenerationUdpApp>();
-        ulApp->Setup(ulDst, Seconds(0.01111));
-        ulApp->SetStartTime(Seconds(staggeredStart));
-        wifiStaNodes.Get(i)->AddApplication(ulApp);
-        xrClientApps.Add(ulApp);
+        // DL AUDIO SINK
+        XrServerHelper audioSinkHelper;
+        audioSinkHelper.SetAttribute("SinkFlag", BooleanValue(true));
+        audioSinkHelper.SetAttribute("LocalPort", UintegerValue(dlAudioPort));
+        xrServerApps.Add(
+            audioSinkHelper.Install(wifiStaNodes.Get(i))
+        );
 
-        PacketSinkHelper dlVideoSink("ns3::UdpSocketFactory",
-                                     InetSocketAddress(Ipv4Address::GetAny(), dlVideoPort));
-        sinks.Add(dlVideoSink.Install(wifiStaNodes.Get(i)));
+        // UPLINK
+        InetSocketAddress trackingAddr(apNodeInterface.GetAddress(0), ulTrackingPort);
+        trackingHelper.SetAttribute("Tos", UintegerValue(tosVo));
+        trackingHelper.SetAttribute("RemoteAddress", AddressValue(trackingAddr));
+        trackingHelper.SetAttribute("RemotePort", UintegerValue(ulTrackingPort));
+        trackingHelper.SetAttribute("InitPacketSentDelay", TimeValue(Seconds(staggeredStart)));
+        trackingHelper.SetAttribute("Interval", TimeValue(Seconds(0.01111)));
 
-        PacketSinkHelper dlAudioSink("ns3::UdpSocketFactory",
-                                     InetSocketAddress(Ipv4Address::GetAny(), dlAudioPort));
-        sinks.Add(dlAudioSink.Install(wifiStaNodes.Get(i)));
+        xrClientApps.Add(trackingHelper.Install(wifiStaNodes.Get(i)));
     }
-
 
     xrServerApps.Start(Seconds(startLogTime));
     xrServerApps.Stop(Seconds(simulationTime + startLogTime));
 
     xrClientApps.Start(Seconds(startLogTime));
     xrClientApps.Stop(Seconds(simulationTime + startLogTime));
-
-    sinks.Start(Seconds(startLogTime));
-    sinks.Stop(Seconds(simulationTime + startLogTime));
 
     Simulator::Schedule(Seconds(0), &Ipv4GlobalRoutingHelper::PopulateRoutingTables);
     for (uint32_t i = 0; i < nStations; i++) {
@@ -564,18 +584,22 @@ int main(int argc, char *argv[]) {
     Ptr<WifiNetDevice> apDev = DynamicCast<WifiNetDevice>(apNetDevice.Get(0));
     apDev->GetMac()->GetQosTxop(AC_VO)->SetTxopLimit(MicroSeconds(txOpLimits));
 
-    Config::ConnectWithoutContext("/NodeList/*/ApplicationList/*/$ns3::PacketSink/RxWithAddresses",
-                                  MakeBoundCallback(&RxTraceWithAddressParam, startLogTime));
+    Config::ConnectWithoutContext(
+      "/NodeList/*/ApplicationList/*/$ns3::XrServerUdpApp/Rx",
+      MakeBoundCallback(&RxTraceWithAddressParam, startLogTime)
+    );
 
     ProgressBar pg(Seconds(simulationTime + startLogTime));
     Simulator::Stop(Seconds(simulationTime + startLogTime));
     Simulator::Run();
 
     uint64_t totalRxBytes = 0;
-    for (uint32_t i = 0; i < sinks.GetN(); ++i) {
-        Ptr<PacketSink> ps = DynamicCast<PacketSink>(sinks.Get(i));
-        if (ps) {
-            totalRxBytes += ps->GetTotalRx();
+
+    for (uint32_t i = 0; i < xrServerApps.GetN(); ++i) {
+        Ptr<XrServerUdpApp> app =
+            DynamicCast<XrServerUdpApp>(xrServerApps.Get(i));
+        if (app) {
+            totalRxBytes += app->GetTotalRx();
         }
     }
 
