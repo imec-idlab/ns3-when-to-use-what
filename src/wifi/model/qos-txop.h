@@ -557,11 +557,24 @@ class QosTxop : public Txop
                                               //!< time
     bool m_longerEDCADisable;
 
+    uint8_t m_logObo = 255;
+
     /// TracedCallback for TXOP trace typedef
     typedef TracedCallback<Time /* start time */, Time /* duration */, uint8_t /* link ID*/>
         TxopTracedCallback;
 
     TxopTracedCallback m_txopTrace; //!< TXOP trace callback
+
+    typedef TracedCallback<uint8_t /* OCWmin */, uint8_t /* link ID*/>
+        OcwTracedCallback;
+     OcwTracedCallback m_ocwTrace;
+
+     typedef TracedCallback<const Mac48Address& /*addr*/, uint8_t /* OCWmin */>
+        OcwTracedWithAddresParamCallback;
+     OcwTracedWithAddresParamCallback m_ocwTraceWithAddressParam;
+      OcwTracedWithAddresParamCallback m_oboTraceWithAddressParam;
+
+
 };
 
 } // namespace ns3

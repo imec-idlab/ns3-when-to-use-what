@@ -101,11 +101,22 @@ QosTxop::GetTypeId()
                                 BooleanValue(false),
                                 MakeBooleanAccessor(&QosTxop::m_longerEDCADisable),
                                 MakeBooleanChecker())
-
             .AddTraceSource("TxopTrace",
                             "Trace source for TXOP start and duration times",
                             MakeTraceSourceAccessor(&QosTxop::m_txopTrace),
-                            "ns3::QosTxop::TxopTracedCallback");
+                            "ns3::QosTxop::TxopTracedCallback")
+            .AddTraceSource("OcwTrace",
+                            "Trace the changes in the OCW values",
+                            MakeTraceSourceAccessor(&QosTxop::m_ocwTrace),
+                            "ns3::QosTxop::OcwTracedCallback")
+            .AddTraceSource("OcwTraceWithAddressParam",
+                            "Trace the changes in the OCW values",
+                            MakeTraceSourceAccessor(&QosTxop::m_ocwTraceWithAddressParam),
+                            "ns3::QosTxop::OcwTracedWithAddresParamCallback")
+            .AddTraceSource("OboTraceWithAddressParam",
+                            "Trace the changes in the OCW values",
+                            MakeTraceSourceAccessor(&QosTxop::m_oboTraceWithAddressParam),
+                            "ns3::QosTxop::OboTracedWithAddresParamCallback");
     return tid;
 }
 
@@ -214,6 +225,13 @@ QosTxop::UpdateObo(uint8_t obo, uint8_t linkId)
     link.m_ocw = GetOcwMin(linkId);
     Ptr<UniformRandomVariable> rv = CreateObject<UniformRandomVariable>();
     link.m_obo = static_cast<uint8_t>(rv->GetInteger(0, link.m_ocw));
+
+    if (m_logObo != 255 )
+      m_oboTraceWithAddressParam(m_mac->GetAddress() , m_logObo);
+
+    m_logObo = link.m_obo;
+    m_ocwTrace(link.m_ocw, linkId);
+    m_ocwTraceWithAddressParam(m_mac->GetAddress(), link.m_ocw);
   }
 }
 
@@ -229,6 +247,9 @@ QosTxop::UpdateFailedOcw(uint8_t linkId)
   link.m_ocw = ( dOcw < oCwMax ) ? dOcw : oCwMax;
   Ptr<UniformRandomVariable> rv = CreateObject<UniformRandomVariable>();
   link.m_obo = static_cast<uint8_t>(rv->GetInteger(0, link.m_ocw));
+  m_logObo = link.m_obo;
+  m_ocwTrace(link.m_ocw, linkId);
+  m_ocwTraceWithAddressParam(m_mac->GetAddress(), link.m_ocw);
 
 }
 

@@ -125,20 +125,6 @@ HeFrameExchangeManager::GetSupportedBaBufferSize() const
 }
 
 void
-HeFrameExchangeManager::StartPartakeInUoraTimerNow()
-{
-
-}
-
-bool
-HeFrameExchangeManager::IsPartakeInUoraTimerActive()
-{
-  return (m_partakeInUoraTimer.IsStrictlyPositive() &&
-      m_partakeInUoraStartTime.IsStrictlyPositive() &&
-      m_partakeInUoraStartTime + m_partakeInUoraTimer > Simulator::Now());
-}
-
-void
 HeFrameExchangeManager::SetWifiMac(const Ptr<WifiMac> mac)
 {
     m_apMac = DynamicCast<ApWifiMac>(mac);
@@ -1878,7 +1864,7 @@ HeFrameExchangeManager::ReceiveBasicTrigger(CtrlTriggerHeader& trigger,
         uint8_t obo = (_obo <= raRus.size() ) ? 0 : _obo - raRus.size();
         uint8_t queueSize = edca->GetQosQueueSize(tid, hdr.GetAddr2());
 
-        if (!obo && queueSize && !IsPartakeInUoraTimerActive()){
+        if (!obo && queueSize){
         //Change trigger: for randomly selected RA RU set AID to the STA AID
           Ptr<UniformRandomVariable> rv = CreateObject<UniformRandomVariable> ();
           uint16_t selectedRu = raRus.at(rv->GetValue(0, raRus.size()));
@@ -2047,7 +2033,7 @@ HeFrameExchangeManager::SendQosNullFramesInTbPpdu(CtrlTriggerHeader& trigger,
         uint8_t queueSize = edca->GetQosQueueSize(tid, hdr.GetAddr2());
 
         
-        if (!obo && queueSize && !IsPartakeInUoraTimerActive()){
+        if (!obo && queueSize){
           Ptr<UniformRandomVariable> rv = CreateObject<UniformRandomVariable> ();
           uint16_t selectedRu = raRus.at(rv->GetValue(0, raRus.size()));
           CtrlTriggerHeader::Iterator selectedRuIt = trigger.begin ();

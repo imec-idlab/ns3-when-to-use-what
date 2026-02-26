@@ -50,7 +50,6 @@ BASE_OFDMA="
 BASE_A2P="
     ${BASE_OFDMA}
     --useMuEdca=true
-    --muSchedAccessReqInterval=128
     --scheduler=ns3::VlceMultiUserScheduler
     "
 
@@ -71,6 +70,7 @@ ofdma() {
 a2p() {
     run_simulation "a2p" "
         ${BASE_A2P}
+        --muSchedAccessReqInterval=128
         --simType=A2P
     "
 }
@@ -79,6 +79,7 @@ a2pv2() {
     run_simulation "a2pv2" "
          ${BASE_A2P}
          --enableBsrp=false
+         --muSchedAccessReqInterval=512
          --simType=A2PV2
     "
 }
@@ -92,7 +93,7 @@ uora() {
         --DelayAccessReqUponAccess=true \
         --LongerEdcaDisable=true \
         --muEdcaTimer=8192 \
-        --scheduler=ns3::uoraMultiUserScheduler
+        --scheduler=ns3::UoraMultiUserScheduler
     "
 }
 

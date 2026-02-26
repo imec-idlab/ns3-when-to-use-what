@@ -52,9 +52,6 @@ class UoraMultiUserScheduler : public MultiUserScheduler
     UoraMultiUserScheduler();
     ~UoraMultiUserScheduler() override;
 
-    void UpdatePollList(Mac48Address address);
-    void SetBtfnRaRus (size_t);
-
   protected:
     void DoDispose() override;
     void DoInitialize() override;
@@ -127,7 +124,13 @@ class UoraMultiUserScheduler : public MultiUserScheduler
         uint16_t aid;         //!< station's AID
         Mac48Address address; //!< station's MAC Address
         double credits;       //!< credits accumulated by the station
-        double initCredit;
+    };
+
+    enum class UlIdleState
+    {
+      SEND_BSRP,
+      SEND_BASIC,
+      SEND_DLMU
     };
 
     /**
@@ -168,7 +171,7 @@ class UoraMultiUserScheduler : public MultiUserScheduler
     uint32_t m_ulPsduSize;       //!< the size in byte of the solicited PSDU
     std::map<AcIndex, std::list<MasterInfo>>
         m_staListDl;                       //!< Per-AC list of stations (next to serve for DL first)
-    std::list<MasterInfo> m_staListUl, m_staListToPoll;     //!< List of stations to serve for UL
+    std::list<MasterInfo> m_staListUl;     //!< List of stations to serve for UL
     std::list<CandidateInfo> m_candidates; //!< Candidate stations for MU TX
     Time m_maxCredits;                     //!< Max amount of credits a station can have
     CtrlTriggerHeader m_trigger;           //!< Trigger Frame to send
@@ -176,8 +179,8 @@ class UoraMultiUserScheduler : public MultiUserScheduler
     WifiTxParameters m_txParams;           //!< TX parameters
 
     uint16_t m_numRaRus; //!< Number of RUs that are reserved for random access
-    uint16_t m_nRaRusBtf;
     HeRu::RuType m_ruAllocationType; //!< The type of RUs allocated to STAs
+    UlIdleState m_ulIdleState = UlIdleState::SEND_BSRP;
 };
 
 } // namespace ns3

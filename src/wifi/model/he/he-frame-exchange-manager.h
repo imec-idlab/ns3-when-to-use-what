@@ -366,9 +366,6 @@ class HeFrameExchangeManager : public VhtFrameExchangeManager
                              Time durationId,
                              double snr);
 
-    bool IsPartakeInUoraTimerActive ();
-    void StartPartakeInUoraTimerNow();
-
     WifiPsduMap m_psduMap;                        //!< the A-MPDU being transmitted
     WifiTxParameters m_txParams;                  //!< the TX parameters for the current PPDU
     Ptr<MultiUserScheduler> m_muScheduler;        //!< Multi-user Scheduler (HE APs only)

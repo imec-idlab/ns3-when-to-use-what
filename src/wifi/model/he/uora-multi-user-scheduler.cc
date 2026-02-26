@@ -39,12 +39,6 @@ NS_LOG_COMPONENT_DEFINE("UoraMultiUserScheduler");
 
 NS_OBJECT_ENSURE_REGISTERED(UoraMultiUserScheduler);
 
-void
-UoraMultiUserScheduler::SetBtfnRaRus (size_t num)
-{
-  m_nRaRusBtf = num;
-}
-
 TypeId
 UoraMultiUserScheduler::GetTypeId()
 {
@@ -163,7 +157,6 @@ UoraMultiUserScheduler::DoDispose()
     m_staListUl.clear();
     m_candidates.clear();
     m_txParams.Clear();
-    m_staListToPoll.clear();
     m_apMac->TraceDisconnectWithoutContext(
         "AssociatedSta",
         MakeCallback(&UoraMultiUserScheduler::NotifyStationAssociated, this));
@@ -184,51 +177,60 @@ UoraMultiUserScheduler::SelectTxFormat()
     {
         return SU_TX;
     }
-    if ( m_enableUlOfdma && m_enableBsrp && ( GetLastTxFormat(m_linkId) != UL_MU_TX) )
+
+    auto ResetUlState = [&]() {
+      m_ulIdleState = m_enableBsrp ? UlIdleState::SEND_BSRP
+                                    : UlIdleState::SEND_BASIC;
+    };
+
+    if (mpdu || !m_enableUlOfdma)
     {
-        TxFormat txFormat = TrySendingBsrpTf();
+      ResetUlState();
+      return TrySendingDlMuPpdu();
+    }
+
+    if (m_enableBsrp)
+    {
+      TxFormat txFormat;
+
+      if (m_ulIdleState == UlIdleState::SEND_BSRP)
+      {
+        txFormat = TrySendingBsrpTf();
 
         if (txFormat != DL_MU_TX)
         {
-            return txFormat;
+          m_ulIdleState = UlIdleState::SEND_BASIC;
+          return txFormat;
         }
+      }
+      else if (m_ulIdleState == UlIdleState::SEND_BASIC)
+      {
+        txFormat = TrySendingBasicTf();
+
+        if (txFormat != DL_MU_TX)
+        {
+          m_ulIdleState = UlIdleState::SEND_BSRP;
+          return txFormat;
+        }
+      }
     }
-    else if (m_enableUlOfdma && ((GetLastTxFormat(m_linkId) != UL_MU_TX && !m_enableBsrp) ||
-                                 (GetLastTxFormat(m_linkId) == UL_MU_TX && m_trigger.GetType() == TriggerFrameType::BSRP_TRIGGER) ))
+    else
     {
+      if (m_ulIdleState == UlIdleState::SEND_BASIC)
+      {
         TxFormat txFormat = TrySendingBasicTf();
 
         if (txFormat != DL_MU_TX)
         {
-            return txFormat;
+          m_ulIdleState = UlIdleState::SEND_DLMU;
+          return txFormat;
         }
+      }
     }
 
+    ResetUlState();
     return TrySendingDlMuPpdu();
-}
 
-void UoraMultiUserScheduler::UpdatePollList(Mac48Address address)
-{
-  NS_LOG_FUNCTION(this);
-
-  auto it = std::find_if( m_staListUl.begin(), m_staListUl.end(),
-      [address](auto s){ return s.address == address;});
-
-  if (it != m_staListUl.end() ){
-    auto b = std::find_if(m_staListToPoll.begin(), m_staListToPoll.end(), [address](auto s){
-        return address == s.address;
-        });
-    if (b == m_staListToPoll.end())
-        {
-          it->initCredit = Simulator::Now().ToDouble(Time::US);
-          it->credits = m_staListToPoll.front().credits;
-          m_staListToPoll.emplace_front(*it);
-        }
-    else {
-      it->initCredit = Simulator::Now().ToDouble(Time::US);
-    }
-
-  }
 }
 
 template <class Func>
@@ -238,7 +240,7 @@ UoraMultiUserScheduler::GetTxVectorForUlMu(Func canbeSolicited, bool isBasicTrig
     NS_LOG_FUNCTION(this);
 
     // determine RUs to allocate to stations
-    auto count = std::min<std::size_t>(m_nStations, m_staListToPoll.size());
+    auto count = std::min<std::size_t>(m_nStations, m_staListUl.size());
     std::size_t nCentral26TonesRus;
     if (m_ruAllocationType == HeRu::RU_UNDEFINED)
     {
@@ -266,10 +268,10 @@ UoraMultiUserScheduler::GetTxVectorForUlMu(Func canbeSolicited, bool isBasicTrig
     txVector.SetBssColor(heConfiguration->GetBssColor());
 
     // iterate over the associated stations until an enough number of stations is identified
-    auto staIt = m_staListToPoll.begin();
+    auto staIt = m_staListUl.begin();
     m_candidates.clear();
 
-    while (staIt != m_staListToPoll.end() &&
+    while (staIt != m_staListUl.end() &&
            txVector.GetHeMuUserInfoMap().size() <
                std::min<std::size_t>(m_nStations, count + nCentral26TonesRus))
     {
@@ -278,10 +280,6 @@ UoraMultiUserScheduler::GetTxVectorForUlMu(Func canbeSolicited, bool isBasicTrig
         if (!canbeSolicited(*staIt))
         {
             NS_LOG_DEBUG("Skipping station based on provided function object");
-            if ( staIt->initCredit + m_maxCredits.ToDouble(Time::US) <= Simulator::Now().ToDouble(Time::US)){
-              staIt = m_staListToPoll.erase(staIt);
-              continue;
-            }
             staIt++;
             continue;
         }
@@ -345,11 +343,11 @@ UoraMultiUserScheduler::GetTxVectorForUlMu(Func canbeSolicited, bool isBasicTrig
 
     if (txVector.GetHeMuUserInfoMap().empty())
     {
-      /*for (size_t i = 0; i < std::min<std::size_t>(m_nStations, count + nCentral26TonesRus); i++)
+      for (size_t i = 0; i < std::min<std::size_t>(m_nStations, count + nCentral26TonesRus); i++)
       {
         auto it = std::next(m_staListUl.begin(), i);
         std::rotate (it, std::next(it), m_staListUl.end() );
-      }*/
+      }
 
       NS_LOG_DEBUG("No suitable station");
       return txVector;
@@ -604,7 +602,7 @@ UoraMultiUserScheduler::TrySendingBasicTf()
         userInfo.SetBasicTriggerDepUserInfo(0, 0, m_edca->GetAccessCategory());
     }
 
-    UpdateCredits(m_staListToPoll, maxDuration, txVector);
+    UpdateCredits(m_staListUl, maxDuration, txVector);
 
     return UL_MU_TX;
 }
@@ -995,7 +993,6 @@ UoraMultiUserScheduler::UpdateCredits(std::list<MasterInfo>& staList,
 
         candidate.first->credits -= debitsPerMhz * HeRu::GetBandwidth(mapIt->second.ru.GetRuType());
         creditsSub[candidate.first->aid] = debitsPerMhz * HeRu::GetBandwidth(mapIt->second.ru.GetRuType());
-        candidate.first->initCredit = Simulator::Now().ToDouble(Time::US);
     }
 
     // assign credits to all stations
@@ -1008,8 +1005,6 @@ UoraMultiUserScheduler::UpdateCredits(std::list<MasterInfo>& staList,
     // sort the list in ascending order of credits -- priotizing those that are
     // transmitting
     staList.sort([](const MasterInfo& a, const MasterInfo& b) { return a.credits < b.credits; });
-
-    staList.remove_if([&](const MasterInfo& a) { return a.initCredit + m_maxCredits.ToDouble(Time::US) <= Simulator::Now().ToDouble(Time::US); });
 
 }
 

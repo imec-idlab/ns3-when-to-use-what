@@ -181,6 +181,7 @@ int  main(int argc, char *argv[])
   double txPowerStart = {40.0412};
   double txPowerEnd = {40.0412};
   uint32_t nMsdus = 1;
+  uint32_t nRaRus {0};
   std::string scheduler {"ns3::RrMultiUserScheduler"};
 
 
@@ -197,6 +198,8 @@ int  main(int argc, char *argv[])
   double txOpLimits = {2080};  //AC_VO default value in microseconds
   std::string ruAllocationType {"ru-undefined"};
   HeRu::RuType ruAllocType {HeRu::RU_UNDEFINED};
+  uint32_t OCwMin {7};
+  uint32_t OCwMax {127};
   double  muEdcaTimer {8192};
   double maxTimeInList {8192 * 5}; //amount credit a stations can have when using
                         //RrMultiUserScheduler, and how long to disable edca for
@@ -247,6 +250,7 @@ int  main(int argc, char *argv[])
   cmd.AddValue ("txPowerEnd", "Maximum available transmissions level (dBm)", txPowerEnd);
   cmd.AddValue ("UseCentral26TonesRus","Enable/Disable the use of Cenral 26 tone RUs", UseCentral26TonesRus);
   cmd.AddValue ("ruAllocationType","The type of RUs allocated to STAs, if undefined - dynamically selected based on the number of STAs (ru-26-tone, ru-52-tone)", ruAllocationType);
+  cmd.AddValue ("nRaRus","Number of RUs to reserve for Random Access", nRaRus);
 
 
   //MAC params
@@ -261,6 +265,8 @@ int  main(int argc, char *argv[])
   cmd.AddValue ("nMpdus", "Number of aggregated MPDUs (=< 6500631/740 for HE PPDUs)", nMpdus);
   cmd.AddValue ("DelayAccessReqUponAccess", "Enable/Disable delay of access req only upon access grant", DelayAccessReqUponAccess);
   cmd.AddValue ("TxOPLimits", "TX Opportunity limits in microseconds", txOpLimits);
+  cmd.AddValue ("OCwMin", "Min OFDMA CW", OCwMin);
+  cmd.AddValue ("OCwMax", "Max OFDMA CW", OCwMax);
   cmd.AddValue ("muEdcaTimer", "How long to disable EDCA for and for VlceMultiUserScheduler, how long to stay in polling list without transmission (in Seconds)", muEdcaTimer);
 
 
@@ -398,7 +404,13 @@ int  main(int argc, char *argv[])
           muEdcaTimer = (simTime % 8192 == 0) ? simTime : ( std::round( simTime / 8192.0) * 8192);
           
           Config::SetDefault("ns3::QosTxop::LongerEDCADisable", BooleanValue(true));
-                  }
+
+          if (simType =="UORA" && nRaRus) {
+            Config::SetDefault ("ns3::HeConfiguration::OCwMin",UintegerValue(OCwMin));
+            Config::SetDefault("ns3::HeConfiguration::OCwMax", UintegerValue(OCwMax));
+          }
+
+        }
         else {
           NS_FATAL_ERROR ("A valid simulation type is needed to continue" << strerror (errno));
         }
@@ -506,6 +518,10 @@ int  main(int argc, char *argv[])
 
           if (scheduler == "ns3::VlceMultiUserScheduler" ) {
             wifimac.SetMultiUserSchedulerAttribute("MaxTimeInList", TimeValue( MicroSeconds(maxTimeInList) ));
+          }
+          if (scheduler == "ns3::UoraMultiUserScheduler" ) {
+            wifimac.SetMultiUserSchedulerAttribute("NumRandomAccessRus", UintegerValue(nRaRus));
+
           }
 
           //this is for uora alone
