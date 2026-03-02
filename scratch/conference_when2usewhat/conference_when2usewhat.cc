@@ -922,7 +922,7 @@ int  main(int argc, char *argv[])
     pktDistOutStream.close();
   } */
   
-  //std::ofstream pktDistOutStream;
+  std::ofstream pktDistOutStream;
   for (auto &staStats : g_statsMapAp) {
     //std::ostringstream mac_str;
     //mac_str << staStats.first ;
