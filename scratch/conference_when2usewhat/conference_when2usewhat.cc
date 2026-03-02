@@ -744,7 +744,6 @@ int  main(int argc, char *argv[])
       auto mac = Mac48Address::ConvertFrom (staNetDevices.Get (i)->GetAddress ());
       auto ip = staNodeInterfaces.Get (i).first->GetAddress (1, 0).GetAddress ();
       g_Ip2Mac[ip] = mac;
-      apMacAddress = mac;
 
       staNetDevices.Get(i)->GetObject<WifiNetDevice>()->GetPhy()->GetPhyEntity(WIFI_MOD_CLASS_OFDM)->TraceConnectWithoutContext("SinrTrace", MakeBoundCallback (&SinrTrace, Mac48Address::ConvertFrom (staNetDevices.Get (i)->GetAddress ())));
       staNetDevices.Get(i)->GetObject<WifiNetDevice>()->GetPhy()->GetPhyEntity(WIFI_MOD_CLASS_HE)->TraceConnectWithoutContext("SinrTrace", MakeBoundCallback (&SinrTrace, Mac48Address::ConvertFrom (staNetDevices.Get (i)->GetAddress ())));
@@ -761,6 +760,7 @@ int  main(int argc, char *argv[])
       auto mac = Mac48Address::ConvertFrom (apNetDevice.Get (i)->GetAddress ());
       auto ip = apNodeInterface.Get (i).first->GetAddress (1, 0).GetAddress ();
       g_Ip2Mac[ip] = mac;
+      apMacAddress = mac;
 
       apNetDevice.Get(i)->GetObject<WifiNetDevice>()->GetPhy()->GetPhyEntity(WIFI_MOD_CLASS_OFDM)->TraceConnectWithoutContext("SinrTrace", MakeBoundCallback (&SinrTrace, Mac48Address::ConvertFrom (apNetDevice.Get (i)->GetAddress ())));
       apNetDevice.Get(i)->GetObject<WifiNetDevice>()->GetPhy()->GetPhyEntity(WIFI_MOD_CLASS_HE)->TraceConnectWithoutContext("SinrTrace", MakeBoundCallback (&SinrTrace, Mac48Address::ConvertFrom (apNetDevice.Get (i)->GetAddress ())));
@@ -847,8 +847,6 @@ int  main(int argc, char *argv[])
 
   std::unordered_map<Key, double, KeyHash> apGenMap;
 
-
-
   for (auto &entry : g_statsMap)
   {
     if (entry.first == apMacAddress)
@@ -867,7 +865,6 @@ int  main(int argc, char *argv[])
       break;
     }
   }
-
 
   for (auto &entry : g_statsMap)
   {
@@ -900,6 +897,7 @@ int  main(int argc, char *argv[])
 
   out.close();
 
+  /*
   std::ofstream pktDistOutStream;
 
   for (auto &staStats : g_statsMap) {
@@ -912,7 +910,7 @@ int  main(int argc, char *argv[])
     }
     pktDistOutStream.close();
   }
-  /* No need to log individual delayed packets, we calculated it earlier*
+  * No need to log individual delayed packets, we calculated it earlier*
   for (auto &staStats : g_statsMap) {
     std::ostringstream mac_str;
     mac_str << staStats.first;
