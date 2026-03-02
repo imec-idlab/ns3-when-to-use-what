@@ -15,10 +15,20 @@ export NS_LOG=""
 
 nSta=$((8 + nStationsToJoin))
 
+if [ "$MODE" = "uora" ]; then
+    : "${nRaRus:?Missing OCwMin}"
+    : "${OCwMin:?Missing OCwMin}"
+    logDir=/scratch/antwerpen/208/vsc20879/${MODE}/ocwMin_${OCwMin}/${run}_run-${nSta}_sta-${nRaRus}_rarus
+else
+    logDir=/scratch/antwerpen/208/vsc20879/${MODE}/${run}_run-${nSta}_sta
+fi
+
+
+
 BASE_ARGS="
     --simulationTime=30
     --RngRun=${run}
-    --logDir=/scratch/antwerpen/208/vsc20879/${MODE}/${run}_run-${nSta}_sta
+    --logDir=${logDir}
     --enableAggregation=true
     --nMpdus=0
     --nMsdus=10
@@ -90,13 +100,14 @@ a2pv2() {
 uora() {
     run_simulation "
         ${BASE_OFDMA}
-        --simType=EDCA \
+        --simType=UORA \
         --useMuEdca=true \
-        --muSchedAccessReqInterval=34 \
+        --muSchedAccessReqInterval=64 \
         --DelayAccessReqUponAccess=true \
-        --LongerEdcaDisable=true \
         --muEdcaTimer=8192 \
-        --scheduler=ns3::UoraMultiUserScheduler
+        --scheduler=ns3::UoraMultiUserScheduler \
+        --OCwMin=${OCwMin} \
+        --nRaRus=${nRaRus}
     "
 }
 

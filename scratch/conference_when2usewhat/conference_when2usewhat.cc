@@ -28,6 +28,8 @@
 #include <ns3/wifi-module.h>
 #include <unistd.h>
 #include <vector>
+#include <unordered_map>
+
 #include "ns3/command-line.h"
 #include "ns3/config.h"
 #include "ns3/string.h"
@@ -215,6 +217,8 @@ int  main(int argc, char *argv[])
   double StartSendInterval {0.001}; //seconds
   bool strictWindow {true};
   double poissonMean {5};
+
+  Mac48Address apMacAddress;
 
 
   CommandLine cmd (__FILE__);
@@ -740,6 +744,7 @@ int  main(int argc, char *argv[])
       auto mac = Mac48Address::ConvertFrom (staNetDevices.Get (i)->GetAddress ());
       auto ip = staNodeInterfaces.Get (i).first->GetAddress (1, 0).GetAddress ();
       g_Ip2Mac[ip] = mac;
+      apMacAddress = mac;
 
       staNetDevices.Get(i)->GetObject<WifiNetDevice>()->GetPhy()->GetPhyEntity(WIFI_MOD_CLASS_OFDM)->TraceConnectWithoutContext("SinrTrace", MakeBoundCallback (&SinrTrace, Mac48Address::ConvertFrom (staNetDevices.Get (i)->GetAddress ())));
       staNetDevices.Get(i)->GetObject<WifiNetDevice>()->GetPhy()->GetPhyEntity(WIFI_MOD_CLASS_HE)->TraceConnectWithoutContext("SinrTrace", MakeBoundCallback (&SinrTrace, Mac48Address::ConvertFrom (staNetDevices.Get (i)->GetAddress ())));
@@ -824,6 +829,77 @@ int  main(int argc, char *argv[])
     }
   perStaOutStream.close ();
 
+
+  std::ofstream out("all_packets_e2e.out", std::ios::out);
+
+  out << "Packet_Tag\tSTA_MAC\tAP_Gen_ms\tSTA_Rx_ms\tE2E_Delay_ms\n";
+
+  // Composite key: (tag + MAC string)
+  using Key = std::pair<uint32_t, std::string>;
+
+  // Custom hash for unordered_map
+  struct KeyHash {
+    std::size_t operator()(const Key& k) const {
+      return std::hash<uint32_t>()(k.first) ^
+        (std::hash<std::string>()(k.second) << 1);
+    }
+  };
+
+  std::unordered_map<Key, double, KeyHash> apGenMap;
+
+
+
+  for (auto &entry : g_statsMap)
+  {
+    if (entry.first == apMacAddress)
+    {
+      for (size_t i = 0; i < entry.second.pktTag.size(); i++)
+      {
+        uint32_t tag = entry.second.pktTag[i];
+
+        std::ostringstream src_mac;
+        src_mac << entry.second.src[i];  // station that sent it
+
+        double genMs = entry.second.genTime[i] * 1000;
+
+        apGenMap[{tag, src_mac.str()}] = genMs;
+      }
+      break;
+    }
+  }
+
+
+  for (auto &entry : g_statsMap)
+  {
+    if (entry.first == apMacAddress)
+      continue;
+
+    std::ostringstream sta_mac;
+    sta_mac << entry.first;
+
+    for (size_t i = 0; i < entry.second.pktTag.size(); i++)
+    {
+      uint32_t tag = entry.second.pktTag[i];
+      double rxMs = entry.second.rxTime[i] * 1000;
+
+      Key key = {tag, sta_mac.str()};
+
+      if (apGenMap.find(key) != apGenMap.end())
+      {
+        double apGenMs = apGenMap[key];
+        double e2e = rxMs - apGenMs;
+
+        out << tag << "\t"
+          << sta_mac.str() << "\t"
+          << apGenMs << "\t"
+          << rxMs << "\t"
+          << e2e << "\n";
+      }
+    }
+  }
+
+  out.close();
+
   std::ofstream pktDistOutStream;
 
   for (auto &staStats : g_statsMap) {
@@ -836,7 +912,7 @@ int  main(int argc, char *argv[])
     }
     pktDistOutStream.close();
   }
-  /* No need to log individual delayed packets, we calculated it earlier
+  /* No need to log individual delayed packets, we calculated it earlier*
   for (auto &staStats : g_statsMap) {
     std::ostringstream mac_str;
     mac_str << staStats.first;

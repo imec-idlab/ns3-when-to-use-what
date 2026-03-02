@@ -9,11 +9,19 @@ export NS_LOG=""
 run_simulation() {
     local mode="$1"
     local extra_args="$2"
+    local raru="${3:-3}"
+    local ocw="${3:-3}"
+
 
     for run in $(seq 9 9); do
         for nSta in $(seq 20 20); do
             it=8
             tt=8
+            if [ "$mode" = "uora" ]; then
+                logDir="$PWD/${mode}_${ocw}/${run}-${nSta}-${raru}"
+            else
+                logDir="$PWD/${mode}/${run}-${nSta}"
+            fi
             ./../ns3 run --no-build --gdb \
                 "scratch/conference_when2usewhat/conference_when2usewhat \
                 --simulationTime=8 \
@@ -21,8 +29,8 @@ run_simulation() {
                 --totalNStations=${nSta} \
                 --initNStations=${it} \
                 --RngRun=${run} \
-                --logDir=$PWD/${mode}/${run}-${nSta} \
-                --enablePcap=true \
+                --logDir=$logDir \
+                --enablePcap=false \
                 --startLogTime=3 \
                 --enableAggregation=true --nMpdus=0 --nMsdus=10 \
                 --ruAllocationType=ru-26-tone \
@@ -87,13 +95,14 @@ a2pv2() {
 uora() {
     run_simulation "uora" "
         ${BASE_OFDMA}
-        --simType=EDCA \
+        --simType=UORA \
         --useMuEdca=true \
-        --muSchedAccessReqInterval=34 \
+        --muSchedAccessReqInterval=1024 \
         --DelayAccessReqUponAccess=true \
-        --LongerEdcaDisable=true \
         --muEdcaTimer=8192 \
-        --scheduler=ns3::UoraMultiUserScheduler
+        --scheduler=ns3::UoraMultiUserScheduler \
+        --nRaRus=3 \
+        --OCwMin=3
     "
 }
 

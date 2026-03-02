@@ -5,7 +5,7 @@
 #SBATCH --time=10:50:00
 
 #SBATCH --mail-type=FAIL
-#SBATCH --mail-user=ferhat.vanherck@student.uantwerpen.be
+#SBATCH --mail-user=douglas.agbeve@uantwerpen.be
 
 module --force purge
 module load calcua/all parallel
