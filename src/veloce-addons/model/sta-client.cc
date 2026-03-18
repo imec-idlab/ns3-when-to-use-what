@@ -297,7 +297,7 @@ void StaClient::DelayedToRightWindow(double delay, std::string joinPolling){
 
   //if not in the 1ms of the 5ms window selected, force to the 1ms of the next
   //5ms window
-  if ( (actual_delay - mt5) <= 0.001 ) {
+  if ( (actual_delay - mt5) <= 0.0005 ) {
     if (joinPolling == "JoinPolling")
       m_sendEvent = Simulator::Schedule (Seconds (delay), &StaClient::Send, this, joinPolling);
     else
@@ -306,7 +306,7 @@ void StaClient::DelayedToRightWindow(double delay, std::string joinPolling){
   else {
     Ptr<UniformRandomVariable> rand = CreateObject <UniformRandomVariable> ();
     double del = rand->GetValue (mt5 + m_interval.GetSeconds() + MicroSeconds(1).GetSeconds(),
-        mt5 + m_interval.GetSeconds() + Seconds(0.001).GetSeconds());
+        mt5 + m_interval.GetSeconds() + Seconds(0.0005).GetSeconds());
     delay = del - Simulator::Now().GetSeconds();
     if (joinPolling == "JoinPolling")
       m_sendEvent = Simulator::Schedule (Seconds (delay), &StaClient::Send, this, joinPolling);

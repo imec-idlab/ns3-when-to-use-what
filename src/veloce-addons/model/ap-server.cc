@@ -280,8 +280,7 @@ ApServer::HandleRead (Ptr<Socket> socket)
           {
             latePacket = true;
           }
-          else if( m_strictWindow &&  ( (Simulator::Now() - seqTs.GetTs ()) ) >= m_interval) {
-              //|| !(seqTs.GetTs().GetMilliSeconds() + m_interval.GetMilliSeconds() > Simulator::Now().GetMilliSeconds() ) )) { NS_ASSERT(0);
+          else if( m_strictWindow && Simulator::Now() > ( Seconds(std::floor(seqTs.GetTs().GetSeconds() / m_interval.GetSeconds()) * m_interval.GetSeconds()) + m_interval) ) {
             // outdated packets
             latePacket = true;
             m_sentTags.push_back(m_tagValue);

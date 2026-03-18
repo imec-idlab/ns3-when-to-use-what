@@ -9,8 +9,8 @@ export NS_LOG=""
 run_simulation() {
     local mode="$1"
     local extra_args="$2"
-    local raru="${3:-3}"
-    local ocw="${3:-3}"
+    local raru="${9:-9}"
+    local ocw="${7:-7}"
 
 
     for run in $(seq 9 9); do
@@ -101,8 +101,8 @@ uora() {
         --DelayAccessReqUponAccess=true \
         --muEdcaTimer=8192 \
         --scheduler=ns3::UoraMultiUserScheduler \
-        --nRaRus=3 \
-        --OCwMin=3
+        --nRaRus=9 \
+        --OCwMin=7
     "
 }
 
