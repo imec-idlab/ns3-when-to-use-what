@@ -97,7 +97,7 @@ int main(int argc, char *argv[]) {
     double staHeight{1}; //meters
 
     uint32_t guardInterval{800}; //in ns
-    std::string phyModel{"Spectrum"}; //Spectrum or Yans
+    std::string phyModel{"Yans"}; //Spectrum or Yans
     bool enableShadowing = false;
     uint32_t nMsdus = 1;
     HeRu::RuType ruAllocType{HeRu::RU_UNDEFINED};
@@ -118,8 +118,13 @@ int main(int argc, char *argv[]) {
     uint32_t OCwMin{7};
     uint32_t OCwMax{127}; // Should this be lager? 1023?
     bool LongerEdcaDisable{true};
-    double muEdcaTimer{8192 * 5};
-    double maxCredit{1000000}; //amount credit a stations can have when using
+    // double muEdcaTimer{8192 * 5};
+    //double maxCredit{1000000}; //amount credit a stations can have when using // todo : check this
+    //RrMultiUserScheduler, and how long to disable edca for
+    //in VlceMultiUserScheduler in MicroSeconds
+
+    double  muEdcaTimer {8192};
+    double maxTimeInList {8192 * 5}; //amount credit a stations can have when using
     //RrMultiUserScheduler, and how long to disable edca for
     //in VlceMultiUserScheduler in MicroSeconds
 
@@ -404,23 +409,39 @@ int main(int argc, char *argv[]) {
 
         staNetDevices = wifi.Install(phy, wifimac, wifiStaNodes);
 
-        if (Scheduler == "ns3::VlceMultiUserScheduler")
-            maxCredit = muEdcaTimer;
+        //if (Scheduler == "ns3::VlceMultiUserScheduler")
+        //    maxCredit = muEdcaTimer;
 
-        if (dlAckSeqType != "NO-OFDMA") {
-            wifimac.SetMultiUserScheduler(Scheduler,
-                                          "EnableUlOfdma", BooleanValue(enableUlOfdma),
-                                          "EnableBsrp", BooleanValue(enableBsrp),
-                                          "AccessReqInterval", TimeValue(MicroSeconds(accessReqInterval)),
-                                          "DelayAccessReqUponAccess", BooleanValue(DelayAccessReqUponAccess),
-                                          "UseCentral26TonesRus", BooleanValue(UseCentral26TonesRus),
-                                          "NStations", UintegerValue(nStations),
-                                          "AccessReqAc", EnumValue(AcIndex::AC_VO),
-                                          "RuAllocationType", EnumValue(ruAllocType),
-                                          "NumRandomAccessRus", UintegerValue(nRaRus),
-                                          "MaxCredits", TimeValue(MicroSeconds(maxCredit)),
-                                          "UlPsduSize", UintegerValue(1500)
-            );
+        if (dlAckSeqType != "NO-OFDMA")
+        {
+            wifimac.SetMultiUserSchedulerNoAttr(Scheduler);
+
+            // Common attributes
+            wifimac.SetMultiUserSchedulerAttribute("EnableUlOfdma", BooleanValue(enableUlOfdma));
+            wifimac.SetMultiUserSchedulerAttribute("EnableBsrp", BooleanValue(enableBsrp));
+            wifimac.SetMultiUserSchedulerAttribute("AccessReqInterval", TimeValue(MicroSeconds(accessReqInterval)));
+            wifimac.SetMultiUserSchedulerAttribute("DelayAccessReqUponAccess", BooleanValue(DelayAccessReqUponAccess));
+            wifimac.SetMultiUserSchedulerAttribute("UseCentral26TonesRus", BooleanValue(UseCentral26TonesRus));
+            wifimac.SetMultiUserSchedulerAttribute("NStations", UintegerValue(nStations));
+            wifimac.SetMultiUserSchedulerAttribute("AccessReqAc", EnumValue(AcIndex::AC_VO));
+            wifimac.SetMultiUserSchedulerAttribute("RuAllocationType", EnumValue(ruAllocType));
+            wifimac.SetMultiUserSchedulerAttribute("UlPsduSize", UintegerValue(1500)); // todo : what does this par do?
+
+            // Scheduler-specific attributes
+            if (Scheduler == "ns3::RrMultiUserScheduler") {
+                wifimac.SetMultiUserSchedulerAttribute("MaxCredits",
+                    TimeValue(MicroSeconds(maxTimeInList)));
+            }
+
+            if (Scheduler == "ns3::VlceMultiUserScheduler") {
+                wifimac.SetMultiUserSchedulerAttribute("MaxTimeInList",
+                    TimeValue(MicroSeconds(maxTimeInList)));
+            }
+
+            if (Scheduler == "ns3::UoraMultiUserScheduler") {
+                wifimac.SetMultiUserSchedulerAttribute("NumRandomAccessRus",
+                    UintegerValue(nRaRus));
+            }
         }
         wifimac.SetType("ns3::ApWifiMac",
                         "EnableBeaconJitter", BooleanValue(false),
