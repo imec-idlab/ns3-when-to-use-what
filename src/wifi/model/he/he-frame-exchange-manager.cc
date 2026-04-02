@@ -21,7 +21,7 @@
 
 #include "he-configuration.h"
 #include "he-phy.h"
-//#include "multi-user-scheduler.h"
+#include "uora-multi-user-scheduler.h"
 #include "vlce-multi-user-scheduler.h"
 
 
@@ -70,10 +70,11 @@ HeFrameExchangeManager::GetTypeId()
                                 BooleanValue(false),
                                 MakeBooleanAccessor(&HeFrameExchangeManager::m_val),
                                 MakeBooleanChecker())
-                            .AddAttribute("HePartakeInUora",
-                                "When true, STAs take part in UORA",
+                            .AddAttribute("SendQosNullAfterBasicTf",
+                                "When true, STAs report their BSRs when they are allocated RUs in BasicTF "
+                                "but do not have any valid mpdus",
                                 BooleanValue(false),
-                                MakeBooleanAccessor(&HeFrameExchangeManager::m_partakeInUora),
+                                MakeBooleanAccessor(&HeFrameExchangeManager::m_sendQosNullAfterBasicTf),
                                 MakeBooleanChecker())
                             .AddAttribute("MuTxStartTime",
                                 "Time at which to initite Multi-user transmissions",
@@ -1880,7 +1881,7 @@ HeFrameExchangeManager::ReceiveBasicTrigger(CtrlTriggerHeader& trigger,
     else if (auto userInfoIt = trigger.FindUserInfoWithAid(m_staMac->GetAssociationId());
               userInfoIt == trigger.end())
     {
-      NS_LOG_DEBUG("No Random Access Ru");
+      NS_LOG_DEBUG("No Random Access Ru " << m_staMac->GetAssociationId());
       return;
     }
 
@@ -1978,10 +1979,10 @@ HeFrameExchangeManager::ReceiveBasicTrigger(CtrlTriggerHeader& trigger,
         }
         SendPsduMapWithProtection(WifiPsduMap{{staId, psdu}}, txParams);
     }
-    else if (!isRandomAccess)
+    else if (m_sendQosNullAfterBasicTf && !isRandomAccess)
     {
         // send QoS Null frames
-        //SendQosNullFramesInTbPpdu(trigger, hdr, false);
+        SendQosNullFramesInTbPpdu(trigger, hdr, false);
     }
     else
     {
@@ -2559,7 +2560,11 @@ HeFrameExchangeManager::ReceiveMpdu(Ptr<const WifiMpdu> mpdu,
                 //received UORA psdu
                 m_staExpectTbPpduFrom.insert (sender);
                 m_numRaRus--;
-                //m_muScheduler->UpdatePollList(sender);
+
+                if (auto uora = DynamicCast<UoraMultiUserScheduler>(m_muScheduler))
+                {
+                  uora->UpdatePollList(sender);
+                }
             }
             else
             {

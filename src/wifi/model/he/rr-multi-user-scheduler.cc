@@ -180,7 +180,7 @@ RrMultiUserScheduler::SelectTxFormat()
                                     : UlIdleState::SEND_BASIC;
     };
 
-    if (mpdu || !m_enableUlOfdma)
+    if ( (mpdu && m_ulIdleState != UlIdleState::SEND_BSRP) || !m_enableUlOfdma)
     {
       ResetUlState();
       return TrySendingDlMuPpdu();
@@ -206,7 +206,7 @@ RrMultiUserScheduler::SelectTxFormat()
 
         if (txFormat != DL_MU_TX)
         {
-          m_ulIdleState = UlIdleState::SEND_BSRP;
+          m_ulIdleState = UlIdleState::SEND_DLMU;
           return txFormat;
         }
       }
@@ -432,6 +432,15 @@ RrMultiUserScheduler::TrySendingBsrpTf()
     NS_LOG_DEBUG("Duration of QoS Null frames: " << qosNullTxDuration.As(Time::MS));
     m_trigger.SetUlLength(ulLength);
 
+    //round-robin
+    if (m_candidates.size())
+    {
+      auto it = m_staListUl.begin();
+      size_t nSaRUs = m_candidates.size();
+      std::advance(it, nSaRUs);
+
+      m_staListUl.splice(m_staListUl.end(), m_staListUl, m_staListUl.begin(), it);
+    }
     
     return UL_MU_TX;
 }
@@ -605,7 +614,7 @@ RrMultiUserScheduler::TrySendingBasicTf()
     }
 
     //round-robin
-    if (m_candidates.size())
+    /*if (m_candidates.size())
     {
       auto it = m_staListUl.begin();
       size_t nSaRUs = m_candidates.size();
@@ -614,7 +623,7 @@ RrMultiUserScheduler::TrySendingBasicTf()
       m_staListUl.splice(m_staListUl.end(), m_staListUl, m_staListUl.begin(), it);
     }
 
-    //UpdateCredits(m_staListUl, maxDuration, txVector);
+    //UpdateCredits(m_staListUl, maxDuration, txVector); */
 
     return UL_MU_TX;
 }

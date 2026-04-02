@@ -157,6 +157,7 @@ UoraMultiUserScheduler::DoDispose()
     m_staListUl.clear();
     m_candidates.clear();
     m_txParams.Clear();
+    m_staListToPoll.clear();
     m_apMac->TraceDisconnectWithoutContext(
         "AssociatedSta",
         MakeCallback(&UoraMultiUserScheduler::NotifyStationAssociated, this));
@@ -183,7 +184,7 @@ UoraMultiUserScheduler::SelectTxFormat()
                                     : UlIdleState::SEND_BASIC;
     };
 
-    if (mpdu || !m_enableUlOfdma)
+    if ( (mpdu && m_ulIdleState != UlIdleState::SEND_BSRP)  || !m_enableUlOfdma)
     {
       ResetUlState();
       return TrySendingDlMuPpdu();
@@ -209,7 +210,7 @@ UoraMultiUserScheduler::SelectTxFormat()
 
         if (txFormat != DL_MU_TX)
         {
-          m_ulIdleState = UlIdleState::SEND_BSRP;
+          m_ulIdleState = UlIdleState::SEND_DLMU;
           return txFormat;
         }
       }
@@ -230,7 +231,26 @@ UoraMultiUserScheduler::SelectTxFormat()
 
     ResetUlState();
     return TrySendingDlMuPpdu();
+}
 
+
+void UoraMultiUserScheduler::UpdatePollList(Mac48Address address)
+{
+  NS_LOG_FUNCTION(this);
+
+  auto it = std::find_if( m_staListUl.begin(), m_staListUl.end(),
+      [address](auto s){ return s.address == address;});
+
+  if (it != m_staListUl.end() ) {
+
+    auto b = std::find_if(m_staListToPoll.begin(), m_staListToPoll.end(), [address](auto s){
+        return address == s.address;
+        });
+    if (b == m_staListToPoll.end())
+    {
+      m_staListToPoll.emplace_front(*it);
+    }
+  }
 }
 
 template <class Func>
@@ -240,7 +260,7 @@ UoraMultiUserScheduler::GetTxVectorForUlMu(Func canbeSolicited, bool isBasicTrig
     NS_LOG_FUNCTION(this);
 
     // determine RUs to allocate to stations
-    auto count = std::min<std::size_t>(m_nStations, m_staListUl.size());
+    auto count = std::min<std::size_t>(m_nStations, m_staListToPoll.size());
     std::size_t nCentral26TonesRus;
     if (m_ruAllocationType == HeRu::RU_UNDEFINED)
     {
@@ -268,10 +288,10 @@ UoraMultiUserScheduler::GetTxVectorForUlMu(Func canbeSolicited, bool isBasicTrig
     txVector.SetBssColor(heConfiguration->GetBssColor());
 
     // iterate over the associated stations until an enough number of stations is identified
-    auto staIt = m_staListUl.begin();
+    auto staIt = m_staListToPoll.begin();
     m_candidates.clear();
 
-    while (staIt != m_staListUl.end() &&
+    while (staIt != m_staListToPoll.end() &&
            txVector.GetHeMuUserInfoMap().size() <
                std::min<std::size_t>(m_nStations, count + nCentral26TonesRus))
     {
@@ -368,11 +388,88 @@ UoraMultiUserScheduler::TrySendingBsrpTf()
         return TxFormat::SU_TX;
     }
 
-    // only consider stations that have setup the current link
-    WifiTxVector txVector = GetTxVectorForUlMu([this](const MasterInfo& info) {
-        const auto& staList = m_apMac->GetStaList(m_linkId);
-        return staList.find(info.aid) != staList.cend();
-    }, false);
+    auto count =static_cast<std::size_t> (m_numRaRus);
+    std::size_t nCentral26TonesRus;
+    HeRu::RuType ruType;
+    if (m_ruAllocationType == HeRu::RU_UNDEFINED)
+    {
+        ruType = HeRu::GetEqualSizedRusForStations(m_allowedWidth, count, nCentral26TonesRus);
+        NS_ASSERT(count >= 1);
+    }
+    else
+    {
+        ruType = m_ruAllocationType;
+        count = std::min(HeRu::GetRusOfType (m_allowedWidth, m_ruAllocationType).size (), count);
+        nCentral26TonesRus = HeRu::GetCentral26TonesRus (m_allowedWidth, m_ruAllocationType).size ();
+    }
+
+    if (!m_useCentral26TonesRus)
+    {
+        nCentral26TonesRus = 0;
+    }
+
+    Ptr<HeConfiguration> heConfiguration = m_apMac->GetHeConfiguration();
+    NS_ASSERT(heConfiguration);
+
+    WifiTxVector txVector;
+    txVector.SetPreambleType(WIFI_PREAMBLE_HE_TB);
+    txVector.SetChannelWidth(m_allowedWidth);
+    txVector.SetGuardInterval(heConfiguration->GetGuardInterval().GetNanoSeconds());
+    txVector.SetBssColor(heConfiguration->GetBssColor());
+
+    auto staIt = m_staListUl.begin();
+    
+    while (staIt != m_staListUl.end() &&
+            txVector.GetHeMuUserInfoMap().size() < count)
+    {
+      if (txVector.GetPreambleType() == WIFI_PREAMBLE_EHT_TB &&
+            !m_apMac->GetEhtSupported(staIt->address))
+        {
+            NS_LOG_DEBUG(
+                "Skipping non-EHT STA because this Trigger Frame is only soliciting EHT STAs");
+            staIt++;
+            continue;
+        }
+
+      // prepare the MAC header of a frame that would be sent to the candidate station,
+      // just for the purpose of retrieving the TXVECTOR used to transmit to that station
+      WifiMacHeader hdr(WIFI_MAC_QOSDATA);
+      hdr.SetAddr1(GetWifiRemoteStationManager(m_linkId)
+                         ->GetAffiliatedStaAddress(staIt->address)
+                         .value_or(staIt->address));
+      hdr.SetAddr2(m_apMac->GetFrameExchangeManager(m_linkId)->GetAddress());
+      WifiTxVector suTxVector =
+            GetWifiRemoteStationManager(m_linkId)->GetDataTxVector(hdr, m_allowedWidth);
+      txVector.SetHeMuUserInfo(staIt->aid,
+                                 {HeRu::RuSpec(), // assigned later by FinalizeTxVector
+                                  suTxVector.GetMode().GetMcsValue(),
+                                  suTxVector.GetNss()});
+
+      staIt++;
+    }
+
+    WifiTxVector::HeMuUserInfoMap heMuUserInfoMap;
+    std::swap(heMuUserInfoMap, txVector.GetHeMuUserInfoMap());
+    auto ruSet = HeRu::GetRusOfType(m_allowedWidth, ruType);
+    auto ruSetIt = ruSet.begin();
+    auto central26TonesRus = HeRu::GetCentral26TonesRus(m_allowedWidth, ruType);
+    auto central26TonesRusIt = central26TonesRus.begin();
+
+    //assign random access RUs
+    uint8_t minMcs = UINT8_MAX;
+    uint8_t minNss = UINT8_MAX;
+    for (auto &user : heMuUserInfoMap)
+    {
+        if (user.second.mcs < minMcs) minMcs = user.second.mcs;
+        if (user.second.nss < minNss) minNss = user.second.nss;
+    }
+
+    for (std::size_t i = 0; i < count; i++)
+    {
+      HeMuUserInfo info = {(ruSetIt != ruSet.end () ? *ruSetIt++ : *central26TonesRusIt++), minMcs, minNss};
+      info.ru.SetRandomAccessFlag (true);
+      txVector.SetHeMuUserInfo(0, info); //AID 0 = RANDOM ACCESS RU
+    }
 
     if (txVector.GetHeMuUserInfoMap().empty())
     {
@@ -400,44 +497,82 @@ UoraMultiUserScheduler::TrySendingBsrpTf()
         return NO_TX;
     }
 
+    
     // Compute the time taken by each station to transmit 8 QoS Null frames
-    Time qosNullTxDuration = Seconds(0);
-    for (const auto& userInfo : m_trigger)
-    {
-        Time duration = WifiPhy::CalculateTxDuration(GetMaxSizeOfQosNullAmpdu(m_trigger),
-                                                     txVector,
-                                                     m_apMac->GetWifiPhy(m_linkId)->GetPhyBand(),
-                                                     userInfo.GetAid12());
-        qosNullTxDuration = Max(qosNullTxDuration, duration);
-    }
+    Time maxDuration = GetPpduMaxTime(txVector.GetPreambleType());
 
     if (m_availableTime != Time::Min())
     {
         // TryAddMpdu only considers the time to transmit the Trigger Frame
         NS_ASSERT(m_txParams.m_protection &&
                   m_txParams.m_protection->protectionTime != Time::Min());
-        NS_ASSERT(m_txParams.m_acknowledgment &&
-                  m_txParams.m_acknowledgment->acknowledgmentTime.IsZero());
+        NS_ASSERT(m_txParams.m_acknowledgment && (
+                  m_txParams.m_acknowledgment->acknowledgmentTime != Time::Min()
+                  || m_txParams.m_acknowledgment->acknowledgmentTime.IsZero() ) );
         NS_ASSERT(m_txParams.m_txDuration != Time::Min());
 
-        if (m_txParams.m_protection->protectionTime + m_txParams.m_txDuration // BSRP TF tx time
-                + m_apMac->GetWifiPhy(m_linkId)->GetSifs() + qosNullTxDuration >
-            m_availableTime)
+        maxDuration = Min(maxDuration,
+                          m_availableTime - m_txParams.m_protection->protectionTime -
+                              m_txParams.m_txDuration - m_apMac->GetWifiPhy(m_linkId)->GetSifs() -
+                              m_txParams.m_acknowledgment->acknowledgmentTime);
+        if (maxDuration.IsNegative())
         {
-            NS_LOG_DEBUG("Remaining TXOP duration is not enough for BSRP TF exchange");
+            NS_LOG_DEBUG("Remaining TXOP duration is not enough for UL MU exchange");
+            return NO_TX;
+        }
+    }
+
+    // Compute the time taken by each station to transmit a frame of maxBufferSize size
+    Time bufferTxTime = Seconds(0);
+    for (const auto& userInfo : m_trigger)
+    {
+        Time duration = WifiPhy::CalculateTxDuration(768,
+                                                     txVector,
+                                                     m_apMac->GetWifiPhy(m_linkId)->GetPhyBand(),
+                                                     userInfo.GetAid12());
+        bufferTxTime = Max(bufferTxTime, duration);
+    }
+
+    if (bufferTxTime < maxDuration)
+    {
+        // the maximum buffer size can be transmitted within the allowed time
+        maxDuration = bufferTxTime;
+    }
+    else
+    {
+        // maxDuration may be a too short time. If it does not allow any station to
+        // transmit at least m_ulPsduSize bytes, give up the UL MU transmission for now
+        Time minDuration = Seconds(0);
+        for (const auto& userInfo : m_trigger)
+        {
+            Time duration =
+                WifiPhy::CalculateTxDuration(m_ulPsduSize,
+                                             txVector,
+                                             m_apMac->GetWifiPhy(m_linkId)->GetPhyBand(),
+                                             userInfo.GetAid12());
+            minDuration = (minDuration.IsZero() ? duration : Min(minDuration, duration));
+        }
+
+        if (maxDuration < minDuration)
+        {
+            // maxDuration is a too short time, hence return NO_TX. In this way,
+            // no transmission will occur now and the next time we will try again
+            // performing an UL OFDMA transmission.
+            NS_LOG_DEBUG("Available time " << maxDuration.As(Time::MS) << " is too short");
             return NO_TX;
         }
     }
 
     uint16_t ulLength;
-    std::tie(ulLength, qosNullTxDuration) = HePhy::ConvertHeTbPpduDurationToLSigLength(
-        qosNullTxDuration,
+    std::tie(ulLength, maxDuration) = HePhy::ConvertHeTbPpduDurationToLSigLength(
+        maxDuration,
         m_trigger.GetHeTbTxVector(m_trigger.begin()->GetAid12()),
         m_apMac->GetWifiPhy(m_linkId)->GetPhyBand());
-    NS_LOG_DEBUG("Duration of QoS Null frames: " << qosNullTxDuration.As(Time::MS));
+    NS_LOG_DEBUG("Duration of Data instead of QoS Null frames: " << maxDuration.As(Time::MS));
     m_trigger.SetUlLength(ulLength);
 
     return UL_MU_TX;
+
 }
 
 MultiUserScheduler::TxFormat
@@ -602,7 +737,15 @@ UoraMultiUserScheduler::TrySendingBasicTf()
         userInfo.SetBasicTriggerDepUserInfo(0, 0, m_edca->GetAccessCategory());
     }
 
-    UpdateCredits(m_staListUl, maxDuration, txVector);
+    if (m_candidates.size())
+    {
+      auto it = m_staListToPoll.begin();
+      size_t nSaRUs = m_candidates.size();
+      std::advance(it, nSaRUs);
+
+      m_staListToPoll.splice(m_staListToPoll.end(), m_staListToPoll, m_staListToPoll.begin(), it);
+    }
+
 
     return UL_MU_TX;
 }
@@ -878,7 +1021,7 @@ UoraMultiUserScheduler::FinalizeTxVector(WifiTxVector& txVector, bool isBasicTri
     NS_LOG_DEBUG(nRusAssigned << " stations are being assigned a " << ruType << " RU");
 
     //Calculate number of random access RUs
-    std::size_t nRandomAccessRus = 0;
+   /* std::size_t nRandomAccessRus = 0;
     if (isBasicTrigger)
     {
         nRandomAccessRus = m_numRaRus;
@@ -905,15 +1048,15 @@ UoraMultiUserScheduler::FinalizeTxVector(WifiTxVector& txVector, bool isBasicTri
                 }
             }
         }
-    }
+    } */
 
-    if (!m_useCentral26TonesRus || m_candidates.size() + nRandomAccessRus == nRusAssigned)
+    if (!m_useCentral26TonesRus || m_candidates.size()  == nRusAssigned)
     {
         nCentral26TonesRus = 0;
     }
     else
     {
-        nCentral26TonesRus = std::min(m_candidates.size() + nRandomAccessRus - nRusAssigned, nCentral26TonesRus);
+        nCentral26TonesRus = std::min(m_candidates.size() - nRusAssigned, nCentral26TonesRus);
         NS_LOG_DEBUG(nCentral26TonesRus << " stations are being assigned a 26-tones RU");
     }
 
@@ -942,7 +1085,7 @@ UoraMultiUserScheduler::FinalizeTxVector(WifiTxVector& txVector, bool isBasicTri
 
     // remove candidates that will not be served
     m_candidates.erase(candidateIt, m_candidates.end());
-
+    /*
     //assign random access RUs
     uint8_t minMcs = UINT8_MAX;
     uint8_t minNss = UINT8_MAX;
@@ -957,6 +1100,7 @@ UoraMultiUserScheduler::FinalizeTxVector(WifiTxVector& txVector, bool isBasicTri
         info.ru.SetRandomAccessFlag (true);
         txVector.SetHeMuUserInfo(0, info); //AID 0 = RANDOM ACCESS RU
     }
+    */
 }
 
 void

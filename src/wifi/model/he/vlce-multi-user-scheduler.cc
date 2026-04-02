@@ -175,7 +175,7 @@ VlceMultiUserScheduler::SelectTxFormat()
                                     : UlIdleState::SEND_BASIC;
     };
 
-    if (mpdu || !m_enableUlOfdma)
+    if ( (mpdu && m_ulIdleState != UlIdleState::SEND_BSRP) || !m_enableUlOfdma)
     {
       ResetUlState();
       return TrySendingDlMuPpdu();
@@ -201,7 +201,7 @@ VlceMultiUserScheduler::SelectTxFormat()
 
         if (txFormat != DL_MU_TX)
         {
-          m_ulIdleState = UlIdleState::SEND_BSRP;
+          m_ulIdleState = UlIdleState::SEND_DLMU;
           return txFormat;
         }
       }

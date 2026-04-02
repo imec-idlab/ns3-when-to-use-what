@@ -9,7 +9,7 @@ export NS_LOG=""
 run_simulation() {
     local mode="$1"
     local extra_args="$2"
-    local raru="${9:-9}"
+    local raru="${13:-13}"
     local ocw="${7:-7}"
 
 
@@ -30,7 +30,7 @@ run_simulation() {
                 --initNStations=${it} \
                 --RngRun=${run} \
                 --logDir=$logDir \
-                --enablePcap=false \
+                --enablePcap=true \
                 --startLogTime=3 \
                 --enableAggregation=true --nMpdus=0 --nMsdus=10 \
                 --ruAllocationType=ru-26-tone \
@@ -97,11 +97,11 @@ uora() {
         ${BASE_OFDMA}
         --simType=UORA \
         --useMuEdca=true \
-        --muSchedAccessReqInterval=1024 \
+        --muSchedAccessReqInterval=64 \
         --DelayAccessReqUponAccess=true \
         --muEdcaTimer=8192 \
         --scheduler=ns3::UoraMultiUserScheduler \
-        --nRaRus=9 \
+        --nRaRus=13 \
         --OCwMin=7
     "
 }

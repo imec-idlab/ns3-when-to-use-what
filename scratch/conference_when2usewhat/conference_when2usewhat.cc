@@ -156,6 +156,7 @@ int  main(int argc, char *argv[])
   //LogComponentEnable("HeFrameExchangeManager", LOG_LEVEL_ALL);
   //LogComponentEnable("QosFrameExchangeManager", LOG_LEVEL_ALL);
   //LogComponentEnable("QosTxop", LOG_LEVEL_ALL);
+  //LogComponentEnable("UoraMultiUserScheduler", LOG_LEVEL_ALL);
   double simulationTime {10};//seconds
   std::string logDir {"output"};
   double minDistance {1.0}; //meters
@@ -392,7 +393,7 @@ int  main(int argc, char *argv[])
           muEdcaTimer = 8192 * 5;
           maxTimeInList = muEdcaTimer;
 
-          Config::SetDefault("ns3::HtFrameExchangeManager::HtMuTxStartTime", TimeValue(Seconds(startLogTime)));
+          
         }
         /*else if (simType == "OFDMA") {
           muEdcaTimer = 2088960;
@@ -412,6 +413,7 @@ int  main(int argc, char *argv[])
           if (simType =="UORA" && nRaRus) {
             Config::SetDefault ("ns3::HeConfiguration::OCwMin",UintegerValue(OCwMin));
             Config::SetDefault("ns3::HeConfiguration::OCwMax", UintegerValue(OCwMax));
+            Config::SetDefault("ns3::HeFrameExchangeManager::SendQosNullAfterBasicTf", BooleanValue(true));
           }
 
         }
@@ -425,7 +427,8 @@ int  main(int argc, char *argv[])
         Config::SetDefault ("ns3::HeConfiguration::VoMuEdcaTimer", TimeValue (MicroSeconds(muEdcaTimer)));
 
         Config::SetDefault("ns3::HtFrameExchangeManager::DisableEDCA", BooleanValue(true));
-        Config::SetDefault("ns3::HeFrameExchangeManager::MuTxStartTime", TimeValue(Seconds(startLogTime)));
+        Config::SetDefault("ns3::HeFrameExchangeManager::MuTxStartTime", TimeValue(Seconds(1.5)));
+        Config::SetDefault("ns3::HtFrameExchangeManager::HtMuTxStartTime", TimeValue(Seconds(1.5)));
         
   }
 
@@ -525,7 +528,6 @@ int  main(int argc, char *argv[])
           }
           if (scheduler == "ns3::UoraMultiUserScheduler" ) {
             wifimac.SetMultiUserSchedulerAttribute("NumRandomAccessRus", UintegerValue(nRaRus));
-
           }
 
           //this is for uora alone

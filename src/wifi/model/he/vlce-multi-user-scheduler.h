@@ -17,8 +17,8 @@
  * Author: Stefano Avallone <stavallo@unina.it>
  */
 
-#ifndef RR_MULTI_USER_SCHEDULER_H
-#define RR_MULTI_USER_SCHEDULER_H
+#ifndef VLCE_MULTI_USER_SCHEDULER_H
+#define VLCE_MULTI_USER_SCHEDULER_H
 
 #include "multi-user-scheduler.h"
 
@@ -188,4 +188,4 @@ class VlceMultiUserScheduler : public MultiUserScheduler
 
 } // namespace ns3
 
-#endif /* RR_MULTI_USER_SCHEDULER_H */
+#endif /* VLCE_MULTI_USER_SCHEDULER_H */

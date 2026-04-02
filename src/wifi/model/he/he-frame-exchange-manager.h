@@ -378,7 +378,7 @@ class HeFrameExchangeManager : public VhtFrameExchangeManager
     uint16_t m_numRaRus; //!< number of RA RUs in either BSRP and BasicTF (this
                          //is to track number of SA RUs to use in Basic during
                          //Naiks)
-    bool m_partakeInUora; //flag to allow STAs to take part in the UORA or not
+    bool m_sendQosNullAfterBasicTf; //flag to allow STAs to send bsr when allocated RUs in BasicTf but no valid mpdu is available
     Time m_muTxStartTime;
     Time m_partakeInUoraTimer;
     Time m_partakeInUoraStartTime;
