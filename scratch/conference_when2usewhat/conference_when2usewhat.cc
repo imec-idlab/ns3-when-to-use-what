@@ -392,8 +392,7 @@ int  main(int argc, char *argv[])
         if (simType =="A2P" || simType =="A2PV2") {
           muEdcaTimer = 8192 * 5;
           maxTimeInList = muEdcaTimer;
-
-          
+          Config::SetDefault("ns3::HtFrameExchangeManager::HtMuTxStartTime", TimeValue(Seconds(1.5)));
         }
         /*else if (simType == "OFDMA") {
           muEdcaTimer = 2088960;
@@ -428,7 +427,7 @@ int  main(int argc, char *argv[])
 
         Config::SetDefault("ns3::HtFrameExchangeManager::DisableEDCA", BooleanValue(true));
         Config::SetDefault("ns3::HeFrameExchangeManager::MuTxStartTime", TimeValue(Seconds(1.5)));
-        Config::SetDefault("ns3::HtFrameExchangeManager::HtMuTxStartTime", TimeValue(Seconds(1.5)));
+        
         
   }
 

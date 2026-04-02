@@ -9,13 +9,13 @@ export NS_LOG=""
 run_simulation() {
     local mode="$1"
     local extra_args="$2"
-    local raru="${13:-13}"
-    local ocw="${7:-7}"
+    local raru="${18:-18}"
+    local ocw="${63:-63}"
 
 
-    for run in $(seq 9 9); do
-        for nSta in $(seq 20 20); do
-            it=8
+    for run in $(seq 1 1); do
+        for nSta in $(seq 100 100); do
+            it=16
             tt=8
             if [ "$mode" = "uora" ]; then
                 logDir="$PWD/${mode}_${ocw}/${run}-${nSta}-${raru}"
@@ -101,8 +101,8 @@ uora() {
         --DelayAccessReqUponAccess=true \
         --muEdcaTimer=8192 \
         --scheduler=ns3::UoraMultiUserScheduler \
-        --nRaRus=13 \
-        --OCwMin=7
+        --nRaRus=18 \
+        --OCwMin=63
     "
 }
 
