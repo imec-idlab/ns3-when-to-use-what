@@ -380,8 +380,6 @@ class HeFrameExchangeManager : public VhtFrameExchangeManager
                          //Naiks)
     bool m_sendQosNullAfterBasicTf; //flag to allow STAs to send bsr when allocated RUs in BasicTf but no valid mpdu is available
     Time m_muTxStartTime;
-    Time m_partakeInUoraTimer;
-    Time m_partakeInUoraStartTime;
 };
 
 } // namespace ns3

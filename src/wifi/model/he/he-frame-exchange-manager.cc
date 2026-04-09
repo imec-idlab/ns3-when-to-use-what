@@ -80,11 +80,6 @@ HeFrameExchangeManager::GetTypeId()
                                 "Time at which to initite Multi-user transmissions",
                                 TimeValue(Seconds(0.0)),
                                 MakeTimeAccessor(&HeFrameExchangeManager::m_muTxStartTime),
-                                MakeTimeChecker())
-                            .AddAttribute("PartakeInUoraTimer",
-                                "Duration of which not to take part in UORA (Smaller for critical traffic)",
-                                TimeValue(Seconds(0.0)),
-                                MakeTimeAccessor(&HeFrameExchangeManager::m_partakeInUoraTimer),
                                 MakeTimeChecker());
 
     return tid;
