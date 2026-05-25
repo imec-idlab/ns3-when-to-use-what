@@ -18,7 +18,7 @@ nSta=$((8 + nStationsToJoin))
 if [ "$MODE" = "uora" ]; then
     : "${nRaRus:?Missing nRaRus}"
     : "${OCwMin:?Missing OCwMin}"
-    logDir=/scratch/antwerpen/208/vsc20879/${MODE}/ocwMin_${OCwMin}/${run}_run-${nSta}_sta-${nRaRus}_rarus
+    logDir=/data/antwerpen/208/vsc20879/${MODE}/ocwMin_${OCwMin}/${run}_run-${nSta}_sta-${nRaRus}_rarus
 elif [ "$MODE" = "cmab" ]; then
     : "${algorithm:?Missing algorithm (CUCB|ThompsonSampling|EpsilonGreedy|EXP3M)}"
     : "${rewardType:?Missing rewardType (Binary|FairnessWeighted)}"
@@ -33,9 +33,9 @@ elif [ "$MODE" = "cmab" ]; then
         EXP3M)         hpTag="_g${exp3Gamma}"   ;;
         *)             hpTag=""                 ;;
     esac
-    logDir=/scratch/antwerpen/208/vsc20879/${MODE}/${algorithm}_${rewardType}${hpTag}/${run}_run-${nSta}_sta
+    logDir=/data/antwerpen/208/vsc20879/${MODE}/${algorithm}_${rewardType}${hpTag}/${run}_run-${nSta}_sta
 else
-    logDir=/scratch/antwerpen/208/vsc20879/${MODE}/${run}_run-${nSta}_sta
+    logDir=/data/antwerpen/208/vsc20879/${MODE}/${run}_run-${nSta}_sta
 fi
 
 
