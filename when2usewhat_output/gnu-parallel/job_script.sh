@@ -16,9 +16,24 @@ export NS_LOG=""
 nSta=$((8 + nStationsToJoin))
 
 if [ "$MODE" = "uora" ]; then
-    : "${nRaRus:?Missing OCwMin}"
+    : "${nRaRus:?Missing nRaRus}"
     : "${OCwMin:?Missing OCwMin}"
     logDir=/scratch/antwerpen/208/vsc20879/${MODE}/ocwMin_${OCwMin}/${run}_run-${nSta}_sta-${nRaRus}_rarus
+elif [ "$MODE" = "cmab" ]; then
+    : "${algorithm:?Missing algorithm (CUCB|ThompsonSampling|EpsilonGreedy|EXP3M)}"
+    : "${rewardType:?Missing rewardType (Binary|FairnessWeighted)}"
+    : "${ucbConstant:=1.41421}"   # sqrt(2), used only by CUCB
+    : "${epsilon:=0.1}"           # used only by EpsilonGreedy
+    : "${exp3Gamma:=0.1}"         # used only by EXP3M
+    # Append a hyperparameter tag only for algorithms that actually use one,
+    # so ThompsonSampling / default-HP runs get clean paths.
+    case "${algorithm}" in
+        CUCB)          hpTag="_c${ucbConstant}" ;;
+        EpsilonGreedy) hpTag="_e${epsilon}"     ;;
+        EXP3M)         hpTag="_g${exp3Gamma}"   ;;
+        *)             hpTag=""                 ;;
+    esac
+    logDir=/scratch/antwerpen/208/vsc20879/${MODE}/${algorithm}_${rewardType}${hpTag}/${run}_run-${nSta}_sta
 else
     logDir=/scratch/antwerpen/208/vsc20879/${MODE}/${run}_run-${nSta}_sta
 fi
@@ -70,16 +85,6 @@ edca() {
 }
 
 
-ofdma() {
-    run_simulation "
-        ${BASE_OFDMA}
-        --simType=OFDMA
-        --useMuEdca=true
-        --muSchedAccessReqInterval=128
-        --scheduler=ns3::RrMultiUserScheduler
-    "
-}
-
 a2p() {
     run_simulation "
         ${BASE_A2P}
@@ -111,16 +116,34 @@ uora() {
     "
 }
 
+cmab() {
+    run_simulation "
+        ${BASE_OFDMA}
+        --simType=UORA \
+        --useMuEdca=true \
+        --muSchedAccessReqInterval=64 \
+        --DelayAccessReqUponAccess=true \
+        --muEdcaTimer=8192 \
+        --scheduler=ns3::CmabMultiUserScheduler \
+        --nRaRus=0 \
+        --cmabAlgorithm=${algorithm} \
+        --cmabRewardType=${rewardType} \
+        --cmabUcbConstant=${ucbConstant} \
+        --cmabEpsilon=${epsilon} \
+        --cmabExp3Gamma=${exp3Gamma}
+    "
+}
+
 # -
 #
 usage() {
-    echo "Usage: {edca|ofdma|a2p|a2pv2|uora} | Unknown mode: ${MODE}"
+    echo "Usage: {edca|a2p|a2pv2|uora|cmab} | Unknown mode: ${MODE}"
     exit 1
 }
 
 
 case "${MODE}" in
-    edca|ofdma|a2p|a2pv2|uora)
+    edca|a2p|a2pv2|uora|cmab)
         "${MODE}"
         ;;
     *)

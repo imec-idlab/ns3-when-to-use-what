@@ -23,6 +23,7 @@
 #include "he-phy.h"
 #include "uora-multi-user-scheduler.h"
 #include "vlce-multi-user-scheduler.h"
+#include "cmab-multi-user-scheduler.h"
 
 
 #include "ns3/abort.h"
@@ -1291,11 +1292,20 @@ HeFrameExchangeManager::TbPpduTimeout(WifiPsduMap* psduMap,
                                       const std::set<Mac48Address>* staMissedTbPpduFrom,
                                       std::size_t nSolicitedStations)
 {
-  
+
     NS_LOG_FUNCTION(this << psduMap << staMissedTbPpduFrom->size() << nSolicitedStations);
 
     NS_ASSERT(psduMap);
     NS_ASSERT(IsTrigger(*psduMap));
+
+    if (auto cmab = DynamicCast<CmabMultiUserScheduler>(m_muScheduler);
+        cmab != nullptr && m_muScheduler->GetUlMuInfo(m_linkId).trigger.IsBsrp())
+    {
+        for (const auto& addr : *staMissedTbPpduFrom)
+        {
+            cmab->NotifyBsrpNoResponse(addr);
+        }
+    }
 
     // This method is called if some station(s) did not send a TB PPDU
     if (staMissedTbPpduFrom->empty() && m_numRaRus == 0)
@@ -2555,11 +2565,12 @@ HeFrameExchangeManager::ReceiveMpdu(Ptr<const WifiMpdu> mpdu,
                 //received UORA psdu
                 m_staExpectTbPpduFrom.insert (sender);
                 m_numRaRus--;
-
-                if (auto uora = DynamicCast<UoraMultiUserScheduler>(m_muScheduler))
+                //Idea is to elucidate the polling problem so no need to have a
+                //specialized list
+                /*if (auto uora = DynamicCast<UoraMultiUserScheduler>(m_muScheduler))
                 {
                   uora->UpdatePollList(sender);
-                }
+                }*/
             }
             else
             {
@@ -2567,6 +2578,7 @@ HeFrameExchangeManager::ReceiveMpdu(Ptr<const WifiMpdu> mpdu,
                 return;
             }
         }
+
 
         if(isRandomAccess && hdr.GetQosAckPolicy() == WifiMacHeader::NORMAL_ACK)
         {
@@ -2601,11 +2613,13 @@ HeFrameExchangeManager::ReceiveMpdu(Ptr<const WifiMpdu> mpdu,
 
         NS_LOG_DEBUG("Received a QoS Null frame in a TB PPDU from " << sender);
 
-        /*if (m_muScheduler->GetInstanceTypeId().GetName() == "ns3::RrMultiUserScheduler")
+        // Feed CMAB the reward signal
+        if (auto cmab = DynamicCast<CmabMultiUserScheduler>(m_muScheduler);
+            cmab != nullptr)
         {
-          Ptr<RrMultiUserScheduler> rrScheduler = DynamicCast<RrMultiUserScheduler>(m_muScheduler);
-          rrScheduler->AddToStaListBasic(sender);
-        }*/
+            uint8_t qs = hdr.IsQosData() ? hdr.GetQosQueueSize() : 0;
+            cmab->NotifyBsrpResponse(sender, qs);
+        }
 
         // remove the sender from the set of stations that are expected to send a TB PPDU
         m_staExpectTbPpduFrom.erase(sender);

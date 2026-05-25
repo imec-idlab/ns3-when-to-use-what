@@ -11,6 +11,8 @@ run_simulation() {
     local extra_args="$2"
     local raru="${18:-18}"
     local ocw="${63:-63}"
+    local cmab_alg="${CMAB_ALG:-CUCB}"
+    local cmab_reward="${CMAB_REWARD:-Binary}"
 
 
     for run in $(seq 1 1); do
@@ -19,6 +21,8 @@ run_simulation() {
             tt=8
             if [ "$mode" = "uora" ]; then
                 logDir="$PWD/${mode}_${ocw}/${run}-${nSta}-${raru}"
+            elif [ "$mode" = "cmab" ]; then
+                logDir="$PWD/${mode}/${cmab_alg}_${cmab_reward}/${run}-${nSta}"
             else
                 logDir="$PWD/${mode}/${run}-${nSta}"
             fi
@@ -65,16 +69,6 @@ edca() {
     run_simulation "edca" "${BASE_EDCA}"
 }
 
-ofdma() {
-    run_simulation "ofdma" "
-        ${BASE_OFDMA}
-        --simType=OFDMA
-        --useMuEdca=true
-        --muSchedAccessReqInterval=128
-        --scheduler=ns3::RrMultiUserScheduler
-    "
-}
-
 a2p() {
     run_simulation "a2p" "
         ${BASE_A2P}
@@ -106,10 +100,35 @@ uora() {
     "
 }
 
+cmab() {
+    : "${CMAB_ALG:=CUCB}"
+    : "${CMAB_REWARD:=Binary}"
+    : "${CMAB_UCB_C:=1.41421}"
+    : "${CMAB_EPSILON:=0.1}"
+    : "${CMAB_EXP3_GAMMA:=0.1}"
+    export CMAB_ALG CMAB_REWARD
+    run_simulation "cmab" "
+        ${BASE_OFDMA}
+        --simType=UORA \
+        --useMuEdca=true \
+        --muSchedAccessReqInterval=64 \
+        --DelayAccessReqUponAccess=true \
+        --muEdcaTimer=8192 \
+        --scheduler=ns3::CmabMultiUserScheduler \
+        --nRaRus=0 \
+        --cmabAlgorithm=${CMAB_ALG} \
+        --cmabRewardType=${CMAB_REWARD} \
+        --cmabUcbConstant=${CMAB_UCB_C} \
+        --cmabEpsilon=${CMAB_EPSILON} \
+        --cmabExp3Gamma=${CMAB_EXP3_GAMMA}
+    "
+}
+
 # ------- Main logic -------
 #
 usage() {
-    echo "Usage: $0 {edca|ofdma|a2p|a2pv2|uora}"
+    echo "Usage: $0 {edca|a2p|a2pv2|uora|cmab}"
+    echo "  cmab mode honours CMAB_ALG / CMAB_REWARD / CMAB_UCB_C / CMAB_EPSILON / CMAB_EXP3_GAMMA env vars."
     exit 1
 }
 
@@ -118,7 +137,7 @@ if [[ $# -ne 1 ]]; then
 fi
 
 case "$1" in
-    edca|ofdma|a2p|a2pv2|uora)
+    edca|a2p|a2pv2|uora|cmab)
         "$1"
         ;;
     *)

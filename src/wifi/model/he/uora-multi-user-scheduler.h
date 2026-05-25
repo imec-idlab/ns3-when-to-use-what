@@ -101,7 +101,7 @@ class UoraMultiUserScheduler : public MultiUserScheduler
      *         transmissions from suitable stations
      */
     template <class Func>
-    WifiTxVector GetTxVectorForUlMu(Func canBeSolicited, bool isBasicTrigger);
+    WifiTxVector GetTxVectorForUlMu(Func canBeSolicited, bool isBsrpTrigger);
 
     /**
      * Notify the scheduler that a station associated with the AP
@@ -146,7 +146,7 @@ class UoraMultiUserScheduler : public MultiUserScheduler
      *
      * \param txVector the given TXVECTOR
      */
-    void FinalizeTxVector(WifiTxVector& txVector, bool isBasicTrigger);
+    void FinalizeTxVector(WifiTxVector& txVector, bool isBsrpTrigger);
     /**
      * Update credits of the stations in the given list considering that a PPDU having
      * the given duration is being transmitted or solicited by using the given TXVECTOR.

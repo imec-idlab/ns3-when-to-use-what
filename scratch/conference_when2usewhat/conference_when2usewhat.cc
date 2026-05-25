@@ -47,6 +47,9 @@
 #include "ns3/packet-sink.h"
 #include "ns3/packet-tag.h"
 #include "ns3/ap-server-helper.h"
+#include "ns3/video-camera-helper.h"
+#include "ns3/packet-sink-helper.h"
+#include "ns3/packet-sink.h"
 
 #include "ns3/arp-cache.h"
 
@@ -71,6 +74,12 @@ struct stats_t
   std::vector<double> pktDelaysWakeUp, genTimeWakeUp, rxTimeWakeUp;
   std::vector<uint64_t> pktTagWakeUp;
   std::vector<Mac48Address> srcWakeUp;
+
+  //video camera (UL flow on a separate port -> AP PacketSink)
+  uint64_t rxBytesVideo;
+  std::vector<double> pktDelaysVideo, genTimeVideo, rxTimeVideo;
+  std::vector<uint32_t> pktSeqVideo;
+  std::vector<Mac48Address> srcVideo;
 };
 
 std::map<Mac48Address, stats_t> g_statsMap; //!< map for statistics for each station
@@ -126,6 +135,29 @@ void RxTrace ( double startLogTime, Ptr< const Packet> p, const Address &src, co
   }
 }
 
+
+void RxTraceVideo (double startLogTime, Ptr<const Packet> p, const Address &src, const Address &dst)
+{
+  Ptr<Packet> pkt = p->Copy ();
+  SeqTsHeader seqTs;
+  pkt->RemoveHeader (seqTs);
+  startLogTime *= 1e+9;
+
+  if (Simulator::Now ().GetNanoSeconds () < startLogTime) return;
+
+  auto srcIp = InetSocketAddress::ConvertFrom (src).GetIpv4 ();
+  auto it = g_Ip2Mac.find (srcIp);
+  if (it == g_Ip2Mac.end ()) return;
+  auto srcMac = it->second;
+
+  auto &s = g_statsMap[srcMac];
+  s.rxBytesVideo += p->GetSize ();
+  s.pktDelaysVideo.push_back ((Simulator::Now () - seqTs.GetTs ()).GetSeconds ());
+  s.pktSeqVideo.push_back (seqTs.GetSeq ());
+  s.genTimeVideo.push_back (seqTs.GetTs ().GetSeconds ());
+  s.rxTimeVideo.push_back (Simulator::Now ().GetSeconds ());
+  s.srcVideo.push_back (srcMac);
+}
 
 void RxTraceWakeUp ( double startLogTime, Ptr< const Packet> p, const Address &src, const Address &dst, size_t k)
 {
@@ -187,6 +219,13 @@ int  main(int argc, char *argv[])
   uint32_t nRaRus {0};
   std::string scheduler {"ns3::RrMultiUserScheduler"};
 
+  // CMAB scheduler ( applied when scheduler == ns3::CmabMultiUserScheduler).
+  std::string cmabAlgorithm {"CUCB"};       // CUCB | ThompsonSampling | EpsilonGreedy | EXP3M
+  std::string cmabRewardType {"Binary"};    // Binary | FairnessWeighted
+  double cmabUcbConstant {std::sqrt(2.0)};
+  double cmabEpsilon {0.1};
+  double cmabExp3Gamma {0.1};
+
 
   std::string dlAckSeqType {"NO-OFDMA"};
   bool enableUlOfdma {true};
@@ -218,6 +257,12 @@ int  main(int argc, char *argv[])
   double StartSendInterval {0.001}; //seconds
   bool strictWindow {true};
   double poissonMean {5};
+
+  bool enableVideoCamera {true};
+  uint32_t videoCameraStaIndex {0};
+  uint16_t videoCameraPort {10};
+  double videoCameraStartTime {1.5};
+  double videoFps {30.0};
 
   Mac48Address apMacAddress;
 
@@ -257,6 +302,7 @@ int  main(int argc, char *argv[])
   cmd.AddValue ("ruAllocationType","The type of RUs allocated to STAs, if undefined - dynamically selected based on the number of STAs (ru-26-tone, ru-52-tone)", ruAllocationType);
   cmd.AddValue ("nRaRus","Number of RUs to reserve for Random Access", nRaRus);
 
+  
 
   //MAC params
   cmd.AddValue ("useRts", "Enable/disable RTS/CTS", useRts);
@@ -273,6 +319,12 @@ int  main(int argc, char *argv[])
   cmd.AddValue ("OCwMin", "Min OFDMA CW", OCwMin);
   cmd.AddValue ("OCwMax", "Max OFDMA CW", OCwMax);
   cmd.AddValue ("muEdcaTimer", "How long to disable EDCA for and for VlceMultiUserScheduler, how long to stay in polling list without transmission (in Seconds)", muEdcaTimer);
+  cmd.AddValue ("cmabAlgorithm", "CMAB algorithm (CUCB | ThompsonSampling | EpsilonGreedy | EXP3M)", cmabAlgorithm);
+  cmd.AddValue ("cmabRewardType", "Per-arm reward shape (Binary | FairnessWeighted)", cmabRewardType);
+  cmd.AddValue ("cmabUcbConstant", "CUCB exploration constant c in score = mean + c*sqrt(2 ln t / n_i)", cmabUcbConstant);
+  cmd.AddValue ("cmabEpsilon", "EpsilonGreedy random-exploration probability in [0,1]", cmabEpsilon);
+  cmd.AddValue ("cmabExp3Gamma", "EXP3.M mixing parameter gamma in (0,1]", cmabExp3Gamma);
+
 
 
   //Traffic params
@@ -285,9 +337,21 @@ int  main(int argc, char *argv[])
   cmd.AddValue ("strictWindow", "To enable/disable strict AP sending time, independent of packet arrival", strictWindow);
   cmd.AddValue ("poissonMean", "The mean of the values returned by Poisson Distro", poissonMean);
 
+  cmd.AddValue ("enableVideoCamera", "Enable a standalone VideoCameraApp on one STA -> AP (separate UDP port)", enableVideoCamera);
+  cmd.AddValue ("videoCameraPort", "UDP port for the video camera flow", videoCameraPort);
+  cmd.AddValue ("videoCameraStartTime", "Start time of the camera app [s]", videoCameraStartTime);
+  cmd.AddValue ("videoFps", "Video camera frames per second", videoFps);
+
 
 
   cmd.Parse (argc, argv);
+
+  // Force the camera STA index to sit just past the init+join slots.
+  videoCameraStaIndex = initNStations + nStationsToJoin;
+  NS_ABORT_MSG_IF (videoCameraStaIndex >= totalNStations,
+                   "videoCameraStaIndex (initNStations + nStationsToJoin = "
+                   << videoCameraStaIndex << ") is out of range [0, "
+                   << totalNStations << ")");
 
   /*
    * make and change into the lodDir
@@ -398,7 +462,7 @@ int  main(int argc, char *argv[])
           muEdcaTimer = 2088960;
 
         }*/
-        else if (simType =="UORA" || simType == "OFDMA") {
+        else if (simType =="UORA" || simType == "CMAB") {
           //STA timer (validity of set)
           /* Disable EDCA for the duration of the entire simulation:
            *    Calculate the ceiling multiple of
@@ -528,9 +592,24 @@ int  main(int argc, char *argv[])
           if (scheduler == "ns3::UoraMultiUserScheduler" ) {
             wifimac.SetMultiUserSchedulerAttribute("NumRandomAccessRus", UintegerValue(nRaRus));
           }
+          if (scheduler == "ns3::CmabMultiUserScheduler") {
+            NS_ABORT_MSG_IF (cmabAlgorithm != "CUCB" &&
+                             cmabAlgorithm != "ThompsonSampling" &&
+                             cmabAlgorithm != "EpsilonGreedy" &&
+                             cmabAlgorithm != "EXP3M",
+                             "Invalid --cmabAlgorithm: " << cmabAlgorithm
+                             << " (expected CUCB | ThompsonSampling | EpsilonGreedy | EXP3M)");
+            NS_ABORT_MSG_IF (cmabRewardType != "Binary" &&
+                             cmabRewardType != "FairnessWeighted",
+                             "Invalid --cmabRewardType: " << cmabRewardType
+                             << " (expected Binary | FairnessWeighted)");
+            wifimac.SetMultiUserSchedulerAttribute("Algorithm",   StringValue(cmabAlgorithm));
+            wifimac.SetMultiUserSchedulerAttribute("RewardType",  StringValue(cmabRewardType));
+            wifimac.SetMultiUserSchedulerAttribute("UcbConstant", DoubleValue(cmabUcbConstant));
+            wifimac.SetMultiUserSchedulerAttribute("Epsilon",     DoubleValue(cmabEpsilon));
+            wifimac.SetMultiUserSchedulerAttribute("Exp3Gamma",   DoubleValue(cmabExp3Gamma));
+          }
 
-          //this is for uora alone
-          //wifimac.SetMultiUserSchedulerAttribute("NumRandomAccessRus", UintegerValue(nRaRus));
 
         }
         wifimac.SetType ("ns3::ApWifiMac",
@@ -653,10 +732,21 @@ int  main(int argc, char *argv[])
        totalNStationsSet.insert(i);
     }
 
+    if (enableVideoCamera)
+    {
+      size_t cand;
+      do {
+        cand = rv->GetInteger();
+      } while (initNStationsSet.count(cand) || nStationsToJoinSet.count(cand));
+      videoCameraStaIndex = cand;
+    }
+
     double staStartTime = 1;
     //Initial Session Stations
     for (auto i : initNStationsSet)
     {
+      // Camera STA runs video only -- skip the AC_VO voice client here.
+      if (enableVideoCamera && i == videoCameraStaIndex) continue;
       staStartTime += 0.00208;
       StaClientHelper staUdpClient (apLocalAddress);
       staUdpClient.SetAttribute ("MaxPackets", UintegerValue (4294967295u));
@@ -675,6 +765,8 @@ int  main(int argc, char *argv[])
     //poison clients
     for (auto i : nStationsToJoinSet )
     {
+      // Camera STA runs video only -- skip the AC_VO voice client here.
+      if (enableVideoCamera && i == videoCameraStaIndex) continue;
       staStartTime += 0.00208;
       StaClientHelper staUdpClient (apLocalAddress);
       staUdpClient.SetAttribute ("MaxPackets", UintegerValue (4294967295u));
@@ -701,6 +793,8 @@ int  main(int argc, char *argv[])
   // idle clients
     for (auto i : totalNStationsSet)
     {
+      // Camera STA runs video only -- skip the AC_VO voice client here.
+      if (enableVideoCamera && i == videoCameraStaIndex) continue;
       staStartTime += 0.00208;
       StaClientHelper staUdpClient (apLocalAddress);
       staUdpClient.SetAttribute ("MaxPackets", UintegerValue (4294967295u));
@@ -717,8 +811,10 @@ int  main(int argc, char *argv[])
     }
   }
   else {
-    for (size_t i = 0; i < totalNStations; i++) 
+    for (size_t i = 0; i < totalNStations; i++)
     {
+      // Camera STA runs video only -- skip the AC_VO voice client here.
+      if (enableVideoCamera && i == videoCameraStaIndex) continue;
       StaClientHelper staUdpClient (apLocalAddress);
       staUdpClient.SetAttribute ("MaxPackets", UintegerValue (4294967295u));
       staUdpClient.SetAttribute ("InitSession", BooleanValue (false));
@@ -729,6 +825,43 @@ int  main(int argc, char *argv[])
       staUdpclientApp.Start (Seconds (0) );
       staUdpclientApp.Stop (Seconds (simulationTime + startLogTime));
     }
+  }
+
+  // Standalone VideoCameraApp: one STA streams video to a PacketSink on the AP 
+  if (enableVideoCamera)
+  {
+    NS_ABORT_MSG_IF (videoCameraStaIndex >= totalNStations,
+                     "videoCameraStaIndex out of range");
+
+    InetSocketAddress videoSinkAddr (
+        apNodeInterface.Get (0).first->GetAddress (1, 0).GetAddress (),
+        videoCameraPort);
+    videoSinkAddr.SetTos (0xa0); // AC_VI (priority 5)
+
+    PacketSinkHelper videoSinkHelper ("ns3::UdpSocketFactory",
+        InetSocketAddress (Ipv4Address::GetAny (), videoCameraPort));
+    ApplicationContainer videoSinkApp = videoSinkHelper.Install (wifiApNode);
+    videoSinkApp.Start (Seconds (0));
+    videoSinkApp.Stop (Seconds (simulationTime + startLogTime));
+
+    // Tuned for a hall projection use case: 1080p talking-head, GOP 0.5s for
+    // faster recovery from packet loss, low P-frame size since speaker motion
+    // is small. ~1.6 Mbps app-layer, 172 pkts/s with two I-frame bursts/s.
+    VideoCameraHelper cameraHelper (videoSinkAddr);
+    cameraHelper.SetAttribute ("Fps",             DoubleValue (videoFps));
+    cameraHelper.SetAttribute ("Gop",             UintegerValue (15));
+    cameraHelper.SetAttribute ("IFrameMeanBytes", UintegerValue (80000));
+    cameraHelper.SetAttribute ("IFrameStdBytes",  UintegerValue (12000));
+    cameraHelper.SetAttribute ("PFrameMeanBytes", UintegerValue (1500));
+    cameraHelper.SetAttribute ("PFrameStdBytes",  UintegerValue (600));
+    ApplicationContainer cameraApp =
+        cameraHelper.Install (wifiStaNodes.Get (videoCameraStaIndex));
+    cameraApp.Start (Seconds (videoCameraStartTime));
+    cameraApp.Stop (Seconds (simulationTime + startLogTime));
+
+    videoSinkApp.Get (0)->TraceConnectWithoutContext (
+        "RxWithAddresses",
+        MakeBoundCallback (&RxTraceVideo, startLogTime));
   }
 
   Simulator::Schedule (Seconds (0), &Ipv4GlobalRoutingHelper::PopulateRoutingTables);
@@ -813,7 +946,8 @@ int  main(int argc, char *argv[])
 
   std::ofstream perStaOutStream;
   perStaOutStream.open ("per_sta_stats.out", std::ios::out);
-  perStaOutStream << "MAC-addr\tSINR_dB\tRX_bytes\tAvg_delay_ms\tPacket_loss_ratio" << std::endl;
+  perStaOutStream << "MAC-addr\tSINR_dB\tRX_bytes\tAvg_delay_ms\tPacket_loss_ratio"
+                  << "\tVideo_RX_bytes\tVideo_pkts\tVideo_avg_delay_ms" << std::endl;
   for (auto &staStats : g_statsMap)
     {
       staStats.second.sinr /= staStats.second.totalBeacons;
@@ -825,8 +959,19 @@ int  main(int argc, char *argv[])
         {
           sumDelay += delay * 1000.; //in ms
         }
+
+      double videoSumDelay = 0.;
+      for (auto &d : staStats.second.pktDelaysVideo) videoSumDelay += d * 1000.;
+      double videoAvgDelay = staStats.second.pktDelaysVideo.empty ()
+          ? 0.
+          : videoSumDelay / staStats.second.pktDelaysVideo.size ();
+
       perStaOutStream << staStats.first << "\t" << staStats.second.sinr << "\t" << staStats.second.rxBytes
-        << "\t" << sumDelay / staStats.second.pktDelays.size () << "\t" << pktLossRatio << std::endl;
+        << "\t" << sumDelay / staStats.second.pktDelays.size () << "\t" << pktLossRatio
+        << "\t" << staStats.second.rxBytesVideo
+        << "\t" << staStats.second.pktDelaysVideo.size ()
+        << "\t" << videoAvgDelay
+        << std::endl;
     }
   perStaOutStream.close ();
 

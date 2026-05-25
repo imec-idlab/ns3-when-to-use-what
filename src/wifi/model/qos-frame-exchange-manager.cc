@@ -179,6 +179,33 @@ QosFrameExchangeManager::StartTransmission(Ptr<QosTxop> edca, Time txopDuration)
 {
     NS_LOG_FUNCTION(this << edca << txopDuration);
 
+    // If PHY is currently TX/SWITCHING when this scheduled-continuation fires,
+    // a higher-priority SIFS frame (typically a Normal Ack scheduled from
+    // ReceiveMpdu) won the same simulator instant. Defer the continuation by
+    // another SIFS so we don't end up scheduling two Send()s on the same PHY
+    // within nanoseconds. 
+    auto& phyState = *m_phy->GetState();
+    if (phyState.IsStateTx() || phyState.IsStateSwitching())
+    {
+        NS_LOG_DEBUG("PHY busy (TX/SWITCHING); re-deferring TXOP continuation");
+        if (edca && edca->GetTxopLimit(m_linkId).IsStrictlyPositive() &&
+            edca->GetRemainingTxop(m_linkId) > m_phy->GetSifs())
+        {
+            bool (QosFrameExchangeManager::*fp)(Ptr<QosTxop>, Time) =
+                &QosFrameExchangeManager::StartTransmission;
+            Simulator::Schedule(m_phy->GetSifs(), fp, this, edca, txopDuration);
+        }
+        else if (edca)
+        {
+            edca->NotifyChannelReleased(m_linkId);
+            if (m_edca == edca)
+            {
+                m_edca = nullptr;
+            }
+        }
+        return false;
+    }
+
     if (m_pifsRecoveryEvent.IsRunning())
     {
         // Another AC (having AIFS=1 or lower, if the user changed the default settings)

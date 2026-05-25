@@ -1,7 +1,7 @@
 #!/bin/bash
 
 usage() {
-    echo "Usage: $0 {edca|ofdma|a2p|a2pv2|uora}"
+    echo "Usage: $0 {edca|ofdma|a2p|a2pv2|uora|cmab}"
     exit 1
 }
 

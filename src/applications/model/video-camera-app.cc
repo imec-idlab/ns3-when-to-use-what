@@ -1,0 +1,128 @@
+#include "video-camera-app.h"
+#include "ns3/udp-socket-factory.h"
+#include "ns3/packet.h"
+#include "ns3/seq-ts-header.h"
+#include "ns3/simulator.h"
+#include "ns3/log.h"
+#include "ns3/uinteger.h"
+#include "ns3/double.h"
+#include "ns3/address-utils.h"
+
+namespace ns3 {
+
+NS_LOG_COMPONENT_DEFINE("VideoCameraApp");
+NS_OBJECT_ENSURE_REGISTERED(VideoCameraApp);
+
+TypeId VideoCameraApp::GetTypeId(void) {
+    static TypeId tid = TypeId("ns3::VideoCameraApp")
+        .SetParent<Application>()
+        .AddConstructor<VideoCameraApp>()
+        .AddAttribute("RemoteAddress", "Destination address",
+                      AddressValue(),
+                      MakeAddressAccessor(&VideoCameraApp::m_peer),
+                      MakeAddressChecker())
+        .AddAttribute("Fps", "Frames per second",
+                      DoubleValue(30.0),
+                      MakeDoubleAccessor(&VideoCameraApp::m_fps),
+                      MakeDoubleChecker<double>(1.0, 120.0))
+        .AddAttribute("Gop", "GOP length (I-frame period in frames)",
+                      UintegerValue(30),
+                      MakeUintegerAccessor(&VideoCameraApp::m_gop),
+                      MakeUintegerChecker<uint32_t>(1))
+        .AddAttribute("IFrameMeanBytes", "Mean I-frame size",
+                      UintegerValue(50000),
+                      MakeUintegerAccessor(&VideoCameraApp::m_iMean),
+                      MakeUintegerChecker<uint32_t>())
+        .AddAttribute("IFrameStdBytes", "I-frame std deviation",
+                      UintegerValue(8000),
+                      MakeUintegerAccessor(&VideoCameraApp::m_iStd),
+                      MakeUintegerChecker<uint32_t>())
+        .AddAttribute("PFrameMeanBytes", "Mean P-frame size",
+                      UintegerValue(2048),
+                      MakeUintegerAccessor(&VideoCameraApp::m_pMean),
+                      MakeUintegerChecker<uint32_t>())
+        .AddAttribute("PFrameStdBytes", "P-frame std deviation",
+                      UintegerValue(1024),
+                      MakeUintegerAccessor(&VideoCameraApp::m_pStd),
+                      MakeUintegerChecker<uint32_t>())
+        .AddAttribute("Mtu", "Max UDP payload bytes",
+                      UintegerValue(1400),
+                      MakeUintegerAccessor(&VideoCameraApp::m_mtu),
+                      MakeUintegerChecker<uint32_t>(100, 1500))
+        .AddAttribute("IntraBurstGap",
+                      "Time between consecutive fragments of one frame",
+                      TimeValue(MicroSeconds(50)),
+                      MakeTimeAccessor(&VideoCameraApp::m_intraBurstGap),
+                      MakeTimeChecker());
+    return tid;
+}
+
+VideoCameraApp::VideoCameraApp() : m_socket(0), m_frameIndex(0), m_seqNo(0) {}
+VideoCameraApp::~VideoCameraApp() {}
+
+void VideoCameraApp::StartApplication(void) {
+    if (!m_socket) {
+        m_socket = Socket::CreateSocket(GetNode(),
+                                        UdpSocketFactory::GetTypeId());
+        m_socket->Bind();
+        m_socket->Connect(m_peer);
+    }
+    m_iSize = CreateObject<NormalRandomVariable>();
+    m_iSize->SetAttribute("Mean", DoubleValue(m_iMean));
+    m_iSize->SetAttribute("Variance", DoubleValue((double)m_iStd * m_iStd));
+    m_pSize = CreateObject<NormalRandomVariable>();
+    m_pSize->SetAttribute("Mean", DoubleValue(m_pMean));
+    m_pSize->SetAttribute("Variance", DoubleValue((double)m_pStd * m_pStd));
+
+    m_frameIndex = 0;
+    m_seqNo = 0;
+    ScheduleNextFrame();
+}
+
+void VideoCameraApp::StopApplication(void) {
+    if (m_nextFrameEvent.IsRunning()) Simulator::Cancel(m_nextFrameEvent);
+    if (m_socket) { m_socket->Close(); m_socket = 0; }
+}
+
+void VideoCameraApp::ScheduleNextFrame(void) {
+    Time interval = Seconds(1.0 / m_fps);
+    m_nextFrameEvent = Simulator::Schedule(
+        interval, &VideoCameraApp::GenerateAndSendFrame, this);
+}
+
+void VideoCameraApp::GenerateAndSendFrame(void) {
+    bool isI = (m_frameIndex % m_gop) == 0;
+    double sample = isI ? m_iSize->GetValue() : m_pSize->GetValue();
+    uint32_t size = std::max<uint32_t>(500, static_cast<uint32_t>(sample));
+
+    NS_LOG_INFO("Frame " << m_frameIndex
+                << (isI ? " I " : " P ")
+                << size << " bytes");
+
+    SendFragments(size);
+    m_frameIndex++;
+    ScheduleNextFrame();
+}
+
+void VideoCameraApp::SendFragments(uint32_t totalSize) {
+    const uint32_t hdrSize = SeqTsHeader().GetSerializedSize();
+    NS_ASSERT_MSG(m_mtu > hdrSize, "MTU must exceed SeqTsHeader size");
+    const uint32_t maxPayload = m_mtu - hdrSize;
+
+    uint32_t remaining = totalSize;
+    Time t = Seconds(0);
+    while (remaining > 0) {
+        uint32_t chunk = std::min(remaining, maxPayload);
+        Simulator::Schedule(t, [this, chunk]() {
+            Ptr<Packet> p = Create<Packet>(chunk);
+            SeqTsHeader hdr;
+            hdr.SetSeq(m_seqNo++);
+            p->AddHeader(hdr);
+            m_socket->Send(p);
+        });
+        remaining -= chunk;
+        t += m_intraBurstGap;
+    }
+}
+
+} // namespace ns3
