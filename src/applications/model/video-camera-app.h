@@ -21,7 +21,7 @@ private:
 
     void ScheduleNextFrame(void);
     void GenerateAndSendFrame(void);
-    void SendFragments(uint32_t totalSize);
+    void SendFragments(uint32_t totalSize, Time frameTs);
 
     Ptr<Socket> m_socket;
     Address m_peer;

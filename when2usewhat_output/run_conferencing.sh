@@ -9,7 +9,7 @@ export NS_LOG=""
 run_simulation() {
     local mode="$1"
     local extra_args="$2"
-    local raru="${18:-18}"
+    local raru="${0:-0}"
     local ocw="${63:-63}"
     local cmab_alg="${CMAB_ALG:-CUCB}"
     local cmab_reward="${CMAB_REWARD:-Binary}"
@@ -22,9 +22,9 @@ run_simulation() {
             if [ "$mode" = "uora" ]; then
                 logDir="$PWD/${mode}_${ocw}/${run}-${nSta}-${raru}"
             elif [ "$mode" = "cmab" ]; then
-                logDir="$PWD/${mode}/${cmab_alg}_${cmab_reward}/${run}-${nSta}"
+                logDir="$PWD/local_${mode}/${cmab_alg}_${cmab_reward}/${run}-${nSta}"
             else
-                logDir="$PWD/${mode}/${run}-${nSta}"
+                logDir="$PWD/local_${mode}/${run}-${nSta}"
             fi
             ./../ns3 run --no-build --gdb \
                 "scratch/conference_when2usewhat/conference_when2usewhat \
@@ -95,7 +95,7 @@ uora() {
         --DelayAccessReqUponAccess=true \
         --muEdcaTimer=8192 \
         --scheduler=ns3::UoraMultiUserScheduler \
-        --nRaRus=18 \
+        --nRaRus=0 \
         --OCwMin=63
     "
 }

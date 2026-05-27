@@ -204,7 +204,7 @@ int  main(int argc, char *argv[])
   std::size_t scenario {1};
   bool onOffFlag {true};
   std::string simType {"OFDMA"};
-  bool enablePcap {false}; 
+  bool enablePcap {false};
 
 
   std::string frequency {"5"}; //whether 2.4, 5 or 6 GHz
@@ -245,7 +245,7 @@ int  main(int argc, char *argv[])
   double  muEdcaTimer {8192};
   double maxTimeInList {8192 * 5}; //amount credit a stations can have when using
                         //RrMultiUserScheduler, and how long to disable edca for
-                        //in VlceMultiUserScheduler in MicroSeconds 
+                        //in VlceMultiUserScheduler in MicroSeconds
 
 
   uint32_t ulPayloadSize = 740; // must fit in the max TX duration when transmitting at MCS 0 over an RU of 26 tones
@@ -302,7 +302,7 @@ int  main(int argc, char *argv[])
   cmd.AddValue ("ruAllocationType","The type of RUs allocated to STAs, if undefined - dynamically selected based on the number of STAs (ru-26-tone, ru-52-tone)", ruAllocationType);
   cmd.AddValue ("nRaRus","Number of RUs to reserve for Random Access", nRaRus);
 
-  
+
 
   //MAC params
   cmd.AddValue ("useRts", "Enable/disable RTS/CTS", useRts);
@@ -456,12 +456,8 @@ int  main(int argc, char *argv[])
         if (simType =="A2P" || simType =="A2PV2") {
           muEdcaTimer = 8192 * 5;
           maxTimeInList = muEdcaTimer;
-          Config::SetDefault("ns3::HtFrameExchangeManager::HtMuTxStartTime", TimeValue(Seconds(1.5)));
+          //Config::SetDefault("ns3::HtFrameExchangeManager::HtMuTxStartTime", TimeValue(Seconds(1.5)));
         }
-        /*else if (simType == "OFDMA") {
-          muEdcaTimer = 2088960;
-
-        }*/
         else if (simType =="UORA" || simType == "CMAB") {
           //STA timer (validity of set)
           /* Disable EDCA for the duration of the entire simulation:
@@ -470,7 +466,7 @@ int  main(int argc, char *argv[])
            */
           int simTime = Seconds(simulationTime).GetMicroSeconds();
           muEdcaTimer = (simTime % 8192 == 0) ? simTime : ( std::round( simTime / 8192.0) * 8192);
-          
+
           Config::SetDefault("ns3::QosTxop::LongerEDCADisable", BooleanValue(true));
 
           if (simType =="UORA" && nRaRus) {
@@ -491,8 +487,9 @@ int  main(int argc, char *argv[])
 
         Config::SetDefault("ns3::HtFrameExchangeManager::DisableEDCA", BooleanValue(true));
         Config::SetDefault("ns3::HeFrameExchangeManager::MuTxStartTime", TimeValue(Seconds(1.5)));
-        
-        
+        Config::SetDefault("ns3::HtFrameExchangeManager::HtMuTxStartTime", TimeValue(Seconds(1.5)));
+
+
   }
 
   //sifs and slot time
@@ -621,7 +618,7 @@ int  main(int argc, char *argv[])
       apNetDevice = wifi.Install (phy, wifimac, wifiApNode);
       if (enablePcap) {
         phy.EnablePcap("wifi-ax-ofdma-ap", apNetDevice); // enable pcap tracing
-        phy.EnablePcap("wifi-ax-ofdma-sta", staNetDevices);
+        //phy.EnablePcap("wifi-ax-ofdma-sta", staNetDevices);
       }
     }
   else
@@ -704,6 +701,7 @@ int  main(int argc, char *argv[])
     staServerApp.Stop(Seconds(simulationTime + startLogTime ));
   }
 
+  double staStartTime = 1;
   if (scenario) {
 
     std::set<std::size_t> totalNStationsSet;
@@ -741,7 +739,7 @@ int  main(int argc, char *argv[])
       videoCameraStaIndex = cand;
     }
 
-    double staStartTime = 1;
+
     //Initial Session Stations
     for (auto i : initNStationsSet)
     {
@@ -827,7 +825,7 @@ int  main(int argc, char *argv[])
     }
   }
 
-  // Standalone VideoCameraApp: one STA streams video to a PacketSink on the AP 
+  // Standalone VideoCameraApp: one STA streams video to a PacketSink on the AP
   if (enableVideoCamera)
   {
     NS_ABORT_MSG_IF (videoCameraStaIndex >= totalNStations,
@@ -856,7 +854,10 @@ int  main(int argc, char *argv[])
     cameraHelper.SetAttribute ("PFrameStdBytes",  UintegerValue (600));
     ApplicationContainer cameraApp =
         cameraHelper.Install (wifiStaNodes.Get (videoCameraStaIndex));
-    cameraApp.Start (Seconds (videoCameraStartTime));
+
+    //double cameraStart = std::min (videoCameraStartTime,
+     //                              staStartTime + 0.00208);
+    cameraApp.Start (Seconds (staStartTime + 0.00208));
     cameraApp.Stop (Seconds (simulationTime + startLogTime));
 
     videoSinkApp.Get (0)->TraceConnectWithoutContext (
@@ -874,6 +875,10 @@ int  main(int argc, char *argv[])
         wifi_mac->SetAttribute("VO_MaxAmpduSize", UintegerValue (nMpdus * ulPayloadSize ));
         wifi_mac->SetAttribute("VO_MaxAmsduSize", UintegerValue (nMsdus * ulPayloadSize ));
       }
+      if (enableAggregation && enableVideoCamera && i == videoCameraStaIndex) {
+        wifi_mac->SetAttribute("VI_MaxAmpduSize", UintegerValue (6500631));
+        wifi_mac->SetAttribute("VI_MaxAmsduSize", UintegerValue (11398));
+      }
       wifi_mac->GetQosTxop(AC_VO)->SetTxopLimit(MicroSeconds(txOpLimits));
       auto mac = Mac48Address::ConvertFrom (staNetDevices.Get (i)->GetAddress ());
       auto ip = staNodeInterfaces.Get (i).first->GetAddress (1, 0).GetAddress ();
@@ -889,6 +894,8 @@ int  main(int argc, char *argv[])
       if (enableAggregation) {
         wifi_mac->SetAttribute("VO_MaxAmpduSize", UintegerValue (nMpdus * dlPayloadSize ));
         wifi_mac->SetAttribute("VO_MaxAmsduSize", UintegerValue (nMsdus * dlPayloadSize ));
+        wifi_mac->SetAttribute("VI_MaxAmpduSize", UintegerValue (6500631));
+        wifi_mac->SetAttribute("VI_MaxAmsduSize", UintegerValue (11398));
       }
       wifi_mac->GetQosTxop(AC_VO)->SetTxopLimit(MicroSeconds(txOpLimits));
       auto mac = Mac48Address::ConvertFrom (apNetDevice.Get (i)->GetAddress ());
@@ -1067,7 +1074,7 @@ int  main(int argc, char *argv[])
     }
     pktDistOutStream.close();
   } */
-  
+
   std::ofstream pktDistOutStream;
   for (auto &staStats : g_statsMapAp) {
     //std::ostringstream mac_str;

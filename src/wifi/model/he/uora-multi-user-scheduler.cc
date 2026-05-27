@@ -979,7 +979,7 @@ UoraMultiUserScheduler::FinalizeTxVector(WifiTxVector& txVector, bool isBsrpTrig
     // remove candidates that will not be served
     m_candidates.erase(candidateIt, m_candidates.end());
 
-    if (isBsrpTrigger)
+    if (isBsrpTrigger && nRandomAccessRus)
     {
       uint8_t minMcs = UINT8_MAX;
       uint8_t minNss = UINT8_MAX;

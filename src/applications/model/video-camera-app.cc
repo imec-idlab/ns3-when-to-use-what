@@ -8,6 +8,8 @@
 #include "ns3/double.h"
 #include "ns3/address-utils.h"
 
+#include <algorithm>
+
 namespace ns3 {
 
 NS_LOG_COMPONENT_DEFINE("VideoCameraApp");
@@ -92,19 +94,21 @@ void VideoCameraApp::ScheduleNextFrame(void) {
 
 void VideoCameraApp::GenerateAndSendFrame(void) {
     bool isI = (m_frameIndex % m_gop) == 0;
-    double sample = isI ? m_iSize->GetValue() : m_pSize->GetValue();
-    uint32_t size = std::max<uint32_t>(500, static_cast<uint32_t>(sample));
+    double raw = isI ? m_iSize->GetValue() : m_pSize->GetValue();
+    double clamped = std::clamp(raw, 500.0, isI ? 200000.0 : 30000.0);
+    uint32_t size = static_cast<uint32_t>(clamped);
 
     NS_LOG_INFO("Frame " << m_frameIndex
                 << (isI ? " I " : " P ")
                 << size << " bytes");
 
-    SendFragments(size);
+    Time frameTs = Simulator::Now();
+    SendFragments(size, frameTs);
     m_frameIndex++;
     ScheduleNextFrame();
 }
 
-void VideoCameraApp::SendFragments(uint32_t totalSize) {
+void VideoCameraApp::SendFragments(uint32_t totalSize, Time frameTs) {
     const uint32_t hdrSize = SeqTsHeader().GetSerializedSize();
     NS_ASSERT_MSG(m_mtu > hdrSize, "MTU must exceed SeqTsHeader size");
     const uint32_t maxPayload = m_mtu - hdrSize;
@@ -113,10 +117,11 @@ void VideoCameraApp::SendFragments(uint32_t totalSize) {
     Time t = Seconds(0);
     while (remaining > 0) {
         uint32_t chunk = std::min(remaining, maxPayload);
-        Simulator::Schedule(t, [this, chunk]() {
+        Simulator::Schedule(t, [this, chunk, frameTs]() {
             Ptr<Packet> p = Create<Packet>(chunk);
             SeqTsHeader hdr;
             hdr.SetSeq(m_seqNo++);
+            hdr.SetTs(frameTs.GetNanoSeconds());
             p->AddHeader(hdr);
             m_socket->Send(p);
         });
