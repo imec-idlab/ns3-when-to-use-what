@@ -9,8 +9,8 @@ export NS_LOG=""
 run_simulation() {
     local mode="$1"
     local extra_args="$2"
-    local raru="${0:-0}"
-    local ocw="${63:-63}"
+    local raru="${RA_RU_COUNT:-0}"
+    local ocw="${OCW_MIN:-63}"
     local cmab_alg="${CMAB_ALG:-CUCB}"
     local cmab_reward="${CMAB_REWARD:-Binary}"
 
@@ -20,7 +20,7 @@ run_simulation() {
             it=16
             tt=8
             if [ "$mode" = "uora" ]; then
-                logDir="$PWD/${mode}_${ocw}/${run}-${nSta}-${raru}"
+                logDir="$PWD/local_${mode}_${ocw}/${run}-${nSta}-${raru}"
             elif [ "$mode" = "cmab" ]; then
                 logDir="$PWD/local_${mode}/${cmab_alg}_${cmab_reward}/${run}-${nSta}"
             else
@@ -89,14 +89,13 @@ a2pv2() {
 uora() {
     run_simulation "uora" "
         ${BASE_OFDMA}
-        --simType=UORA \
-        --useMuEdca=true \
-        --muSchedAccessReqInterval=64 \
-        --DelayAccessReqUponAccess=true \
-        --muEdcaTimer=8192 \
-        --scheduler=ns3::UoraMultiUserScheduler \
-        --nRaRus=0 \
-        --OCwMin=63
+        --simType=UORA
+        --useMuEdca=true
+        --muSchedAccessReqInterval=64
+        --DelayAccessReqUponAccess=true
+        --scheduler=ns3::UoraMultiUserScheduler
+        --nRaRus=${raru}
+        --OCwMin=${ocw}
     "
 }
 

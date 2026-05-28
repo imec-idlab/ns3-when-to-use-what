@@ -465,6 +465,14 @@ UoraMultiUserScheduler::TrySendingBsrpTf()
     NS_LOG_DEBUG("Duration of QoS Null frames: " << qosNullTxDuration.As(Time::MS));
     m_trigger.SetUlLength(ulLength);
 
+    if (!m_candidates.empty())
+    {
+        std::size_t polled = std::min(m_candidates.size(), m_staListUl.size());
+        auto it = m_staListUl.begin();
+        std::advance(it, polled);
+        m_staListUl.splice(m_staListUl.end(), m_staListUl, m_staListUl.begin(), it);
+    }
+
     return UL_MU_TX;
 }
 
@@ -631,6 +639,7 @@ UoraMultiUserScheduler::TrySendingBasicTf()
         userInfo.SetBasicTriggerDepUserInfo(0, 0, m_edca->GetAccessCategory());
     }
 
+    /*
     if (m_candidates.size())
     {
       auto it = m_staListUl.begin();
@@ -638,7 +647,7 @@ UoraMultiUserScheduler::TrySendingBasicTf()
       std::advance(it, nSaRUs);
 
       m_staListUl.splice(m_staListUl.end(), m_staListUl, m_staListUl.begin(), it);
-    }
+    } */
 
 
     return UL_MU_TX;
