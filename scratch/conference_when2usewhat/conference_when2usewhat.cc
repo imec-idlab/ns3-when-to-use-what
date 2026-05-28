@@ -863,6 +863,14 @@ int  main(int argc, char *argv[])
     videoSinkApp.Get (0)->TraceConnectWithoutContext (
         "RxWithAddresses",
         MakeBoundCallback (&RxTraceVideo, startLogTime));
+
+    {
+      std::ostringstream camRtsPath;
+      camRtsPath << "/NodeList/" << wifiStaNodes.Get (videoCameraStaIndex)->GetId ()
+                 << "/DeviceList/*/$ns3::WifiNetDevice/RemoteStationManager/RtsCtsThreshold";
+      Config::Set (camRtsPath.str (),
+                   UintegerValue (std::numeric_limits<uint32_t>::max ()));
+    }
   }
 
   Simulator::Schedule (Seconds (0), &Ipv4GlobalRoutingHelper::PopulateRoutingTables);
