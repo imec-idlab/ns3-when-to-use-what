@@ -488,6 +488,12 @@ VlceMultiUserScheduler::TrySendingBasicTf()
         return TxFormat::SU_TX;
     }
 
+    if (m_staListToPoll.empty())
+    {
+        NS_LOG_DEBUG("No stations in poll list: return DL_MU_TX");
+        return TxFormat::DL_MU_TX;
+    }
+
     // check if an UL OFDMA transmission is possible after a DL OFDMA transmission
     NS_ABORT_MSG_IF(m_ulPsduSize == 0, "The UlPsduSize attribute must be set to a non-null value");
 
