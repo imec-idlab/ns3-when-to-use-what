@@ -372,9 +372,9 @@ int  main(int argc, char *argv[])
     }
   else
     {
-      //use rts/cts for edca to see if this solves the retransmission issue in
-      //some cases.
-      Config::SetDefault ("ns3::WifiRemoteStationManager::RtsCtsThreshold", StringValue ("700"));
+      std::string rtsThreshold = (simType == "UORA") ? "4294967295" : "700";
+      Config::SetDefault ("ns3::WifiRemoteStationManager::RtsCtsThreshold",
+                          StringValue (rtsThreshold));
       Config::SetDefault("ns3::WifiDefaultProtectionManager::EnableMuRts", BooleanValue(false));
     }
 
@@ -456,7 +456,7 @@ int  main(int argc, char *argv[])
         if (simType =="A2P" || simType =="A2PV2") {
           muEdcaTimer = 8192 * 5;
           maxTimeInList = muEdcaTimer;
-          //Config::SetDefault("ns3::HtFrameExchangeManager::HtMuTxStartTime", TimeValue(Seconds(1.5)));
+          Config::SetDefault("ns3::HtFrameExchangeManager::HtMuTxStartTime", TimeValue(Seconds(1.5)));
         }
         else if (simType =="UORA" || simType == "CMAB") {
           //STA timer (validity of set)
@@ -487,7 +487,7 @@ int  main(int argc, char *argv[])
 
         Config::SetDefault("ns3::HtFrameExchangeManager::DisableEDCA", BooleanValue(true));
         Config::SetDefault("ns3::HeFrameExchangeManager::MuTxStartTime", TimeValue(Seconds(1.5)));
-        Config::SetDefault("ns3::HtFrameExchangeManager::HtMuTxStartTime", TimeValue(Seconds(1.5)));
+        //Config::SetDefault("ns3::HtFrameExchangeManager::HtMuTxStartTime", TimeValue(Seconds(1.5)));
 
 
   }
@@ -852,6 +852,12 @@ int  main(int argc, char *argv[])
     cameraHelper.SetAttribute ("IFrameStdBytes",  UintegerValue (12000));
     cameraHelper.SetAttribute ("PFrameMeanBytes", UintegerValue (1500));
     cameraHelper.SetAttribute ("PFrameStdBytes",  UintegerValue (600));
+    // Push the second frame past MuTxStartTime (1.5 s) + a small settle window.
+    // The first burst goes out via EDCA (channel is free, drains quickly); by
+    // the time the second burst would fire, MU EDCA disable has propagated and
+    // the AP's MU TX is stable -- avoids the partial-RX PHY race that fires at
+    // the second I-frame burst around t~2.0 s with the original cadence.
+    cameraHelper.SetAttribute ("PostFirstFrameTime", TimeValue (MilliSeconds (1600)));
     ApplicationContainer cameraApp =
         cameraHelper.Install (wifiStaNodes.Get (videoCameraStaIndex));
 

@@ -55,6 +55,13 @@ TypeId VideoCameraApp::GetTypeId(void) {
                       "Time between consecutive fragments of one frame",
                       TimeValue(MicroSeconds(50)),
                       MakeTimeAccessor(&VideoCameraApp::m_intraBurstGap),
+                      MakeTimeChecker())
+        .AddAttribute("PostFirstFrameTime",
+                      "Absolute simulation time at which the SECOND frame is "
+                      "scheduled (overrides 1/Fps for the second frame only). "
+                      "If 0, normal cadence applies from frame 1 onward.",
+                      TimeValue(Seconds(0)),
+                      MakeTimeAccessor(&VideoCameraApp::m_postFirstFrameTime),
                       MakeTimeChecker());
     return tid;
 }
@@ -88,6 +95,16 @@ void VideoCameraApp::StopApplication(void) {
 
 void VideoCameraApp::ScheduleNextFrame(void) {
     Time interval = Seconds(1.0 / m_fps);
+    // After the very first frame fires, optionally push the SECOND frame's
+    // scheduled time forward to m_postFirstFrameTime (absolute) so it doesn't
+    // collide with the AP's MU-TX stabilization window. m_frameIndex is
+    // incremented in GenerateAndSendFrame BEFORE calling ScheduleNextFrame,
+    // so == 1 here means "we just sent frame 0, scheduling frame 1".
+    if (m_frameIndex == 1 && !m_postFirstFrameTime.IsZero() &&
+        Simulator::Now() < m_postFirstFrameTime)
+    {
+        interval = m_postFirstFrameTime - Simulator::Now();
+    }
     m_nextFrameEvent = Simulator::Schedule(
         interval, &VideoCameraApp::GenerateAndSendFrame, this);
 }

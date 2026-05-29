@@ -35,6 +35,11 @@ private:
     uint32_t m_pStd;         // P-frame std dev
     uint32_t m_mtu;          // max UDP payload
     Time m_intraBurstGap;    // gap between fragments in a frame
+    Time m_postFirstFrameTime; // absolute time at which the SECOND frame fires
+                               // (0 = normal 1/Fps cadence). Used to push the
+                               // second burst past MuTxStartTime so MU EDCA
+                               // disable has propagated to STAs before the
+                               // camera floods the channel again.
 
     // State
     uint32_t m_frameIndex;
