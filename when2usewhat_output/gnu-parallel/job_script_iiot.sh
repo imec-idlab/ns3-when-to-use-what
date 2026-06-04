@@ -13,13 +13,29 @@ export NS_LOG=""
 : "${run:?Missing run}"
 : "${typeTwoNStations:?Missing typeTwoNStations}"
 
+nSta=${typeTwoNStations}
 
 if [ "$MODE" = "uora" ]; then
-    : "${nRaRus:?Missing OCwMin}"
+    : "${nRaRus:?Missing nRaRus}"
     : "${OCwMin:?Missing OCwMin}"
-    logDir=/scratch/antwerpen/208/vsc20879/iiot/${MODE}/ocwMin_${OCwMin}/${run}_run-${typeTwoNStations}_sta-${nRaRus}_rarus
+    logDir=/data/antwerpen/208/vsc20879/iiot_data/${MODE}/ocwMin_${OCwMin}/${run}_run-${nSta}_sta-${nRaRus}_rarus
+elif [ "$MODE" = "cmab" ]; then
+    : "${algorithm:?Missing algorithm (CUCB|ThompsonSampling|EpsilonGreedy|EXP3M)}"
+    : "${rewardType:?Missing rewardType (Binary|FairnessWeighted)}"
+    : "${ucbConstant:=1.41421}"   # sqrt(2), used only by CUCB
+    : "${epsilon:=0.1}"           # used only by EpsilonGreedy
+    : "${exp3Gamma:=0.1}"         # used only by EXP3M
+    # Append a hyperparameter tag only for algorithms that actually use one,
+    # so ThompsonSampling / default-HP runs get clean paths.
+    case "${algorithm}" in
+        CUCB)          hpTag="_c${ucbConstant}" ;;
+        EpsilonGreedy) hpTag="_e${epsilon}"     ;;
+        EXP3M)         hpTag="_g${exp3Gamma}"   ;;
+        *)             hpTag=""                 ;;
+    esac
+    logDir=/data/antwerpen/208/vsc20879/iiot_data/${MODE}/${algorithm}_${rewardType}${hpTag}/${run}_run-${nSta}_sta
 else
-    logDir=/scratch/antwerpen/208/vsc20879/iiot/${MODE}/${run}_run-${typeTwoNStations}_sta
+    logDir=/data/antwerpen/208/vsc20879/iiot_data/${MODE}/${run}_run-${nSta}_sta
 fi
 
 
@@ -47,13 +63,14 @@ BASE_A2P="
     ${BASE_OFDMA}
     --useMuEdca=true 
     --scheduler=ns3::VlceMultiUserScheduler
+    --maxTimeInList=100000
     "
 
 run_simulation() {
   local extra_args="$1"
 
   $VSC_DATA/ns3-when2usewhat/ns3 run --no-build \
-                    "scratch/conference_when2usewhat/conference_when2usewhat \
+                    "scratch/iiot_when2usewhat/iiot_when2usewhat \
                     --typeTwoNStations=${typeTwoNStations} \
                     ${BASE_ARGS} \
                     ${extra_args}"
@@ -69,16 +86,6 @@ edca() {
 }
 
 
-ofdma() {
-    run_simulation "
-        ${BASE_OFDMA}
-        --simType=OFDMA
-        --useMuEdca=true
-        --muSchedAccessReqInterval=128
-        --scheduler=ns3::RrMultiUserScheduler
-    "
-}
-
 a2p() {
     run_simulation "
         ${BASE_A2P}
@@ -91,7 +98,7 @@ a2pv2() {
     run_simulation "
          ${BASE_A2P}
          --enableBsrp=false
-         --muSchedAccessReqInterval=512
+         --muSchedAccessReqInterval=128
          --simType=A2PV2
     "
 }
@@ -110,16 +117,34 @@ uora() {
     "
 }
 
+cmab() {
+    run_simulation "
+        ${BASE_OFDMA}
+        --simType=CMAB \
+        --useMuEdca=true \
+        --muSchedAccessReqInterval=64 \
+        --DelayAccessReqUponAccess=true \
+        --muEdcaTimer=8192 \
+        --scheduler=ns3::CmabMultiUserScheduler \
+        --nRaRus=0 \
+        --cmabAlgorithm=${algorithm} \
+        --cmabRewardType=${rewardType} \
+        --cmabUcbConstant=${ucbConstant} \
+        --cmabEpsilon=${epsilon} \
+        --cmabExp3Gamma=${exp3Gamma}
+    "
+}
+
 # -
 #
 usage() {
-    echo "Usage: {edca|ofdma|a2p|a2pv2|uora} | Unknown mode: ${MODE}"
+    echo "Usage: {edca|a2p|a2pv2|uora|cmab} | Unknown mode: ${MODE}"
     exit 1
 }
 
 
 case "${MODE}" in
-    edca|ofdma|a2p|a2pv2|uora)
+    edca|a2p|a2pv2|uora|cmab)
         "${MODE}"
         ;;
     *)

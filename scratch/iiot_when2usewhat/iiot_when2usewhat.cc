@@ -19,6 +19,7 @@
  */
 
 #include <cerrno>
+#include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -64,11 +65,26 @@ struct stats_t
   std::vector<double> pktDelaysLate, genTimeLate, rxTimeLate;
   std::vector<uint64_t> pktTagLate;
   std::vector<Mac48Address> srcLate;
+
+  uint8_t classId {0};   // 1 = type-1 CBR background, 2 = type-2 time-critical
 };
 
 std::map<Mac48Address, stats_t> g_statsMap; //!< map for statistics for each station
 std::map<Ipv4Address, Mac48Address> g_Ip2Mac; //!< map for mapping IPv4 to MAC address
 std::map<Mac48Address, stats_t> g_statsMapAp;  //!< map for starts for only AP
+
+static uint8_t
+TosForAc (const std::string &ac)
+{
+  if (ac == "AC_VO") return 0xc0;
+  if (ac == "AC_VI") return 0xa0;
+  if (ac == "AC_BE") return 0x00;
+  if (ac == "AC_BK") return 0x20;
+  NS_ABORT_MSG ("Invalid AC name: " << ac
+                << " (expected AC_VO | AC_VI | AC_BE | AC_BK)");
+  return 0;
+}
+
 void SinrTrace (Mac48Address addr, double sinr)
 {
   g_statsMap[addr].sinr += sinr;
@@ -124,7 +140,7 @@ int main(int argc, char *argv[])
   std::string logDir {"output"};
   double minDistance {1.0}; //meters
   double maxDistance {40}; //meters
-  std::size_t typeOneNStations {9};
+  std::size_t typeOneNStations {18};
   std::size_t typeTwoNStations {1};
   double apHeight {3}; //meters
   double staHeight {1}; //meters
@@ -144,6 +160,12 @@ int main(int argc, char *argv[])
   double txPowerEnd = {40.0412};
   uint32_t nMsdus = 1;
   uint32_t nRaRus {0};
+
+  std::string cmabAlgorithm {"CUCB"};       // CUCB | ThompsonSampling | EpsilonGreedy | EXP3M
+  std::string cmabRewardType {"Binary"};    // Binary | FairnessWeighted
+  double cmabUcbConstant {std::sqrt(2.0)};
+  double cmabEpsilon {0.1};
+  double cmabExp3Gamma {0.1};
 
 
   std::string dlAckSeqType {"AGGR-MU-BAR"};
@@ -175,6 +197,12 @@ int main(int argc, char *argv[])
   std::string accessCategory {"AC_VO"};
   bool enableAggregation {false};
   double pMean {0.001};
+
+  // Per-class access category split. Type-1 = bulk CBR background sensors we
+  // do NOT care about; Type-2 = sporadic time-critical sensors whose tail
+  // latency is the figure of merit.
+  std::string type1Ac {"AC_BE"};
+  std::string type2Ac {"AC_VO"};
 
   CommandLine cmd (__FILE__);
 
@@ -225,6 +253,12 @@ int main(int argc, char *argv[])
   cmd.AddValue ("scheduler", "Type of resource scheduler to use  e.g ns3::RrMultiUserScheduler | ns3::VlceMultiUserScheduler", scheduler);
 
   cmd.AddValue ("muEdcaTimer", "How long to disable EDCA for and for VlceMultiUserScheduler, how long to stay in polling list without transmission (in Seconds)", muEdcaTimer);  // todo : multi user scedualer for A2P?
+  cmd.AddValue ("maxTimeInList", "VLCE poll-list eviction timeout (microseconds). Default 8192*5 us = 41 ms.", maxTimeInList);
+  cmd.AddValue ("cmabAlgorithm", "CMAB algorithm (CUCB | ThompsonSampling | EpsilonGreedy | EXP3M)", cmabAlgorithm);
+  cmd.AddValue ("cmabRewardType", "Per-arm reward shape (Binary | FairnessWeighted)", cmabRewardType);
+  cmd.AddValue ("cmabUcbConstant", "CUCB exploration constant c in score = mean + c*sqrt(2 ln t / n_i)", cmabUcbConstant);
+  cmd.AddValue ("cmabEpsilon", "EpsilonGreedy random-exploration probability in [0,1]", cmabEpsilon);
+  cmd.AddValue ("cmabExp3Gamma", "EXP3.M mixing parameter gamma in (0,1]", cmabExp3Gamma);
 
 
 
@@ -234,6 +268,8 @@ int main(int argc, char *argv[])
   cmd.AddValue ("accessCategory", "Access category for traffic: AC_BE, AC_BK, AC_VO, AC_VI", accessCategory);
   cmd.AddValue ("enableAggregation", "Enable/disable mpdu/msdu aggregation", enableAggregation);
   cmd.AddValue ("pMean", "Exponential Mean for how often stations generate packets in Seconds", pMean);
+  cmd.AddValue ("type1Ac", "Access category for type-1 CBR background sensors (AC_BE | AC_BK | AC_VI | AC_VO)", type1Ac);
+  cmd.AddValue ("type2Ac", "Access category for type-2 sporadic time-critical sensors (AC_BE | AC_BK | AC_VI | AC_VO)", type2Ac);
 
 
 
@@ -256,10 +292,16 @@ int main(int argc, char *argv[])
 
   /*
    * rts/cts
+   * UORA / CMAB: RTS disabled to avoid the AP-burst / EDCA-RTS race that
+   * trips wifi-phy-state-helper assertions during MU-TX bursts. Other modes
+   * keep the original useRts gate.
    * */
   if (useRts)
     {
-      Config::SetDefault ("ns3::WifiRemoteStationManager::RtsCtsThreshold", StringValue ("700"));
+      std::string rtsThreshold =
+          (simType == "UORA" || simType == "CMAB") ? "4294967295" : "700";
+      Config::SetDefault ("ns3::WifiRemoteStationManager::RtsCtsThreshold",
+                          StringValue (rtsThreshold));
       Config::SetDefault("ns3::WifiDefaultProtectionManager::EnableMuRts", BooleanValue(false));
     }
 
@@ -293,12 +335,6 @@ int main(int argc, char *argv[])
     {
       NS_ABORT_MSG ("Invalid PHY model (must be Yans or Spectrum)");
     }
-
-  /*if (dlAckSeqType != "NO-OFDMA")
-    {
-      // SpectrumWifiPhy is required for OFDMA
-      phyModel = "Spectrum";
-    }*/
 
   /*
    * Type of resource unit tones
@@ -371,15 +407,16 @@ int main(int argc, char *argv[])
       Config::SetDefault ("ns3::HeConfiguration::MuVoCwMax", UintegerValue (32767));
 
       if (simType =="A2P" || simType =="A2PV2") {
-          muEdcaTimer = 8192 * 5;
-          maxTimeInList = muEdcaTimer;
-          Config::SetDefault("ns3::HtFrameExchangeManager::HtMuTxStartTime", TimeValue(Seconds(1.5)));
+          muEdcaTimer = maxTimeInList;
+          // Only fall back to the legacy "maxTimeInList = muEdcaTimer" default
+          // if the user did not pass --maxTimeInList. The scenario default of
+          // 8192*5 = 40960 us is preserved when no override is given.
+          //if (maxTimeInList == 8192 * 5) {
+          //  maxTimeInList = muEdcaTimer;
+          //}
+          Config::SetDefault("ns3::HtFrameExchangeManager::HtMuTxStartTime", TimeValue(Seconds(startLogTime)));
         }
-        /*else if (simType == "OFDMA") {
-          muEdcaTimer = 2088960;
-
-        }*/
-      else if (simType =="UORA" || simType == "OFDMA") {
+      else if (simType =="UORA" || simType == "CMAB") {
           //STA timer (validity of set)
           /* Disable EDCA for the duration of the entire simulation:
            *    Calculate the ceiling multiple of
@@ -387,7 +424,7 @@ int main(int argc, char *argv[])
            */
           int simTime = Seconds(simulationTime).GetMicroSeconds();
           muEdcaTimer = (simTime % 8192 == 0) ? simTime : ( std::round( simTime / 8192.0) * 8192);
-          
+
           Config::SetDefault("ns3::QosTxop::LongerEDCADisable", BooleanValue(true));
 
           if (simType =="UORA" && nRaRus) {
@@ -406,7 +443,7 @@ int main(int argc, char *argv[])
         Config::SetDefault ("ns3::HeConfiguration::VoMuEdcaTimer", TimeValue (MicroSeconds(muEdcaTimer)));
 
         Config::SetDefault("ns3::HtFrameExchangeManager::DisableEDCA", BooleanValue(true));
-        Config::SetDefault("ns3::HeFrameExchangeManager::MuTxStartTime", TimeValue(Seconds(1.5)));
+        Config::SetDefault("ns3::HeFrameExchangeManager::MuTxStartTime", TimeValue(Seconds(startLogTime)));
     }
 
 
@@ -526,6 +563,23 @@ int main(int argc, char *argv[])
           if (scheduler == "ns3::UoraMultiUserScheduler" ) {
             wifimac.SetMultiUserSchedulerAttribute("NumRandomAccessRus", UintegerValue(nRaRus));
           }
+          if (scheduler == "ns3::CmabMultiUserScheduler") {
+            NS_ABORT_MSG_IF (cmabAlgorithm != "CUCB" &&
+                             cmabAlgorithm != "ThompsonSampling" &&
+                             cmabAlgorithm != "EpsilonGreedy" &&
+                             cmabAlgorithm != "EXP3M",
+                             "Invalid --cmabAlgorithm: " << cmabAlgorithm
+                             << " (expected CUCB | ThompsonSampling | EpsilonGreedy | EXP3M)");
+            NS_ABORT_MSG_IF (cmabRewardType != "Binary" &&
+                             cmabRewardType != "FairnessWeighted",
+                             "Invalid --cmabRewardType: " << cmabRewardType
+                             << " (expected Binary | FairnessWeighted)");
+            wifimac.SetMultiUserSchedulerAttribute("Algorithm",   StringValue(cmabAlgorithm));
+            wifimac.SetMultiUserSchedulerAttribute("RewardType",  StringValue(cmabRewardType));
+            wifimac.SetMultiUserSchedulerAttribute("UcbConstant", DoubleValue(cmabUcbConstant));
+            wifimac.SetMultiUserSchedulerAttribute("Epsilon",     DoubleValue(cmabEpsilon));
+            wifimac.SetMultiUserSchedulerAttribute("Exp3Gamma",   DoubleValue(cmabExp3Gamma));
+          }
 
           //this is for uora alone
           //wifimac.SetMultiUserSchedulerAttribute("NumRandomAccessRus", UintegerValue(nRaRus));
@@ -603,16 +657,21 @@ int main(int argc, char *argv[])
   // === Setup STA Applications ===
   double staStartTime = startLogTime;
 
+  const uint8_t type1Tos = TosForAc (type1Ac);
+  const uint8_t type2Tos = TosForAc (type2Ac);
+
   for (size_t i = 0; i < typeOneNStations + typeTwoNStations; ++i)
   {
     staStartTime += 0.00108;
+    const bool isType1 = (i < typeOneNStations);
 
     InetSocketAddress voAddr(apNodeInterface.GetAddress(0), port);
-    voAddr.SetTos(0xc0); // AC_VO
+    
+    voAddr.SetTos(isType1 ? type1Tos : type2Tos);
 
     UdpClientHelper announcer(voAddr);
     announcer.SetAttribute("MaxPackets", UintegerValue(1));
-    announcer.SetAttribute("PacketSize", UintegerValue(1024));
+    announcer.SetAttribute("PacketSize", UintegerValue(500));
     announcer.SetAttribute("EnableRandom", BooleanValue(false));
     announcer.SetAttribute("Interval", TimeValue(Seconds(1)));
 
@@ -620,12 +679,14 @@ int main(int argc, char *argv[])
     announceApp.Start(Seconds(1 + i * 0.001));
     announceApp.Stop(Seconds(startLogTime - 1));
 
-    // Main uplink traffic
-    UdpClientHelper trafficGen(voAddr);
+    // Main uplink traffic -- ToS picks per-class AC.
+    InetSocketAddress trafficAddr(apNodeInterface.GetAddress(0), port);
+    trafficAddr.SetTos(isType1 ? type1Tos : type2Tos);
+    UdpClientHelper trafficGen(trafficAddr);
     trafficGen.SetAttribute("MaxPackets", UintegerValue(0));
     trafficGen.SetAttribute("PacketSize", UintegerValue(ulPayloadSize));
 
-    if (trafficType == "CBR" && i < typeOneNStations)
+    if (trafficType == "CBR" && isType1)
     {
       trafficGen.SetAttribute("EnableRandom", BooleanValue(false));
       trafficGen.SetAttribute("Interval", TimeValue(Seconds(interval)));
@@ -670,6 +731,7 @@ int main(int argc, char *argv[])
     auto mac = Mac48Address::ConvertFrom (staNetDevices.Get (i)->GetAddress ());
     auto ip = staNodeInterfaces.Get (i).first->GetAddress (1, 0).GetAddress ();
     g_Ip2Mac[ip] = mac;
+    g_statsMap[mac].classId = (i < typeOneNStations) ? 1 : 2;
 
     staNetDevices.Get(i)->GetObject<WifiNetDevice>()->GetPhy()->GetPhyEntity(WIFI_MOD_CLASS_OFDM)->TraceConnectWithoutContext("SinrTrace", MakeBoundCallback (&SinrTrace, Mac48Address::ConvertFrom (staNetDevices.Get (i)->GetAddress ())));
     staNetDevices.Get(i)->GetObject<WifiNetDevice>()->GetPhy()->GetPhyEntity(WIFI_MOD_CLASS_HE)->TraceConnectWithoutContext("SinrTrace", MakeBoundCallback (&SinrTrace, Mac48Address::ConvertFrom (staNetDevices.Get (i)->GetAddress ())));
@@ -715,20 +777,39 @@ int main(int argc, char *argv[])
 
   std::ofstream perStaOutStream;
   perStaOutStream.open ("per_sta_stats.out", std::ios::out);
-  perStaOutStream << "MAC-addr\tSINR_dB\tRX_bytes\tAvg_delay_ms" << std::endl;
+  perStaOutStream << "MAC-addr\tSINR_dB\tRX_bytes\tAvg_delay_ms\tClass" << std::endl;
   for (auto &staStats : g_statsMap)
     {
-      staStats.second.sinr /= staStats.second.totalBeacons;
+      auto &s = staStats.second;
+      if (s.totalBeacons > 0) s.sinr /= s.totalBeacons;
       double sumDelay = 0.;
-      for (auto &delay : staStats.second.pktDelays)
+      for (auto &delay : s.pktDelays)
         {
           sumDelay += delay * 1000.; //in ms
         }
-      perStaOutStream << staStats.first << "\t" << staStats.second.sinr << "\t" << staStats.second.rxBytes
-        << "\t" << sumDelay / staStats.second.pktDelays.size ()  << std::endl;
+      double avgMs = s.pktDelays.empty () ? 0.0 : sumDelay / s.pktDelays.size ();
+      perStaOutStream << staStats.first << "\t" << s.sinr << "\t" << s.rxBytes
+        << "\t" << avgMs << "\t" << static_cast<int>(s.classId) << std::endl;
     }
   perStaOutStream.close ();
 
-  
+  std::ofstream t2Pkt;
+  t2Pkt.open ("type2_packets.out", std::ios::out);
+  t2Pkt << "MAC-addr\tgen_s\trx_s\tdelay_ms" << std::endl;
+  for (const auto &kv : g_statsMap)
+    {
+      if (kv.second.classId != 2) continue;
+      const auto &s = kv.second;
+      for (size_t i = 0; i < s.pktDelays.size (); ++i)
+        {
+          t2Pkt << kv.first << "\t"
+                << s.genTime[i] << "\t"
+                << s.rxTime[i] << "\t"
+                << s.pktDelays[i] * 1000.0 << std::endl;
+        }
+    }
+  t2Pkt.close ();
+
+
   return 0;
 }
