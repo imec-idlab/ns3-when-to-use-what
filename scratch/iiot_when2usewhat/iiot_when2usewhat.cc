@@ -103,12 +103,14 @@ void RxTraceWithAddressParam (double logTime, Ptr<const Packet> p, const Address
 
   if (Simulator::Now().GetSeconds () >= startLogTime.GetSeconds()) {
 
-    g_statsMap[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (src).GetIpv4 ())].rxBytes += p->GetSize ();
-    g_statsMap[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (src).GetIpv4 ())].pktDelays.push_back ((Simulator::Now() - seqTs.GetTs ()).GetSeconds ());
-    g_statsMap[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (src).GetIpv4 ())].pktTag.push_back (tag.GetValue());
-    g_statsMap[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (src).GetIpv4 ())].genTime.push_back(seqTs.GetTs().GetSeconds() );
-    g_statsMap[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (src).GetIpv4 ())].rxTime.push_back(Simulator::Now().GetSeconds());
-    g_statsMap[g_Ip2Mac.at (InetSocketAddress::ConvertFrom (src).GetIpv4 ())].src.push_back( g_Ip2Mac.at (InetSocketAddress::ConvertFrom (src).GetIpv4 ()));
+    Mac48Address srcMac = g_Ip2Mac.at (InetSocketAddress::ConvertFrom (src).GetIpv4 ());
+    auto &s = g_statsMap[srcMac];
+    s.rxBytes += p->GetSize ();
+    s.pktDelays.push_back ((Simulator::Now() - seqTs.GetTs ()).GetSeconds ());
+    s.pktTag.push_back (tag.GetValue());
+    s.genTime.push_back (seqTs.GetTs().GetSeconds());
+    s.rxTime.push_back (Simulator::Now().GetSeconds());
+    s.src.push_back (srcMac);
   }
 }
 
@@ -172,7 +174,7 @@ int main(int argc, char *argv[])
   bool enableUlOfdma {true};
   bool enableBsrp {true};
   double accessReqInterval = {0}; //microseconds
-  bool useRts {true};
+  bool useRts {false};
   bool useExtendedBlockAck {true};
   bool useMuEdca {false};
   uint32_t nMpdus = 1;
@@ -292,18 +294,14 @@ int main(int argc, char *argv[])
 
   /*
    * rts/cts
-   * UORA / CMAB: RTS disabled to avoid the AP-burst / EDCA-RTS race that
-   * trips wifi-phy-state-helper assertions during MU-TX bursts. Other modes
-   * keep the original useRts gate.
+   * Uniform RTS policy across all schedulers (no per-simType asymmetry):
+   *   useRts=true  -> RTS for unicast packets >= 700 B (also includes aggregated MPDUs).
+   *   useRts=false -> RTS effectively disabled.
+   * MU-RTS protection of MU-TX bursts is always off.
    * */
-  if (useRts)
-    {
-      std::string rtsThreshold =
-          (simType == "UORA" || simType == "CMAB") ? "4294967295" : "700";
-      Config::SetDefault ("ns3::WifiRemoteStationManager::RtsCtsThreshold",
-                          StringValue (rtsThreshold));
-      Config::SetDefault("ns3::WifiDefaultProtectionManager::EnableMuRts", BooleanValue(false));
-    }
+  Config::SetDefault ("ns3::WifiRemoteStationManager::RtsCtsThreshold",
+                      StringValue (useRts ? "700" : "4294967295"));
+  Config::SetDefault ("ns3::WifiDefaultProtectionManager::EnableMuRts", BooleanValue (false));
 
   /*
    * Downlink ACK type
@@ -408,13 +406,6 @@ int main(int argc, char *argv[])
 
       if (simType =="A2P" || simType =="A2PV2") {
           muEdcaTimer = maxTimeInList;
-          // Only fall back to the legacy "maxTimeInList = muEdcaTimer" default
-          // if the user did not pass --maxTimeInList. The scenario default of
-          // 8192*5 = 40960 us is preserved when no override is given.
-          //if (maxTimeInList == 8192 * 5) {
-          //  maxTimeInList = muEdcaTimer;
-          //}
-          Config::SetDefault("ns3::HtFrameExchangeManager::HtMuTxStartTime", TimeValue(Seconds(startLogTime)));
         }
       else if (simType =="UORA" || simType == "CMAB") {
           //STA timer (validity of set)
@@ -443,6 +434,8 @@ int main(int argc, char *argv[])
         Config::SetDefault ("ns3::HeConfiguration::VoMuEdcaTimer", TimeValue (MicroSeconds(muEdcaTimer)));
 
         Config::SetDefault("ns3::HtFrameExchangeManager::DisableEDCA", BooleanValue(true));
+
+        Config::SetDefault("ns3::HtFrameExchangeManager::HtMuTxStartTime", TimeValue(Seconds(startLogTime)));
         Config::SetDefault("ns3::HeFrameExchangeManager::MuTxStartTime", TimeValue(Seconds(startLogTime)));
     }
 
@@ -593,8 +586,8 @@ int main(int argc, char *argv[])
 
       apNetDevice = wifi.Install (phy, wifimac, wifiApNode);
       if (enablePcap) {
-        phy.EnablePcap("wifi-ax-ofdma-ap", apNetDevice); // enable pcap tracing
-        phy.EnablePcap("wifi-ax-ofdma-sta", staNetDevices);
+        phy.EnablePcap("wifi-ax-ofdma-ap", apNetDevice); // AP-side only
+        //phy.EnablePcap("wifi-ax-ofdma-sta", staNetDevices);
       }
     }
   else
@@ -651,11 +644,10 @@ int main(int argc, char *argv[])
   PacketSinkHelper sinkHelper("ns3::UdpSocketFactory", voAddress);
   apServerApps = sinkHelper.Install(wifiApNode);
 
-  apServerApps.Start(Seconds(startLogTime));
+  apServerApps.Start(Seconds(0));
   apServerApps.Stop(Seconds(simulationTime + startLogTime));
 
-  // === Setup STA Applications ===
-  double staStartTime = startLogTime;
+  double staStartTime = startLogTime - 2.0;
 
   const uint8_t type1Tos = TosForAc (type1Ac);
   const uint8_t type2Tos = TosForAc (type2Ac);
@@ -724,8 +716,13 @@ int main(int argc, char *argv[])
     Ptr<WifiNetDevice> dev = DynamicCast<WifiNetDevice> ( staNetDevices.Get(i) );
     Ptr<WifiMac> wifi_mac = dev->GetMac();
     if (enableAggregation) {
-      wifi_mac->SetAttribute("VO_MaxAmpduSize", UintegerValue (nMpdus * ulPayloadSize ));
-      wifi_mac->SetAttribute("VO_MaxAmsduSize", UintegerValue (nMsdus * ulPayloadSize ));
+      // Apply aggregation to all four ACs so type-1 (AC_BE by default) and
+      // type-2 (AC_VO by default) both benefit; remaining ACs left enabled
+      // for completeness.
+      for (const char* ac : {"BK", "BE", "VI", "VO"}) {
+        wifi_mac->SetAttribute(std::string(ac) + "_MaxAmpduSize", UintegerValue (nMpdus * ulPayloadSize ));
+        wifi_mac->SetAttribute(std::string(ac) + "_MaxAmsduSize", UintegerValue (nMsdus * ulPayloadSize ));
+      }
     }
     wifi_mac->GetQosTxop(AC_VO)->SetTxopLimit(MicroSeconds(txOpLimits));
     auto mac = Mac48Address::ConvertFrom (staNetDevices.Get (i)->GetAddress ());
@@ -742,8 +739,10 @@ int main(int argc, char *argv[])
     Ptr<WifiNetDevice> dev = DynamicCast<WifiNetDevice> ( apNetDevice.Get(i) );
     Ptr<WifiMac> wifi_mac = dev->GetMac();
     if (enableAggregation) {
-      wifi_mac->SetAttribute("VO_MaxAmpduSize", UintegerValue (nMpdus * ulPayloadSize ));
-      wifi_mac->SetAttribute("VO_MaxAmsduSize", UintegerValue (nMsdus * ulPayloadSize ));
+      for (const char* ac : {"BK", "BE", "VI", "VO"}) {
+        wifi_mac->SetAttribute(std::string(ac) + "_MaxAmpduSize", UintegerValue (nMpdus * ulPayloadSize ));
+        wifi_mac->SetAttribute(std::string(ac) + "_MaxAmsduSize", UintegerValue (nMsdus * ulPayloadSize ));
+      }
     }
     wifi_mac->GetQosTxop(AC_VO)->SetTxopLimit(MicroSeconds(txOpLimits));
   }
@@ -757,17 +756,19 @@ int main(int argc, char *argv[])
   Simulator::Run ();
 
 
-  uint64_t rxBytes = 0;
-
-  for (uint32_t i = 0; i < wifiApNode.GetN (); i++)
+  // Compute throughput from g_statsMap, which is already gated by startLogTime
+  // (see RxTraceWithAddressParam). This avoids counting the 2 s pre-log warmup
+  // bytes that the PacketSink also receives. Denominator is the logging window
+  // = simulationTime seconds (i.e., [startLogTime, startLogTime+simulationTime]).
+  uint64_t rxBytesLogWindow = 0;
+  for (const auto &kv : g_statsMap)
   {
-    rxBytes += DynamicCast<PacketSink> (apServerApps.Get (i))->GetTotalRx ();
+    rxBytesLogWindow += kv.second.rxBytes;
   }
-  
+
   Simulator::Destroy();
 
-  simulationTime = simulationTime - startLogTime;
-  double throughput = (rxBytes * 8) / (simulationTime * 1000000.0); //Mbit/s
+  double throughput = (rxBytesLogWindow * 8.0) / (simulationTime * 1e6); //Mbit/s
 
   std::ofstream totalStatsOutStream;
   totalStatsOutStream.open ("throughput.out", std::ios::out);

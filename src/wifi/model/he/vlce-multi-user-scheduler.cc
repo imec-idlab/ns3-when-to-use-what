@@ -52,7 +52,7 @@ VlceMultiUserScheduler::GetTypeId()
                           "OFDMA transmission",
                           UintegerValue(4),
                           MakeUintegerAccessor(&VlceMultiUserScheduler::m_nStations),
-                          MakeUintegerChecker<uint8_t>(1, 100))
+                          MakeUintegerChecker<uint8_t>(1, 255))
             .AddAttribute("EnableTxopSharing",
                           "If enabled, allow A-MPDUs of different TIDs in a DL MU PPDU.",
                           BooleanValue(true),
@@ -72,6 +72,15 @@ VlceMultiUserScheduler::GetTypeId()
                           "If enabled, send a BSRP Trigger Frame before an UL MU transmission.",
                           BooleanValue(true),
                           MakeBooleanAccessor(&VlceMultiUserScheduler::m_enableBsrp),
+                          MakeBooleanChecker())
+            .AddAttribute("FilterByBsr",
+                          "If true, the Basic-TF includes only STAs whose cached "
+                          "MaxBufferStatus > 0 (correct when EnableBsrp=true since BSRP refreshes "
+                          "the cache every cycle). Set to false when EnableBsrp=false (A2PV2) to "
+                          "avoid the BSR=0 lockout: STAs whose last EOSP reported a "
+                          "momentarily-empty queue otherwise stay excluded indefinitely.",
+                          BooleanValue(true),
+                          MakeBooleanAccessor(&VlceMultiUserScheduler::m_filterByBsr),
                           MakeBooleanChecker())
             .AddAttribute("UlPsduSize",
                           "The default size in bytes of the solicited PSDU (to be sent in a TB PPDU)",
@@ -497,12 +506,11 @@ VlceMultiUserScheduler::TrySendingBasicTf()
     // check if an UL OFDMA transmission is possible after a DL OFDMA transmission
     NS_ABORT_MSG_IF(m_ulPsduSize == 0, "The UlPsduSize attribute must be set to a non-null value");
 
-    // only consider stations that have setup the current link and do not have
-    // reported a null queue size
     WifiTxVector txVector = GetTxVectorForUlMu([this](const MasterInfo& info) {
         const auto& staList = m_apMac->GetStaList(m_linkId);
-        return staList.find(info.aid) != staList.cend() &&
-        m_apMac->GetMaxBufferStatus(info.address) > 0;
+        if (staList.find(info.aid) == staList.cend()) return false;
+        if (!m_filterByBsr) return true;
+        return m_apMac->GetMaxBufferStatus(info.address) > 0;
     }, true);
 
     if (txVector.GetHeMuUserInfoMap().empty())

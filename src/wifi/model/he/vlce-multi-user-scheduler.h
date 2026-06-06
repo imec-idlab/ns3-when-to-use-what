@@ -171,6 +171,7 @@ class VlceMultiUserScheduler : public MultiUserScheduler
     bool m_forceDlOfdma;         //!< return DL_OFDMA even if no DL MU PPDU was built
     bool m_enableUlOfdma;        //!< enable the scheduler to also return UL_OFDMA
     bool m_enableBsrp;           //!< send a BSRP before an UL MU transmission
+    bool m_filterByBsr;          //!< Basic-TF filter: include only STAs with MaxBufferStatus > 0
     bool m_useCentral26TonesRus; //!< whether to allocate central 26-tone RUs
     uint32_t m_ulPsduSize;       //!< the size in byte of the solicited PSDU
     std::map<AcIndex, std::list<MasterInfo>>

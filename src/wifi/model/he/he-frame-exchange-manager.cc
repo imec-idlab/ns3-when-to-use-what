@@ -2520,7 +2520,7 @@ HeFrameExchangeManager::ReceiveMpdu(Ptr<const WifiMpdu> mpdu,
                                                     mpdu->GetHeader().GetDuration());
         }
         if (auto vlce = DynamicCast<VlceMultiUserScheduler> (m_muScheduler);
-            vlce != nullptr)
+            vlce != nullptr && hdr.HasData())
         {
           vlce->UpdatePollList(hdr.GetAddr2());
         }
