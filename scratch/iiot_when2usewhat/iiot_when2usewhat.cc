@@ -406,6 +406,8 @@ int main(int argc, char *argv[])
 
       if (simType =="A2P" || simType =="A2PV2") {
           muEdcaTimer = maxTimeInList;
+          Config::SetDefault("ns3::HtFrameExchangeManager::HtMuTxStartTime", TimeValue(Seconds(startLogTime - 2)));
+
         }
       else if (simType =="UORA" || simType == "CMAB") {
           //STA timer (validity of set)
@@ -435,8 +437,8 @@ int main(int argc, char *argv[])
 
         Config::SetDefault("ns3::HtFrameExchangeManager::DisableEDCA", BooleanValue(true));
 
-        Config::SetDefault("ns3::HtFrameExchangeManager::HtMuTxStartTime", TimeValue(Seconds(startLogTime)));
-        Config::SetDefault("ns3::HeFrameExchangeManager::MuTxStartTime", TimeValue(Seconds(startLogTime)));
+        //Config::SetDefault("ns3::HtFrameExchangeManager::HtMuTxStartTime", TimeValue(Seconds(startLogTime)));
+        Config::SetDefault("ns3::HeFrameExchangeManager::MuTxStartTime", TimeValue(Seconds(startLogTime - 2)));
     }
 
 
@@ -669,7 +671,7 @@ int main(int argc, char *argv[])
 
     auto announceApp = announcer.Install(wifiStaNodes.Get(i));
     announceApp.Start(Seconds(1 + i * 0.001));
-    announceApp.Stop(Seconds(startLogTime - 1));
+    announceApp.Stop(Seconds(startLogTime - 2.0));
 
     // Main uplink traffic -- ToS picks per-class AC.
     InetSocketAddress trafficAddr(apNodeInterface.GetAddress(0), port);
