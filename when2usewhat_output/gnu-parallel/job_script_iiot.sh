@@ -34,11 +34,6 @@ elif [ "$MODE" = "cmab" ]; then
         *)             hpTag=""                 ;;
     esac
     logDir=/data/antwerpen/208/vsc20879/iiot_data/${MODE}/${algorithm}_${rewardType}${hpTag}/${run}_run-${nSta}_sta
-elif [ "$MODE" = "a2p" ] || [ "$MODE" = "a2pv2" ]; then
-    : "${filterByBsr:?Missing filterByBsr}"
-    : "${maxTimeInList:?Missing maxTimeInList}"
-    : "${accessReqInterval:?Missing accessReqInterval}"
-    logDir=/data/antwerpen/208/vsc20879/iiot_data/${MODE}/filter-${filterByBsr}/mtl-${maxTimeInList}/acc-${accessReqInterval}/${run}_run-${nSta}_sta
 else
     logDir=/data/antwerpen/208/vsc20879/iiot_data/${MODE}/${run}_run-${nSta}_sta
 fi
@@ -68,8 +63,7 @@ BASE_A2P="
     ${BASE_OFDMA}
     --useMuEdca=true
     --scheduler=ns3::VlceMultiUserScheduler
-    --maxTimeInList=${maxTimeInList:-98304}
-    --ns3::VlceMultiUserScheduler::FilterByBsr=${filterByBsr:-true}
+    --maxTimeInList=204800
     "
 
 run_simulation() {
@@ -95,7 +89,7 @@ edca() {
 a2p() {
     run_simulation "
         ${BASE_A2P}
-        --muSchedAccessReqInterval=${accessReqInterval:-128}
+        --muSchedAccessReqInterval=128
         --simType=A2P
     "
 }
@@ -104,9 +98,8 @@ a2pv2() {
     run_simulation "
          ${BASE_A2P}
          --enableBsrp=false
-         --muSchedAccessReqInterval=${accessReqInterval:-128}
+         --muSchedAccessReqInterval=256
          --simType=A2PV2
-         --ns3::HeFrameExchangeManager::SendQosNullAfterBasicTf=true
     "
 }
 
