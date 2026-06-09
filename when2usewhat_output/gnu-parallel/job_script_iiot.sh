@@ -44,7 +44,6 @@ BASE_ARGS="
     --simulationTime=30
     --RngRun=${run}
     --logDir=${logDir}
-    --enableAggregation=true
     --nMpdus=0
     --nMsdus=10
     --ruAllocationType=ru-26-tone
@@ -82,6 +81,7 @@ edca() {
     --simType=EDCA
     --dlAckType=NO-OFDMA
     --useMuEdca=false
+    --enableAggregation=true
   "
 }
 
@@ -98,7 +98,7 @@ a2pv2() {
     run_simulation "
          ${BASE_A2P}
          --enableBsrp=false
-         --muSchedAccessReqInterval=256
+         --muSchedAccessReqInterval=128
          --simType=A2PV2
     "
 }
@@ -108,7 +108,7 @@ uora() {
         ${BASE_OFDMA}
         --simType=UORA \
         --useMuEdca=true \
-        --muSchedAccessReqInterval=64 \
+        --muSchedAccessReqInterval=16 \
         --DelayAccessReqUponAccess=true \
         --muEdcaTimer=8192 \
         --scheduler=ns3::UoraMultiUserScheduler \
@@ -122,7 +122,7 @@ cmab() {
         ${BASE_OFDMA}
         --simType=CMAB \
         --useMuEdca=true \
-        --muSchedAccessReqInterval=64 \
+        --muSchedAccessReqInterval=16 \
         --DelayAccessReqUponAccess=true \
         --muEdcaTimer=8192 \
         --scheduler=ns3::CmabMultiUserScheduler \

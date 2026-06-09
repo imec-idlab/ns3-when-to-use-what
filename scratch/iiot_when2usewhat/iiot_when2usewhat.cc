@@ -404,10 +404,16 @@ int main(int argc, char *argv[])
       Config::SetDefault ("ns3::HeConfiguration::MuViCwMax", UintegerValue (32767));
       Config::SetDefault ("ns3::HeConfiguration::MuVoCwMax", UintegerValue (32767));
 
+      // Stagger between MuTxStartTime (AP MU-TX begin) and HtMuTxStartTime
+      // (EDCA disable) for A2P/A2PV2. AP starts polling first; HT EDCA stays
+      // enabled for a short overlap window so STAs can bootstrap into the
+      // VLCE poll list via EDCA *while* the AP is already cycling triggers.
+      double muTxStartSec = startLogTime - 2;
       if (simType =="A2P" || simType =="A2PV2") {
           muEdcaTimer = maxTimeInList;
-          Config::SetDefault("ns3::HtFrameExchangeManager::HtMuTxStartTime", TimeValue(Seconds(startLogTime - 2)));
-
+          Config::SetDefault("ns3::HtFrameExchangeManager::HtMuTxStartTime",
+                             TimeValue(Seconds(startLogTime)));
+          muTxStartSec = startLogTime;
         }
       else if (simType =="UORA" || simType == "CMAB") {
           //STA timer (validity of set)
@@ -438,7 +444,7 @@ int main(int argc, char *argv[])
         Config::SetDefault("ns3::HtFrameExchangeManager::DisableEDCA", BooleanValue(true));
 
         //Config::SetDefault("ns3::HtFrameExchangeManager::HtMuTxStartTime", TimeValue(Seconds(startLogTime)));
-        Config::SetDefault("ns3::HeFrameExchangeManager::MuTxStartTime", TimeValue(Seconds(startLogTime - 2)));
+        Config::SetDefault("ns3::HeFrameExchangeManager::MuTxStartTime", TimeValue(Seconds(muTxStartSec)));
     }
 
 
