@@ -186,6 +186,8 @@ class QosFrameExchangeManager : public FrameExchangeManager
     std::optional<Mac48Address> m_txopHolder; //!< MAC address of the TXOP holder
     bool m_setQosQueueSize;                   /**< whether to set the Queue Size subfield of the
                                                    QoS Control field of QoS data frames */
+    bool m_trackBufferDrain;                  /**< AP subtracts received data frame size from the
+                                                   reported Queue Size when caching buffer status */
 
   private:
     /**

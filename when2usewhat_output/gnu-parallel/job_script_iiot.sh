@@ -91,6 +91,8 @@ a2p() {
         ${BASE_A2P}
         --muSchedAccessReqInterval=128
         --simType=A2P
+        --ns3::VlceMultiUserScheduler::BsrpPrioritizeEmpty=true
+        --ns3::VlceMultiUserScheduler::PrioritizeByAc=true
     "
 }
 
@@ -98,8 +100,10 @@ a2pv2() {
     run_simulation "
          ${BASE_A2P}
          --enableBsrp=false
-         --muSchedAccessReqInterval=128
+         --muSchedAccessReqInterval=256
          --simType=A2PV2
+         --ns3::VlceMultiUserScheduler::FilterByBsr=false
+         --ns3::VlceMultiUserScheduler::PrioritizeByAc=true
     "
 }
 
@@ -113,7 +117,9 @@ uora() {
         --muEdcaTimer=8192 \
         --scheduler=ns3::UoraMultiUserScheduler \
         --OCwMin=${OCwMin} \
-        --nRaRus=${nRaRus}
+        --nRaRus=${nRaRus} \
+        --ns3::UoraMultiUserScheduler::BsrpPrioritizeEmpty=true \
+        --ns3::UoraMultiUserScheduler::PrioritizeByAc=true
     "
 }
 

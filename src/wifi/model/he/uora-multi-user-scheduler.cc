@@ -84,6 +84,24 @@ UoraMultiUserScheduler::GetTypeId()
                           BooleanValue(false),
                           MakeBooleanAccessor(&UoraMultiUserScheduler::m_useCentral26TonesRus),
                           MakeBooleanChecker())
+            .AddAttribute("PrioritizeByAc",
+                          "If enabled, the Basic-TF allocates scheduled RUs to candidate STAs "
+                          "in order of the highest Access Category for which they have buffered "
+                          "data (VO before VI before BE before BK), instead of plain list order. "
+                          "Round-robin fairness is preserved within each AC tier. Does not affect "
+                          "random-access RUs.",
+                          BooleanValue(false),
+                          MakeBooleanAccessor(&UoraMultiUserScheduler::m_prioritizeByAc),
+                          MakeBooleanChecker())
+            .AddAttribute("BsrpPrioritizeEmpty",
+                          "If enabled, on the BSRP-TF the scheduled RUs are given to stations in "
+                          "order of ascending cached buffer status, so empty (0) / unknown (255) "
+                          "stations -- those whose arrivals the AP cannot otherwise see -- are "
+                          "polled first; stations with known buffered data fall to the back and "
+                          "are served via the Basic-TF. Does not affect random-access RUs.",
+                          BooleanValue(false),
+                          MakeBooleanAccessor(&UoraMultiUserScheduler::m_bsrpPrioritizeEmpty),
+                          MakeBooleanChecker())
             .AddAttribute("MaxCredits",
                           "Maximum amount of credits a station can have. When transmitting a DL MU PPDU, "
                           "the amount of credits received by each station equals the TX duration (in "
@@ -258,6 +276,25 @@ void UoraMultiUserScheduler::UpdatePollList(Mac48Address address)
   }
 }
 
+int
+UoraMultiUserScheduler::StaHighestAcWithData(Mac48Address address) const
+{
+  // TID -> AC priority rank, following the standard UP->AC mapping.
+  // VO (TID 6,7) = 3, VI (TID 4,5) = 2, BE (TID 0,3) = 1, BK (TID 1,2) = 0.
+  static const int tidToRank[8] = {1, 0, 0, 1, 2, 2, 3, 3};
+  int best = -1;
+  for (uint8_t tid = 0; tid < 8; ++tid)
+  {
+    uint8_t bs = m_apMac->GetBufferStatus(tid, address);
+    // 255 = unknown, 0 = empty; anything else (incl. 254 = unlimited) means data.
+    if (bs != 255 && bs > 0)
+    {
+      best = std::max(best, tidToRank[tid]);
+    }
+  }
+  return best;
+}
+
 template <class Func>
 WifiTxVector
 UoraMultiUserScheduler::GetTxVectorForUlMu(Func canbeSolicited, bool isBsrpTrigger)
@@ -292,20 +329,65 @@ UoraMultiUserScheduler::GetTxVectorForUlMu(Func canbeSolicited, bool isBsrpTrigg
     txVector.SetGuardInterval(heConfiguration->GetGuardInterval().GetNanoSeconds());
     txVector.SetBssColor(heConfiguration->GetBssColor());
 
-    // iterate over the associated stations until an enough number of stations is identified
-    auto staIt = m_staListUl.begin();
     m_candidates.clear();
 
-    while (staIt != m_staListUl.end() &&
-           txVector.GetHeMuUserInfoMap().size() <
-               std::min<std::size_t>(m_nStations, count + nCentral26TonesRus))
+    // Build the traversal order as iterators into m_staListUl WITHOUT reordering
+    // the list itself (it stays in round-robin order). The actual list is never
+    // mutated by the sort, so the RR window the rotation advances stays
+    // consistent with the allocation.
+    //  - Basic-TF (data) phase (!isBsrpTrigger): stable-sort by descending AC so
+    //    higher-AC STAs fill the scheduled RUs first; RR order is the tiebreak.
+    //  - BSRP phase (isBsrpTrigger): stable-sort by ascending cached BSR so
+    //    empty/unknown STAs (discovery candidates) take the scheduled RUs first;
+    //    known-data STAs fall to the back and are served via the Basic-TF.
+    std::vector<std::list<MasterInfo>::iterator> order;
+    order.reserve(m_staListUl.size());
+    for (auto it = m_staListUl.begin(); it != m_staListUl.end(); ++it)
     {
+        order.push_back(it);
+    }
+    if (m_prioritizeByAc && !isBsrpTrigger)
+    {
+        std::map<Mac48Address, int> rank;
+        for (const auto& it : order)
+        {
+            rank[it->address] = StaHighestAcWithData(it->address);
+        }
+        std::stable_sort(order.begin(), order.end(),
+            [&rank](const std::list<MasterInfo>::iterator& a,
+                    const std::list<MasterInfo>::iterator& b) {
+                return rank.at(a->address) > rank.at(b->address);
+            });
+    }
+    else if (m_bsrpPrioritizeEmpty && isBsrpTrigger)
+    {
+        std::map<Mac48Address, int> key;
+        for (const auto& it : order)
+        {
+            uint8_t bs = m_apMac->GetMaxBufferStatus(it->address);
+            key[it->address] = (bs == 255) ? 0 : static_cast<int>(bs);
+        }
+        std::stable_sort(order.begin(), order.end(),
+            [&key](const std::list<MasterInfo>::iterator& a,
+                   const std::list<MasterInfo>::iterator& b) {
+                return key.at(a->address) < key.at(b->address);
+            });
+    }
+
+    // iterate over the candidate STAs until enough are identified
+    for (const auto& staIt : order)
+    {
+        if (txVector.GetHeMuUserInfoMap().size() >=
+            std::min<std::size_t>(m_nStations, count + nCentral26TonesRus))
+        {
+            break;
+        }
+
         NS_LOG_DEBUG("Next candidate STA (MAC=" << staIt->address << ", AID=" << staIt->aid << ")");
 
         if (!canbeSolicited(*staIt))
         {
             NS_LOG_DEBUG("Skipping station based on provided function object");
-            staIt++;
             continue;
         }
 
@@ -314,7 +396,6 @@ UoraMultiUserScheduler::GetTxVectorForUlMu(Func canbeSolicited, bool isBsrpTrigg
         {
             NS_LOG_DEBUG(
                 "Skipping non-EHT STA because this Trigger Frame is only soliciting EHT STAs");
-            staIt++;
             continue;
         }
 
@@ -332,7 +413,6 @@ UoraMultiUserScheduler::GetTxVectorForUlMu(Func canbeSolicited, bool isBsrpTrigg
         if (tid == 8)
         {
             NS_LOG_DEBUG("No Block Ack agreement established with " << staIt->address);
-            staIt++;
             continue;
         }
 
@@ -361,9 +441,6 @@ UoraMultiUserScheduler::GetTxVectorForUlMu(Func canbeSolicited, bool isBsrpTrigg
                                   suTxVector.GetMode().GetMcsValue(),
                                   suTxVector.GetNss()});
         m_candidates.emplace_back(staIt, nullptr);
-
-        // move to the next station in the list
-        staIt++;
     }
 
     if (txVector.GetHeMuUserInfoMap().empty())

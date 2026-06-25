@@ -82,6 +82,24 @@ VlceMultiUserScheduler::GetTypeId()
                           BooleanValue(true),
                           MakeBooleanAccessor(&VlceMultiUserScheduler::m_filterByBsr),
                           MakeBooleanChecker())
+            .AddAttribute("PrioritizeByAc",
+                          "If enabled, the Basic-TF allocates RUs to candidate STAs in "
+                          "order of the highest Access Category for which they have buffered "
+                          "data (VO before VI before BE before BK), instead of plain poll-list "
+                          "order. Round-robin fairness is preserved within each AC tier.",
+                          BooleanValue(false),
+                          MakeBooleanAccessor(&VlceMultiUserScheduler::m_prioritizeByAc),
+                          MakeBooleanChecker())
+            .AddAttribute("BsrpPrioritizeEmpty",
+                          "If enabled, the BSRP-TF polls stations in order of ascending cached "
+                          "buffer status, so empty (0) / unknown (255) stations -- those whose "
+                          "arrivals the AP cannot otherwise see -- are polled first and fill the "
+                          "limited BSRP slots; stations with known buffered data fall to the back "
+                          "and are served via the Basic-TF instead. Relies on the AP keeping the "
+                          "BSR estimate current (buffer-status decrement on received data).",
+                          BooleanValue(false),
+                          MakeBooleanAccessor(&VlceMultiUserScheduler::m_bsrpPrioritizeEmpty),
+                          MakeBooleanChecker())
             .AddAttribute("UlPsduSize",
                           "The default size in bytes of the solicited PSDU (to be sent in a TB PPDU)",
                           UintegerValue(500),
@@ -257,6 +275,26 @@ void VlceMultiUserScheduler::UpdatePollList(Mac48Address address)
 }
 
 
+int
+VlceMultiUserScheduler::StaHighestAcWithData(Mac48Address address) const
+{
+  // TID -> AC priority rank, following the standard UP->AC mapping.
+  // VO (TID 6,7) = 3, VI (TID 4,5) = 2, BE (TID 0,3) = 1, BK (TID 1,2) = 0.
+  static const int tidToRank[8] = {1, 0, 0, 1, 2, 2, 3, 3};
+  int best = -1;
+  for (uint8_t tid = 0; tid < 8; ++tid)
+  {
+    uint8_t bs = m_apMac->GetBufferStatus(tid, address);
+    // 255 = unknown, 0 = empty; anything else (incl. 254 = unlimited) means data.
+    if (bs != 255 && bs > 0)
+    {
+      best = std::max(best, tidToRank[tid]);
+    }
+  }
+  return best;
+}
+
+
 template <class Func>
 WifiTxVector
 VlceMultiUserScheduler::GetTxVectorForUlMu(Func canbeSolicited, bool isBasicTrigger)
@@ -291,26 +329,75 @@ VlceMultiUserScheduler::GetTxVectorForUlMu(Func canbeSolicited, bool isBasicTrig
     txVector.SetGuardInterval(heConfiguration->GetGuardInterval().GetNanoSeconds());
     txVector.SetBssColor(heConfiguration->GetBssColor());
 
-    // iterate over the associated stations until an enough number of stations is identified
-    auto staIt = m_staListToPoll.begin();
     m_candidates.clear();
 
-    while (staIt != m_staListToPoll.end() &&
-           txVector.GetHeMuUserInfoMap().size() <
-               std::min<std::size_t>(m_nStations, count + nCentral26TonesRus))
+    // Build the traversal order as iterators into m_staListToPoll WITHOUT
+    // reordering the list itself (the list stays in round-robin order). On the
+    // AC-priority data phase, stable-sort a temp view of those iterators by
+    // descending AC so higher-AC STAs are selected first; round-robin order is
+    // the within-tier tiebreak. This is self-consistent for A2PV2 (single Basic
+    // phase) and safe for A2P: the BSRP phase (isBasicTrigger=false) is left in
+    // pure round-robin order, and the Basic phase allocates from the sorted temp
+    // view -- the actual list is never mutated by the sort.
+    std::vector<std::list<MasterInfo>::iterator> order;
+    order.reserve(m_staListToPoll.size());
+    for (auto it = m_staListToPoll.begin(); it != m_staListToPoll.end(); ++it)
     {
+        order.push_back(it);
+    }
+    if (m_prioritizeByAc && isBasicTrigger)
+    {
+        std::map<Mac48Address, int> rank;
+        for (const auto& it : order)
+        {
+            rank[it->address] = StaHighestAcWithData(it->address);
+        }
+        std::stable_sort(order.begin(), order.end(),
+            [&rank](const std::list<MasterInfo>::iterator& a,
+                    const std::list<MasterInfo>::iterator& b) {
+                return rank.at(a->address) > rank.at(b->address);
+            });
+    }
+    else if (m_bsrpPrioritizeEmpty && !isBasicTrigger)
+    {
+        // BSRP discovery: poll empty/unknown-BSR stations first. The cached
+        // buffer status is 0 when known-empty, 255 when never reported -- both
+        // are stations whose arrivals the AP cannot see, so map them to the
+        // smallest key and sort ascending. Known-data stations (1..254) fall to
+        // the back of the (size-limited) BSRP window and are served via Basic-TF.
+        std::map<Mac48Address, int> key;
+        for (const auto& it : order)
+        {
+            uint8_t bs = m_apMac->GetMaxBufferStatus(it->address);
+            key[it->address] = (bs == 255) ? 0 : static_cast<int>(bs);
+        }
+        std::stable_sort(order.begin(), order.end(),
+            [&key](const std::list<MasterInfo>::iterator& a,
+                   const std::list<MasterInfo>::iterator& b) {
+                return key.at(a->address) < key.at(b->address);
+            });
+    }
+
+    // iterate over the candidate STAs until enough are identified
+    for (const auto& staIt : order)
+    {
+        if (txVector.GetHeMuUserInfoMap().size() >=
+            std::min<std::size_t>(m_nStations, count + nCentral26TonesRus))
+        {
+            break;
+        }
+
         NS_LOG_DEBUG("Next candidate STA (MAC=" << staIt->address << ", AID=" << staIt->aid << ")");
 
         if ( staIt->inListTime + m_maxTimeInList <= Simulator::Now())
         {
-            staIt = m_staListToPoll.erase(staIt);
+            m_staListToPoll.erase(staIt);
             continue;
         }
 
         if (!canbeSolicited(*staIt))
         {
             NS_LOG_DEBUG("Skipping station based on provided function object");
-            staIt++;
             continue;
         }
 
@@ -319,7 +406,6 @@ VlceMultiUserScheduler::GetTxVectorForUlMu(Func canbeSolicited, bool isBasicTrig
         {
             NS_LOG_DEBUG(
                 "Skipping non-EHT STA because this Trigger Frame is only soliciting EHT STAs");
-            staIt++;
             continue;
         }
 
@@ -337,7 +423,6 @@ VlceMultiUserScheduler::GetTxVectorForUlMu(Func canbeSolicited, bool isBasicTrig
         if (tid == 8)
         {
             NS_LOG_DEBUG("No Block Ack agreement established with " << staIt->address);
-            staIt++;
             continue;
         }
 
@@ -366,9 +451,6 @@ VlceMultiUserScheduler::GetTxVectorForUlMu(Func canbeSolicited, bool isBasicTrig
                                   suTxVector.GetMode().GetMcsValue(),
                                   suTxVector.GetNss()});
         m_candidates.emplace_back(staIt, nullptr);
-
-        // move to the next station in the list
-        staIt++;
     }
 
     if (txVector.GetHeMuUserInfoMap().empty())
@@ -661,13 +743,30 @@ VlceMultiUserScheduler::TrySendingBasicTf()
 
     //UpdateCredits(m_staListToPoll, maxDuration, txVector);
 
+    // Round-robin advance of the poll list. Two variants:
     if (m_candidates.size())
     {
-      auto it = m_staListToPoll.begin();
-      size_t nSaRUs = m_candidates.size();
-      std::advance(it, nSaRUs);
-
-      m_staListToPoll.splice(m_staListToPoll.end(), m_staListToPoll, m_staListToPoll.begin(), it);
+      if (m_prioritizeByAc && !m_enableBsrp)
+      {
+        // A2PV2: serve-aware. The AC sort may scatter the served STAs through
+        // the list, so move each actually-served STA to the back -- this is what
+        // gives intra-AC-tier fairness (the rest of a tier gets a turn next
+        // cycle) without freezing the tier order.
+        for (const auto& c : m_candidates)
+        {
+          m_staListToPoll.splice(m_staListToPoll.end(), m_staListToPoll, c.first);
+        }
+      }
+      else
+      {
+        // A2P / baseline: advance the round-robin window. The list is still in
+        // round-robin order (any AC sort used only a temp view), so moving the
+        // front served-count entries to the back is a valid RR advance and keeps
+        // the BSRP poll window cycling over all STAs.
+        auto it = m_staListToPoll.begin();
+        std::advance(it, m_candidates.size());
+        m_staListToPoll.splice(m_staListToPoll.end(), m_staListToPoll, m_staListToPoll.begin(), it);
+      }
     }
 
     return UL_MU_TX;

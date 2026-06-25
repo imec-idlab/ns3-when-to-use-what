@@ -200,9 +200,6 @@ int main(int argc, char *argv[])
   bool enableAggregation {false};
   double pMean {0.001};
 
-  // Per-class access category split. Type-1 = bulk CBR background sensors we
-  // do NOT care about; Type-2 = sporadic time-critical sensors whose tail
-  // latency is the figure of merit.
   std::string type1Ac {"AC_BE"};
   std::string type2Ac {"AC_VO"};
 
@@ -414,6 +411,9 @@ int main(int argc, char *argv[])
           Config::SetDefault("ns3::HtFrameExchangeManager::HtMuTxStartTime",
                              TimeValue(Seconds(startLogTime)));
           muTxStartSec = startLogTime;
+
+          Config::SetDefault("ns3::QosFrameExchangeManager::TrackBufferDrain",
+                             BooleanValue(simType == "A2P"));
         }
       else if (simType =="UORA" || simType == "CMAB") {
           //STA timer (validity of set)
@@ -425,6 +425,9 @@ int main(int argc, char *argv[])
           muEdcaTimer = (simTime % 8192 == 0) ? simTime : ( std::round( simTime / 8192.0) * 8192);
 
           Config::SetDefault("ns3::QosTxop::LongerEDCADisable", BooleanValue(true));
+
+          Config::SetDefault("ns3::QosFrameExchangeManager::TrackBufferDrain",
+                             BooleanValue(simType == "UORA"));
 
           if (simType =="UORA" && nRaRus) {
             Config::SetDefault ("ns3::HeConfiguration::OCwMin",UintegerValue(OCwMin));

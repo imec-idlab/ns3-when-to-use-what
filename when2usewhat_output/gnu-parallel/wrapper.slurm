@@ -4,7 +4,7 @@
 #SBATCH --nodes=1 --exclusive
 #SBATCH --time=10:50:00
 
-#SBATCH --mail-type=FAIL
+#SBATCH --mail-type=END,FAIL
 #SBATCH --mail-user=douglas.agbeve@uantwerpen.be
 
 module --force purge

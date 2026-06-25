@@ -53,6 +53,14 @@ class VlceMultiUserScheduler : public MultiUserScheduler
     ~VlceMultiUserScheduler() override;
 
     void UpdatePollList(Mac48Address address);
+
+    /**
+     * Priority rank of the highest-priority Access Category for which the given
+     * STA currently has buffered UL data, derived from the AP's per-TID BSR
+     * cache. Higher = more urgent: VO=3 > VI=2 > BE=1 > BK=0; returns -1 if the
+     * STA has no known buffered data on any AC.
+     */
+    int StaHighestAcWithData(Mac48Address address) const;
   protected:
     void DoDispose() override;
     void DoInitialize() override;
@@ -172,6 +180,8 @@ class VlceMultiUserScheduler : public MultiUserScheduler
     bool m_enableUlOfdma;        //!< enable the scheduler to also return UL_OFDMA
     bool m_enableBsrp;           //!< send a BSRP before an UL MU transmission
     bool m_filterByBsr;          //!< Basic-TF filter: include only STAs with MaxBufferStatus > 0
+    bool m_prioritizeByAc;       //!< Basic-TF: allocate RUs to higher-AC STAs first
+    bool m_bsrpPrioritizeEmpty;  //!< BSRP-TF: poll empty/unknown-BSR STAs first (discovery)
     bool m_useCentral26TonesRus; //!< whether to allocate central 26-tone RUs
     uint32_t m_ulPsduSize;       //!< the size in byte of the solicited PSDU
     std::map<AcIndex, std::list<MasterInfo>>

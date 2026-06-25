@@ -2485,19 +2485,6 @@ HeFrameExchangeManager::ReceiveMpdu(Ptr<const WifiMpdu> mpdu,
             acknowledgment->baType.m_bitmapLen.push_back(0);
             uint16_t staId = txVector.GetHeMuUserInfoMap().begin()->first;
             m_muSnrTag.Set(staId, rxSignalInfo.snr);
-
-        /*
-         * Update the BSR by subtracting the number of received 'queueSize' from
-         * the reported.
-         * 
-        uint32_t packetSize = mpdu->GetPacketSize();
-        uint8_t queueSize = static_cast<uint8_t>(std::ceil(std::min(packetSize, 64769U) / 256.0));
-        //uint8_t tid = hdr.GetQosTid();
-        uint8_t bufferStatus = m_apMac->GetBufferStatus(tid, sender);
-
-        bufferStatus = (bufferStatus == 255) ? 0 : (bufferStatus <= queueSize) ? 0 : bufferStatus - queueSize; 
-        m_apMac->SetBufferStatus(tid, sender, bufferStatus );*/
-
         }
         else if (!(hdr.IsQosData() && !hdr.HasData() && !inAmpdu))
         {

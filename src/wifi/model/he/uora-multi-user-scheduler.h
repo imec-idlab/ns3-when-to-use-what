@@ -54,6 +54,14 @@ class UoraMultiUserScheduler : public MultiUserScheduler
 
     void UpdatePollList(Mac48Address address);
 
+    /**
+     * Priority rank of the highest-priority Access Category for which the given
+     * STA currently has buffered UL data, derived from the AP's per-TID BSR
+     * cache. Higher = more urgent: VO=3 > VI=2 > BE=1 > BK=0; returns -1 if the
+     * STA has no known buffered data on any AC.
+     */
+    int StaHighestAcWithData(Mac48Address address) const;
+
   protected:
     void DoDispose() override;
     void DoInitialize() override;
@@ -170,6 +178,8 @@ class UoraMultiUserScheduler : public MultiUserScheduler
     bool m_enableUlOfdma;        //!< enable the scheduler to also return UL_OFDMA
     bool m_enableBsrp;           //!< send a BSRP before an UL MU transmission
     bool m_useCentral26TonesRus; //!< whether to allocate central 26-tone RUs
+    bool m_prioritizeByAc;       //!< Basic-TF: allocate scheduled RUs to higher-AC STAs first
+    bool m_bsrpPrioritizeEmpty;  //!< BSRP-TF: give scheduled RUs to empty/unknown-BSR STAs first
     uint32_t m_ulPsduSize;       //!< the size in byte of the solicited PSDU
     std::map<AcIndex, std::list<MasterInfo>>
         m_staListDl;                       //!< Per-AC list of stations (next to serve for DL first)

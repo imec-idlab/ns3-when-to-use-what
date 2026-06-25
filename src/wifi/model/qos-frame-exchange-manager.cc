@@ -55,6 +55,16 @@ QosFrameExchangeManager::GetTypeId()
                           "of QoS data frames sent by non-AP stations",
                           BooleanValue(false),
                           MakeBooleanAccessor(&QosFrameExchangeManager::m_setQosQueueSize),
+                          MakeBooleanChecker())
+            .AddAttribute("TrackBufferDrain",
+                          "When an AP saves a station's reported Queue Size, subtract the size "
+                          "of the just-received data frame so the cached buffer status reflects "
+                          "the station's current remaining backlog (the reported value still "
+                          "includes the in-flight frame). Safe only for schedulers with a "
+                          "buffer-status polling phase to re-ground the estimate (BSRP); leave "
+                          "off for schedulers without one (e.g. A2PV2).",
+                          BooleanValue(false),
+                          MakeBooleanAccessor(&QosFrameExchangeManager::m_trackBufferDrain),
                           MakeBooleanChecker());
     return tid;
 }
@@ -681,12 +691,21 @@ QosFrameExchangeManager::PreProcessFrame(Ptr<const WifiPsdu> psdu, const WifiTxV
             if (hdr.IsQosData() && hdr.IsQosEosp())
             {
                 uint8_t queueSize = 0;
-                /*if (hdr.HasData()){
+                // With TrackBufferDrain, the reported Queue Size includes the data
+                // carried in this very frame, so for a data frame subtract the
+                // received frame's size to get the STA's *current* remaining
+                // buffer (QoS-Null frames carry no data, so they are saved as-is).
+                // This keeps the AP's per-(STA,TID) estimate current, but is only
+                // safe when a polling phase (BSRP) periodically re-grounds it.
+                if (m_trackBufferDrain && hdr.HasData())
+                {
                   uint8_t dec = static_cast<uint8_t>(std::ceil(std::min(mpdu->GetPacketSize(), 64769U) / 256.0));
                   queueSize = ( hdr.GetQosQueueSize() > dec ) ? hdr.GetQosQueueSize() - dec : 0;
-                } else {*/ 
+                }
+                else
+                {
                   queueSize = hdr.GetQosQueueSize();
-                //}
+                }
                 NS_LOG_DEBUG("Station " << hdr.GetAddr2() << " reported a buffer status of "
                                         << +hdr.GetQosQueueSize()
                                         << " actual queueSize saved by AP " << +queueSize
