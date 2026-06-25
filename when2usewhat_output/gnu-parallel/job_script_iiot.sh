@@ -15,10 +15,16 @@ export NS_LOG=""
 
 nSta=${typeTwoNStations}
 
+# Exponential mean (s) of the stochastic stations' packet generation. Default to
+# 0.1 when the CSV has no pMean column. Tag the output path only for non-default
+# values, so the nSta-sweep paths (pMean=0.1) stay stable.
+pMean="${pMean:-0.1}"
+if [ "${pMean}" = "0.1" ]; then pTag=""; else pTag="_pMean-${pMean}"; fi
+
 if [ "$MODE" = "uora" ]; then
     : "${nRaRus:?Missing nRaRus}"
     : "${OCwMin:?Missing OCwMin}"
-    logDir=/data/antwerpen/208/vsc20879/iiot_data/${MODE}/ocwMin_${OCwMin}/${run}_run-${nSta}_sta-${nRaRus}_rarus
+    logDir=/data/antwerpen/208/vsc20879/iiot_data/${MODE}/ocwMin_${OCwMin}/${run}_run-${nSta}_sta-${nRaRus}_rarus${pTag}
 elif [ "$MODE" = "cmab" ]; then
     : "${algorithm:?Missing algorithm (CUCB|ThompsonSampling|EpsilonGreedy|EXP3M)}"
     : "${rewardType:?Missing rewardType (Binary|FairnessWeighted)}"
@@ -33,9 +39,9 @@ elif [ "$MODE" = "cmab" ]; then
         EXP3M)         hpTag="_g${exp3Gamma}"   ;;
         *)             hpTag=""                 ;;
     esac
-    logDir=/data/antwerpen/208/vsc20879/iiot_data/${MODE}/${algorithm}_${rewardType}${hpTag}/${run}_run-${nSta}_sta
+    logDir=/data/antwerpen/208/vsc20879/iiot_data/${MODE}/${algorithm}_${rewardType}${hpTag}/${run}_run-${nSta}_sta${pTag}
 else
-    logDir=/data/antwerpen/208/vsc20879/iiot_data/${MODE}/${run}_run-${nSta}_sta
+    logDir=/data/antwerpen/208/vsc20879/iiot_data/${MODE}/${run}_run-${nSta}_sta${pTag}
 fi
 
 
@@ -48,6 +54,7 @@ BASE_ARGS="
     --nMsdus=10
     --ruAllocationType=ru-26-tone
     --startLogTime=5
+    --pMean=${pMean}
     "
     
 BASE_OFDMA="

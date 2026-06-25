@@ -198,7 +198,7 @@ int main(int argc, char *argv[])
   bool randomStart {false};
   std::string accessCategory {"AC_VO"};
   bool enableAggregation {false};
-  double pMean {0.001};
+  double pMean {0.1};
 
   std::string type1Ac {"AC_BE"};
   std::string type2Ac {"AC_VO"};
@@ -698,7 +698,7 @@ int main(int argc, char *argv[])
     {
       trafficGen.SetAttribute("EnableRandom", BooleanValue(true));
       std::ostringstream distr;
-      distr << "ns3::ExponentialRandomVariable[Mean=" << 0.1 << "|Bound=0]";
+      distr << "ns3::ExponentialRandomVariable[Mean=" << pMean << "|Bound=0]";
       trafficGen.SetAttribute("IntervalRandomVariable", StringValue(distr.str()));
     }
 
