@@ -110,7 +110,7 @@ a2pv2() {
          --muSchedAccessReqInterval=256
          --simType=A2PV2
          --ns3::VlceMultiUserScheduler::FilterByBsr=false
-         --ns3::VlceMultiUserScheduler::PrioritizeByAc=true
+         --ns3::VlceMultiUserScheduler::PrioritizeByAc=false
     "
 }
 

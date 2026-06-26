@@ -152,6 +152,20 @@ class CmabMultiUserScheduler : public MultiUserScheduler
 
     std::pair<std::size_t, std::size_t> ComputeRuLayout() const;
 
+    /**
+     * Priority rank of the highest-priority Access Category for which the given
+     * STA currently has buffered UL data (VO=3 > VI=2 > BE=1 > BK=0; -1 if none),
+     * read from the AP's per-TID BSR cache.
+     */
+    int StaHighestAcWithData(Mac48Address address) const;
+
+    /**
+     * Reward multiplier in (0,1] for the given STA based on its highest AC with
+     * buffered data: VO=1.0, VI=0.75, BE=0.5, BK=0.25. Returns 1.0 when
+     * AcAwareReward is disabled or the AC is unknown (neutral).
+     */
+    double AcRewardWeight(Mac48Address address) const;
+
     /// UCB1 score for the given arm (uses m_timeStep as global t).
     double UcbScore(const ArmState& arm) const;
 
@@ -164,6 +178,7 @@ class CmabMultiUserScheduler : public MultiUserScheduler
     double m_ucbConstant;      ///< exploration constant for CUCB (default sqrt(2))
     double m_epsilon;          ///< probability of random selection for EpsilonGreedy
     double m_exp3Gamma;        ///< exploration mixing parameter for EXP3.M (in (0,1])
+    bool m_acAwareReward;      ///< scale arm reward by the STA's highest-AC-with-data weight
 
     // CMAB state
     std::map<uint16_t, ArmState> m_arms;        ///< per-AID arm state

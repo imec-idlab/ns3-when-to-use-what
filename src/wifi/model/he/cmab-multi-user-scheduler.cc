@@ -130,7 +130,16 @@ CmabMultiUserScheduler::GetTypeId()
                           "Mixing parameter gamma for EXP3.M in (0,1]; smaller = more exploitation.",
                           DoubleValue(0.1),
                           MakeDoubleAccessor(&CmabMultiUserScheduler::m_exp3Gamma),
-                          MakeDoubleChecker<double>(1e-6, 1.0));
+                          MakeDoubleChecker<double>(1e-6, 1.0))
+            .AddAttribute("AcAwareReward",
+                          "If enabled, the per-arm bandit reward is scaled by the access "
+                          "category of the station's buffered data (VO=1.0, VI=0.75, BE=0.5, "
+                          "BK=0.25), so the bandit learns to prefer serving higher-priority "
+                          "(e.g. time-critical VO) traffic. Default off keeps the AC-agnostic "
+                          "reward.",
+                          BooleanValue(false),
+                          MakeBooleanAccessor(&CmabMultiUserScheduler::m_acAwareReward),
+                          MakeBooleanChecker());
     return tid;
 }
 
@@ -992,6 +1001,10 @@ CmabMultiUserScheduler::NotifyBsrpResponse(Mac48Address senderAddr, uint8_t repo
         reward = normBytes * fairness;
     }
 
+    // Scale by the access category of the STA's buffered data (no-op unless
+    // AcAwareReward is set), so the bandit learns to prefer higher-AC traffic.
+    reward *= AcRewardWeight(senderAddr);
+
     arm.pulls++;
     arm.rewardSum += reward;
     arm.alpha += reward;
@@ -1048,6 +1061,36 @@ CmabMultiUserScheduler::ComputeRuLayout() const
         nCentral26TonesRus = 0;
     }
     return {count, nCentral26TonesRus};
+}
+
+int
+CmabMultiUserScheduler::StaHighestAcWithData(Mac48Address address) const
+{
+    // TID -> AC priority rank (standard UP->AC): VO(6,7)=3, VI(4,5)=2, BE(0,3)=1, BK(1,2)=0.
+    static const int tidToRank[8] = {1, 0, 0, 1, 2, 2, 3, 3};
+    int best = -1;
+    for (uint8_t tid = 0; tid < 8; ++tid)
+    {
+        uint8_t bs = m_apMac->GetBufferStatus(tid, address);
+        if (bs != 255 && bs > 0)
+        {
+            best = std::max(best, tidToRank[tid]);
+        }
+    }
+    return best;
+}
+
+double
+CmabMultiUserScheduler::AcRewardWeight(Mac48Address address) const
+{
+    if (!m_acAwareReward)
+    {
+        return 1.0;
+    }
+    // rank -> weight: BK=0.25, BE=0.5, VI=0.75, VO=1.0; unknown AC -> neutral 1.0.
+    static const double acWeight[4] = {0.25, 0.5, 0.75, 1.0};
+    int rank = StaHighestAcWithData(address);
+    return (rank >= 0 && rank < 4) ? acWeight[rank] : 1.0;
 }
 
 double
@@ -1244,6 +1287,10 @@ CmabMultiUserScheduler::UpdateBanditRewards()
             double fairness = 1.0 / (1.0 + pulls / static_cast<double>(N));
             reward = normBytes * fairness;
         }
+
+        // Scale by the access category of the STA's buffered data (no-op unless
+        // AcAwareReward is set), so the bandit learns to prefer higher-AC traffic.
+        reward *= AcRewardWeight(*address);
 
         auto& arm = armIt->second;
         arm.pulls++;
