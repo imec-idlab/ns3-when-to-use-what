@@ -45,6 +45,7 @@
 #include "ns3/packet-sink.h"
 #include "ns3/packet-tag.h"
 #include "ns3/ap-server-helper.h"
+#include "ns3/udp-client.h"
 #include "ns3/flow-monitor-helper.h"
 
 #include "ns3/arp-cache.h"
@@ -67,6 +68,15 @@ struct stats_t
   std::vector<Mac48Address> srcLate;
 
   uint8_t classId {0};   // 1 = type-1 CBR background, 2 = type-2 time-critical
+
+  // App-level TX accounting (ground truth from the UdpClient source), used to
+  // derive true packet loss without any delivery deadline. txBase is the
+  // client's GetTotalTx() snapshotted at startLogTime, so txBytes counts only
+  // what was generated inside the logging window (the traffic app starts
+  // earlier, during the warm-up).
+  Ptr<UdpClient> txClient {nullptr};
+  uint64_t txBase {0};
+  uint64_t txBytes {0};
 };
 
 std::map<Mac48Address, stats_t> g_statsMap; //!< map for statistics for each station
@@ -89,6 +99,24 @@ void SinrTrace (Mac48Address addr, double sinr)
 {
   g_statsMap[addr].sinr += sinr;
   g_statsMap[addr].totalBeacons++;
+}
+
+/**
+ * Snapshot each STA's generated-byte counter at the start of the logging
+ * window. The traffic generators start during the warm-up, so only the
+ * difference between this baseline and the final counter was generated inside
+ * the measurement window -- which is the denominator that matches the RX
+ * statistics.
+ */
+void SnapshotTxBaseline ()
+{
+  for (auto &kv : g_statsMap)
+    {
+      if (kv.second.txClient)
+        {
+          kv.second.txBase = kv.second.txClient->GetTotalTx ();
+        }
+    }
 }
 
 void RxTraceWithAddressParam (double logTime, Ptr<const Packet> p, const Address &src, const Address &dst)
@@ -663,6 +691,11 @@ int main(int argc, char *argv[])
   const uint8_t type1Tos = TosForAc (type1Ac);
   const uint8_t type2Tos = TosForAc (type2Ac);
 
+  // Per-STA handle on the uplink traffic generator, indexed like wifiStaNodes,
+  // so the number of packets each STA actually generated can be read back after
+  // the run and compared against what the AP received.
+  std::vector<Ptr<UdpClient>> txClients;
+
   for (size_t i = 0; i < typeOneNStations + typeTwoNStations; ++i)
   {
     staStartTime += 0.00108;
@@ -703,6 +736,7 @@ int main(int argc, char *argv[])
     }
 
     auto trafficApp = trafficGen.Install(wifiStaNodes.Get(i));
+    txClients.push_back (DynamicCast<UdpClient> (trafficApp.Get (0)));
 
     if (randomStart)
     {
@@ -740,6 +774,7 @@ int main(int argc, char *argv[])
     auto ip = staNodeInterfaces.Get (i).first->GetAddress (1, 0).GetAddress ();
     g_Ip2Mac[ip] = mac;
     g_statsMap[mac].classId = (i < typeOneNStations) ? 1 : 2;
+    g_statsMap[mac].txClient = txClients.at (i);
 
     staNetDevices.Get(i)->GetObject<WifiNetDevice>()->GetPhy()->GetPhyEntity(WIFI_MOD_CLASS_OFDM)->TraceConnectWithoutContext("SinrTrace", MakeBoundCallback (&SinrTrace, Mac48Address::ConvertFrom (staNetDevices.Get (i)->GetAddress ())));
     staNetDevices.Get(i)->GetObject<WifiNetDevice>()->GetPhy()->GetPhyEntity(WIFI_MOD_CLASS_HE)->TraceConnectWithoutContext("SinrTrace", MakeBoundCallback (&SinrTrace, Mac48Address::ConvertFrom (staNetDevices.Get (i)->GetAddress ())));
@@ -763,6 +798,8 @@ int main(int argc, char *argv[])
 
 
   ProgressBar pg (Seconds(simulationTime + startLogTime ));
+  Simulator::Schedule (Seconds (startLogTime), &SnapshotTxBaseline);
+
   Simulator::Stop (Seconds (simulationTime + startLogTime ));
   Simulator::Run ();
 
@@ -777,6 +814,17 @@ int main(int argc, char *argv[])
     rxBytesLogWindow += kv.second.rxBytes;
   }
 
+  // Read the generators' final counters before the simulator tears the apps
+  // down. UdpClient counts m_size bytes per generated packet (payload plus the
+  // 12-byte SeqTsHeader), so this is an exact multiple of ulPayloadSize.
+  for (auto &kv : g_statsMap)
+  {
+    if (kv.second.txClient)
+    {
+      kv.second.txBytes = kv.second.txClient->GetTotalTx () - kv.second.txBase;
+    }
+  }
+
   Simulator::Destroy();
 
   double throughput = (rxBytesLogWindow * 8.0) / (simulationTime * 1e6); //Mbit/s
@@ -789,7 +837,11 @@ int main(int argc, char *argv[])
 
   std::ofstream perStaOutStream;
   perStaOutStream.open ("per_sta_stats.out", std::ios::out);
-  perStaOutStream << "MAC-addr\tSINR_dB\tRX_bytes\tAvg_delay_ms\tClass" << std::endl;
+  // TX_pkts / RX_pkts are matched on the same generation window: TX_pkts counts
+  // what the STA's generator produced after startLogTime, RX_pkts counts how
+  // many of those the AP actually received. Packet loss is therefore
+  // 1 - RX_pkts/TX_pkts, with no delivery deadline involved.
+  perStaOutStream << "MAC-addr\tSINR_dB\tRX_bytes\tAvg_delay_ms\tClass\tTX_pkts\tRX_pkts" << std::endl;
   for (auto &staStats : g_statsMap)
     {
       auto &s = staStats.second;
@@ -800,8 +852,17 @@ int main(int argc, char *argv[])
           sumDelay += delay * 1000.; //in ms
         }
       double avgMs = s.pktDelays.empty () ? 0.0 : sumDelay / s.pktDelays.size ();
+
+      const uint64_t txPkts = (ulPayloadSize > 0) ? s.txBytes / ulPayloadSize : 0;
+      uint64_t rxPkts = 0;
+      for (const auto &g : s.genTime)
+        {
+          if (g >= startLogTime) ++rxPkts;
+        }
+
       perStaOutStream << staStats.first << "\t" << s.sinr << "\t" << s.rxBytes
-        << "\t" << avgMs << "\t" << static_cast<int>(s.classId) << std::endl;
+        << "\t" << avgMs << "\t" << static_cast<int>(s.classId)
+        << "\t" << txPkts << "\t" << rxPkts << std::endl;
     }
   perStaOutStream.close ();
 
