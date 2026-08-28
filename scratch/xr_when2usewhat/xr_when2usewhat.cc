@@ -62,6 +62,7 @@ void SinrTrace(Mac48Address addr, double sinr) {
     g_statsMap[addr].totalBeacons++;
 }
 
+
 // Bound per sink with its STA MAC and flow. For the downlink flows the sink runs
 // on the STA, so the bound staMac is the receiver; for the uplink pose flow the
 // single AP sink receives from every STA, so the STA is resolved from the source.
@@ -138,6 +139,10 @@ int main(int argc, char *argv[]) {
     uint32_t OCwMin{7};
     uint32_t OCwMax{127}; // Should this be lager? 1023?
     bool LongerEdcaDisable{true};
+    bool edcaPrime{true};        // warm-up: STAs send tiny UL packets so the AP triggers
+    double edcaPrimeStart{0.15}; // them and their MU-EDCA timer arms (EDCA off) before XR
+    double edcaPrimeInterval{0.001};
+    double poseDeadline{11.11};  // UL pose latency target (ms); one 90 Hz pose period
     // double muEdcaTimer{8192 * 5};
     //double maxCredit{1000000}; //amount credit a stations can have when using // todo : check this
     //RrMultiUserScheduler, and how long to disable edca for
@@ -210,6 +215,10 @@ int main(int argc, char *argv[]) {
                  useA2Pv2); // New, use A2Pv2
 
     cmd.AddValue("LongerEdcaDisable", "if True, disable EDCA for the duration of simulation", LongerEdcaDisable);
+    cmd.AddValue("edcaPrime", "warm-up: STAs send tiny UL packets before XR so their MU-EDCA arms (EDCA off)", edcaPrime);
+    cmd.AddValue("edcaPrimeStart", "time (s) to start the UL priming flow (after association)", edcaPrimeStart);
+    cmd.AddValue("edcaPrimeInterval", "inter-packet interval (s) of the UL priming flow", edcaPrimeInterval);
+    cmd.AddValue("poseDeadline", "UL pose latency target in ms (packets later than this miss the deadline)", poseDeadline);
     cmd.AddValue("muEdcaTimer",
                  "How long to disable EDCA for and for VlceMultiUserScheduler, how long to stay in polling list without transmission (in Seconds)",
                  muEdcaTimer);
@@ -565,12 +574,25 @@ int main(int argc, char *argv[]) {
     uint16_t dlVideoPort = 9;
     uint16_t dlAudioPort = 10;
     uint16_t ulTrackingPort = 11;
+    uint16_t ulPrimePort = 12;
 
     uint8_t tosVo = 0xc0; // Voice
     uint8_t tosVi = 0xb8; // Video
 
     XrAppContainer xrServerApps;
     XrAppContainer xrClientApps;
+    XrAppContainer primeApps;   // warm-up UL priming (own start/stop window; not logged)
+    std::map<Mac48Address, Ptr<XrPacketGenerationUdpApp>> poseSender; // per-STA UL pose generator (for generated count)
+
+    // AP-side sink for the priming flow (deliberately NOT connected to RxFlowTrace,
+    // so priming traffic is never counted in the XR metrics).
+    if (edcaPrime)
+    {
+        XrServerHelper primeSinkHelper;
+        primeSinkHelper.SetAttribute("SinkFlag", BooleanValue(true));
+        primeSinkHelper.SetAttribute("LocalPort", UintegerValue(ulPrimePort));
+        primeApps.Add(primeSinkHelper.Install(wifiApNode.Get(0)));
+    }
 
     // Helpers
     XrServerHelper videoHelper;
@@ -644,7 +666,23 @@ int main(int argc, char *argv[]) {
         trackingHelper.SetAttribute("InitPacketSentDelay", TimeValue(Seconds(staggeredStart)));
         trackingHelper.SetAttribute("Interval", TimeValue(Seconds(0.01111)));
 
-        xrClientApps.Add(trackingHelper.Install(wifiStaNodes.Get(i)));
+        XrAppContainer poseApp = trackingHelper.Install(wifiStaNodes.Get(i));
+        poseSender[staMac] = DynamicCast<XrPacketGenerationUdpApp>(poseApp.Get(0));
+        xrClientApps.Add(poseApp);
+
+        // WARM-UP EDCA PRIMING: tiny AC_VO UL packets so the AP triggers this STA
+        // during the (DL-empty) warm-up, arming its MU-EDCA timer before XR starts.
+        if (edcaPrime)
+        {
+            XrServerHelper primeHelper;
+            primeHelper.SetAttribute("Tos", UintegerValue(tosVo));
+            primeHelper.SetAttribute("RemoteAddress", AddressValue(InetSocketAddress(apNodeInterface.GetAddress(0), ulPrimePort)));
+            primeHelper.SetAttribute("RemotePort", UintegerValue(ulPrimePort));
+            primeHelper.SetAttribute("Interval", TimeValue(Seconds(edcaPrimeInterval)));
+            primeHelper.SetAttribute("PacketsPerBatch", UintegerValue(1));
+            primeHelper.SetAttribute("PacketSize", UintegerValue(60));
+            primeApps.Add(primeHelper.Install(wifiStaNodes.Get(i)));
+        }
     }
 
     xrServerApps.Start(Seconds(startLogTime));
@@ -652,6 +690,13 @@ int main(int argc, char *argv[]) {
 
     xrClientApps.Start(Seconds(startLogTime));
     xrClientApps.Stop(Seconds(simulationTime + startLogTime));
+
+    // Priming runs only during warm-up: from just after association until XR starts.
+    if (edcaPrime)
+    {
+        primeApps.Start(Seconds(edcaPrimeStart));
+        primeApps.Stop(Seconds(startLogTime));
+    }
 
     Simulator::Schedule(Seconds(0), &Ipv4GlobalRoutingHelper::PopulateRoutingTables);
     // TXOP limits left at the ns-3 standard EDCA defaults (AC_VO=2080 us,
@@ -694,7 +739,10 @@ int main(int argc, char *argv[]) {
     perStaOutStream << "MAC-addr\tAvg_SINR_dB\t"
                     << "Vid_RXbytes\tVid_mean_ms\tVid_p99_ms\t"
                     << "Aud_RXbytes\tAud_mean_ms\tAud_p99_ms\t"
-                    << "Pose_RXbytes\tPose_mean_ms\tPose_p99_ms" << std::endl;
+                    << "Pose_RXbytes\tPose_mean_ms\tPose_p99_ms\t"
+                    << "Pose_gen\tPose_rx\tPose_ontime\tPose_deadline_loss" << std::endl;
+
+    double poseDeadlineS = poseDeadline / 1000.0; // ms -> s (delays are in seconds)
 
     for (auto &staStats : g_statsMap) {
         stats_t &s = staStats.second;
@@ -704,10 +752,21 @@ int main(int argc, char *argv[]) {
         delayStats(s.audDelays, aMean, aP99);
         delayStats(s.poseDelays, pMean, pP99);
 
+        // Pose deadline compliance (survivorship-proof: generated from the sender's
+        // exact TX count, so dropped pose packets count against the deadline too).
+        uint32_t poseGen = (poseSender.count(staStats.first) && poseSender[staStats.first])
+                               ? poseSender[staStats.first]->GetSent() : 0;
+        uint32_t poseRx = s.poseDelays.size();
+        uint32_t poseOntime = 0;
+        for (double d : s.poseDelays) { if (d <= poseDeadlineS) ++poseOntime; }
+        double poseLoss = (poseGen > 0) ? (1.0 - static_cast<double>(poseOntime) / poseGen) : 0.0;
+        if (poseLoss < 0.0) poseLoss = 0.0; // guard: RX during warm-up tail vs gen count
+
         perStaOutStream << staStats.first << "\t" << avgSinr << "\t"
                         << s.vidBytes  << "\t" << vMean << "\t" << vP99 << "\t"
                         << s.audBytes  << "\t" << aMean << "\t" << aP99 << "\t"
-                        << s.poseBytes << "\t" << pMean << "\t" << pP99 << std::endl;
+                        << s.poseBytes << "\t" << pMean << "\t" << pP99 << "\t"
+                        << poseGen << "\t" << poseRx << "\t" << poseOntime << "\t" << poseLoss << std::endl;
     }
     perStaOutStream.close();
     Simulator::Destroy();

@@ -38,6 +38,7 @@ fi
 
 
 BASE_ARGS="
+    --simulationTime=30
     --RngRun=${run}
     --logDir=${logDir}
     --nStations=${nSta}
@@ -45,6 +46,7 @@ BASE_ARGS="
     --nMsdus=10
     --ruAllocationType=ru-26-tone
     --startLogTime=2.0
+    --edcaPrime=true
     "
 
 # Spectrum + UL-OFDMA are non-default; dlAckType, UseCentral26TonesRus,
@@ -109,6 +111,11 @@ uora() {
         --ns3::UoraMultiUserScheduler::DownlinkAware=true \
         --ns3::QosFrameExchangeManager::TrackBufferDrain=true
     "
+    # DownlinkAware is safe for UORA here because BASE_ARGS enables --edcaPrime:
+    # STAs arm MU-EDCA during warm-up (EDCA off before XR), which removes the
+    # asynchronous UL that otherwise races a DL-first TX (SendNormalAck while the
+    # PHY is in TX -> "Invalid WifiPhy state"). Verified crash-free across a
+    # seeds x OCwMin scan at the sensitive nRaRus=18, nSta=6 point.
 }
 
 cmab() {

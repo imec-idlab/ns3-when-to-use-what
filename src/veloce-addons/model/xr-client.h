@@ -21,6 +21,9 @@ namespace ns3 {
 
         void Setup(Address addr, Time interval);
 
+        /** \brief Number of application-layer packets generated (sent) so far. */
+        uint32_t GetSent() const { return m_sent; }
+
     protected:
         void DoDispose(void) override;
 
