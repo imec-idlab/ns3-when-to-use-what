@@ -45,7 +45,14 @@ struct stats_t {
     std::vector<double> pktDelaysLate, genTimeLate, rxTimeLate;
     std::vector<uint64_t> pktTagLate;
     std::vector<Mac48Address> srcLate;
+
+    // per-direction / per-AC accounting (delays in seconds)
+    uint64_t vidBytes{0}, audBytes{0}, poseBytes{0};   // DL video (AC_VI), DL audio (AC_VO), UL pose (AC_VO)
+    std::vector<double> vidDelays, audDelays, poseDelays;
 };
+
+// XR traffic flows: DL video is AC_VI; DL audio and UL pose are AC_VO.
+enum XrFlow { FLOW_VIDEO_DL = 0, FLOW_AUDIO_DL = 1, FLOW_POSE_UL = 2 };
 
 std::map<Mac48Address, stats_t> g_statsMap; //!< map for statistics for each station
 std::map<Ipv4Address, Mac48Address> g_Ip2Mac; //!< map for mapping IPv4 to MAC address
@@ -55,27 +62,31 @@ void SinrTrace(Mac48Address addr, double sinr) {
     g_statsMap[addr].totalBeacons++;
 }
 
-void RxTraceWithAddressParam(double logTime, Ptr<const Packet> p, const Address &src, const Address &dst) {
-    Ptr<Packet> pkt = p->Copy();
+// Bound per sink with its STA MAC and flow. For the downlink flows the sink runs
+// on the STA, so the bound staMac is the receiver; for the uplink pose flow the
+// single AP sink receives from every STA, so the STA is resolved from the source.
+void RxFlowTrace(Mac48Address staMac, uint8_t flow, double logTime,
+                 Ptr<const Packet> p, const Address &src, const Address &dst) {
+    if (Simulator::Now().GetSeconds() < logTime) return;
 
+    Ptr<Packet> pkt = p->Copy();
     SeqTsHeader seqTs;
     ns3::PacketTag tag;
     pkt->RemovePacketTag(tag);
     pkt->RemoveHeader(seqTs);
-    Time startLogTime = Seconds(logTime);
 
-    if (Simulator::Now().GetSeconds() >= startLogTime.GetSeconds()) {
-        g_statsMap[g_Ip2Mac.at(InetSocketAddress::ConvertFrom(src).GetIpv4())].rxBytes += p->GetSize();
-        g_statsMap[g_Ip2Mac.at(InetSocketAddress::ConvertFrom(src).GetIpv4())].pktDelays.push_back(
-            (Simulator::Now() - seqTs.GetTs()).GetSeconds());
-        g_statsMap[g_Ip2Mac.at(InetSocketAddress::ConvertFrom(src).GetIpv4())].pktTag.push_back(tag.GetValue());
-        g_statsMap[g_Ip2Mac.at(InetSocketAddress::ConvertFrom(src).GetIpv4())].genTime.push_back(
-            seqTs.GetTs().GetSeconds());
-        g_statsMap[g_Ip2Mac.at(InetSocketAddress::ConvertFrom(src).GetIpv4())].rxTime.push_back(
-            Simulator::Now().GetSeconds());
-        g_statsMap[g_Ip2Mac.at(InetSocketAddress::ConvertFrom(src).GetIpv4())].src.push_back(
-            g_Ip2Mac.at(InetSocketAddress::ConvertFrom(src).GetIpv4()));
+    double delay = (Simulator::Now() - seqTs.GetTs()).GetSeconds();
+    uint32_t sz = p->GetSize();
+
+    Mac48Address key = staMac;
+    if (flow == FLOW_POSE_UL) {
+        key = g_Ip2Mac.at(InetSocketAddress::ConvertFrom(src).GetIpv4());
     }
+    stats_t &st = g_statsMap[key];
+
+    if (flow == FLOW_VIDEO_DL)      { st.vidBytes  += sz; st.vidDelays.push_back(delay); }
+    else if (flow == FLOW_AUDIO_DL) { st.audBytes  += sz; st.audDelays.push_back(delay); }
+    else                            { st.poseBytes += sz; st.poseDelays.push_back(delay); }
 }
 
 int main(int argc, char *argv[]) {
@@ -88,7 +99,14 @@ int main(int argc, char *argv[]) {
     std::string Scheduler = "ns3::RrMultiUserScheduler";
     uint32_t nRaRus = 0; // 0 = EDCA, >0 = UORA
     bool useA2Pv2 = false;
-    double txPower = 23.0; // From Table II
+
+    // CMAB scheduler params (applied when Scheduler == ns3::CmabMultiUserScheduler)
+    std::string cmabAlgorithm {"CUCB"};       // CUCB | ThompsonSampling | EpsilonGreedy | EXP3M
+    std::string cmabRewardType {"Binary"};    // Binary | FairnessWeighted
+    double cmabUcbConstant {std::sqrt(2.0)};
+    double cmabEpsilon {0.1};
+    double cmabExp3Gamma {0.1};
+    double txPower = 40.0; // From Table II
     std::string frequency = "5"; // From Section C
 
     double minDistance{1.0}; //meters
@@ -102,18 +120,20 @@ int main(int argc, char *argv[]) {
     uint32_t nMsdus = 1;
     HeRu::RuType ruAllocType{HeRu::RU_UNDEFINED};
     bool enableAggregation{true}; // todo : should this be true or false?
+    // Arbitrary UL PSDU size the scheduler allocates per STA when a device's
+    // buffer status (BSR) is unknown; not tied to the XR tracking packet size.
+    uint32_t ulPayloadSize = 1500;
 
 
     std::string dlAckSeqType{"AGGR-MU-BAR"};
     bool enableUlOfdma{false};
-    bool enableBsrp{false};
+    bool enableBsrp{true};   // match conference: A2P uses BSRP; UORA/CMAB trigger on it
     double accessReqInterval = {0}; //microseconds
     bool useExtendedBlockAck{true};
     bool useMuEdca{true};
     uint32_t nMpdus = 1;
     bool UseCentral26TonesRus = {true};
     bool DelayAccessReqUponAccess = {true};
-    double txOpLimits = {2080}; //AC_VO default value in microseconds 2080
     std::string ruAllocationType{"ru-undefined"};
     uint32_t OCwMin{7};
     uint32_t OCwMax{127}; // Should this be lager? 1023?
@@ -172,11 +192,18 @@ int main(int argc, char *argv[]) {
     cmd.AddValue("nMpdus", "Number of aggregated MPDUs (=< 6500631/740 for HE PPDUs)", nMpdus);
     cmd.AddValue("DelayAccessReqUponAccess", "Enable/Disable delay of access req only upon access grant",
                  DelayAccessReqUponAccess);
-    cmd.AddValue("TxOPLimits", "TX Opportunity limits in microseconds", txOpLimits);
     cmd.AddValue("OCwMin", "Min OFDMA CW", OCwMin);
     cmd.AddValue("OCwMax", "Max OFDMA CW", OCwMax);
     cmd.AddValue("Scheduler", "Type resource scheduler to use", Scheduler);
     cmd.AddValue("startLogTime", "Time to begin logging [seconds]", startLogTime);
+
+    // CMAB scheduler hyperparameters (match conference scenario)
+    cmd.AddValue("cmabAlgorithm", "CMAB algorithm (CUCB | ThompsonSampling | EpsilonGreedy | EXP3M)", cmabAlgorithm);
+    cmd.AddValue("cmabRewardType", "Per-arm reward shape (Binary | FairnessWeighted)", cmabRewardType);
+    cmd.AddValue("cmabUcbConstant", "CUCB exploration constant c in score = mean + c*sqrt(2 ln t / n_i)", cmabUcbConstant);
+    cmd.AddValue("cmabEpsilon", "EpsilonGreedy random-exploration probability in [0,1]", cmabEpsilon);
+    cmd.AddValue("cmabExp3Gamma", "EXP3.M mixing parameter gamma in (0,1]", cmabExp3Gamma);
+    cmd.AddValue("ulPayloadSize", "Arbitrary UL PSDU size (bytes) the scheduler allocates when a STA's BSR is unknown", ulPayloadSize);
 
     cmd.AddValue("useA2Pv2",
                  "If true, use A2Pv2 (VlceMultiUserSchedulerNoBsrp: no BSRP, direct BasicTF).",
@@ -300,15 +327,22 @@ int main(int argc, char *argv[]) {
         Config::SetDefault("ns3::HeConfiguration::MuViCwMax", UintegerValue(32767));
         Config::SetDefault("ns3::HeConfiguration::MuVoCwMax", UintegerValue(32767));
 
-        if (LongerEdcaDisable) {
-            /* Disable EDCA for the duration of the entire simulation:
-             *    Calculate the ceiling multiple of
-             *    8192 from simulation time
-             *    This is needed for UORA only simulation
-             */
+        // Per-scheme MU-EDCA timer + warm-up, matching the conference scenario.
+        // (XR selects the scheme via the Scheduler string + useA2Pv2 + nRaRus.)
+        if (Scheduler.find("Vlce") != std::string::npos) {
+            // A2P / A2Pv2 (VlceMultiUserScheduler[NoBsrp]): longer poll-list tenure,
+            // HT EDCA stays up briefly so STAs bootstrap into the poll list.
+            muEdcaTimer = 8192 * 5;
+            maxTimeInList = muEdcaTimer;
+            Config::SetDefault("ns3::HtFrameExchangeManager::HtMuTxStartTime", TimeValue(Seconds(1.5)));
+        } else {
+            // UORA / CMAB / RR: disable EDCA for the whole simulation.
             int simTime = Seconds(simulationTime).GetMicroSeconds();
             muEdcaTimer = (simTime % 8192 == 0) ? simTime : (std::round(simTime / 8192.0) * 8192);
             Config::SetDefault("ns3::QosTxop::LongerEDCADisable", BooleanValue(true));
+            if (Scheduler.find("Uora") != std::string::npos && nRaRus) {
+                Config::SetDefault("ns3::HeFrameExchangeManager::SendQosNullAfterBasicTf", BooleanValue(true));
+            }
         }
 
         //STA timer (validity of set)
@@ -319,7 +353,9 @@ int main(int argc, char *argv[]) {
 
         Config::SetDefault("ns3::HtFrameExchangeManager::DisableEDCA", BooleanValue(true));
 
-        Config::SetDefault("ns3::HeFrameExchangeManager::MuTxStartTime", TimeValue(Seconds(startLogTime)));
+        // Warm-up: AP begins MU transmissions at 1.5 s (matches conference). The
+        // first traffic flows via EDCA, then MU-OFDMA takes over.
+        Config::SetDefault("ns3::HeFrameExchangeManager::MuTxStartTime", TimeValue(Seconds(1.5)));
     } else {
         Config::SetDefault("ns3::HeFrameExchangeManager::MuTxStartTime",
                            TimeValue(Seconds(simulationTime + startLogTime)));
@@ -345,6 +381,10 @@ int main(int argc, char *argv[]) {
 
     if (enableAggregation) {
         Config::SetDefault("ns3::WifiRemoteStationManager::FragmentationThreshold", StringValue("990000"));
+        // Video (AC_VI) is the dominant DL flow. t
+        Config::SetDefault("ns3::WifiMac::VI_MaxAmpduSize", UintegerValue(6500631)); //HE max
+        Config::SetDefault("ns3::WifiMac::VI_MaxAmsduSize", UintegerValue(11398)); //11398
+        // Audio + UL tracking (AC_VO): keep A-MPDU off (latency-critical, small)
         Config::SetDefault("ns3::WifiMac::VO_MaxAmpduSize", UintegerValue(0)); //6500631
         Config::SetDefault("ns3::WifiMac::VO_MaxAmsduSize", UintegerValue(11398)); //11398
         Config::SetDefault("ns3::WifiMac::BE_MaxAmpduSize", UintegerValue(0)); //6500631
@@ -425,22 +465,33 @@ int main(int argc, char *argv[]) {
             wifimac.SetMultiUserSchedulerAttribute("NStations", UintegerValue(nStations));
             wifimac.SetMultiUserSchedulerAttribute("AccessReqAc", EnumValue(AcIndex::AC_VO));
             wifimac.SetMultiUserSchedulerAttribute("RuAllocationType", EnumValue(ruAllocType));
-            wifimac.SetMultiUserSchedulerAttribute("UlPsduSize", UintegerValue(1500)); // todo : what does this par do?
+            wifimac.SetMultiUserSchedulerAttribute("UlPsduSize", UintegerValue(ulPayloadSize)); // fallback UL alloc when BSR unknown
 
             // Scheduler-specific attributes
-            if (Scheduler == "ns3::RrMultiUserScheduler") {
-                wifimac.SetMultiUserSchedulerAttribute("MaxCredits",
-                    TimeValue(MicroSeconds(maxTimeInList)));
-            }
-
             if (Scheduler == "ns3::VlceMultiUserScheduler") {
-                wifimac.SetMultiUserSchedulerAttribute("MaxTimeInList",
-                    TimeValue(MicroSeconds(maxTimeInList)));
+                wifimac.SetMultiUserSchedulerAttribute("MaxTimeInList", TimeValue(MicroSeconds(maxTimeInList)));
             }
 
             if (Scheduler == "ns3::UoraMultiUserScheduler") {
-                wifimac.SetMultiUserSchedulerAttribute("NumRandomAccessRus",
-                    UintegerValue(nRaRus));
+                wifimac.SetMultiUserSchedulerAttribute("NumRandomAccessRus", UintegerValue(nRaRus));
+            }
+
+            if (Scheduler == "ns3::CmabMultiUserScheduler") {
+                NS_ABORT_MSG_IF(cmabAlgorithm != "CUCB" &&
+                                cmabAlgorithm != "ThompsonSampling" &&
+                                cmabAlgorithm != "EpsilonGreedy" &&
+                                cmabAlgorithm != "EXP3M",
+                                "Invalid --cmabAlgorithm: " << cmabAlgorithm
+                                << " (expected CUCB | ThompsonSampling | EpsilonGreedy | EXP3M)");
+                NS_ABORT_MSG_IF(cmabRewardType != "Binary" &&
+                                cmabRewardType != "FairnessWeighted",
+                                "Invalid --cmabRewardType: " << cmabRewardType
+                                << " (expected Binary | FairnessWeighted)");
+                wifimac.SetMultiUserSchedulerAttribute("Algorithm",   StringValue(cmabAlgorithm));
+                wifimac.SetMultiUserSchedulerAttribute("RewardType",  StringValue(cmabRewardType));
+                wifimac.SetMultiUserSchedulerAttribute("UcbConstant", DoubleValue(cmabUcbConstant));
+                wifimac.SetMultiUserSchedulerAttribute("Epsilon",     DoubleValue(cmabEpsilon));
+                wifimac.SetMultiUserSchedulerAttribute("Exp3Gamma",   DoubleValue(cmabExp3Gamma));
             }
         }
         wifimac.SetType("ns3::ApWifiMac",
@@ -532,9 +583,10 @@ int main(int argc, char *argv[]) {
     trackingSinkHelper.SetAttribute("LocalPort", UintegerValue(ulTrackingPort));
 
 
-    xrServerApps.Add(
-        trackingSinkHelper.Install(wifiApNode.Get(0))
-    );
+    XrAppContainer trackingSink = trackingSinkHelper.Install(wifiApNode.Get(0));
+    trackingSink.Get(0)->TraceConnectWithoutContext(
+        "Rx", MakeBoundCallback(&RxFlowTrace, apMac, (uint8_t)FLOW_POSE_UL, startLogTime));
+    xrServerApps.Add(trackingSink);
 
     for (uint32_t i = 0; i < nStations; ++i) {
         double staggeredStart = startLogTime + (i * 0.00108);
@@ -564,21 +616,25 @@ int main(int argc, char *argv[]) {
         aApp.Start(Seconds(staggeredStart));
         xrServerApps.Add(aApp);
 
-        // DL VIDEO SINK
+        Mac48Address staMac = Mac48Address::ConvertFrom(staNetDevices.Get(i)->GetAddress());
+
+        // DL VIDEO SINK (AC_VI)
         XrServerHelper videoSinkHelper;
         videoSinkHelper.SetAttribute("SinkFlag", BooleanValue(true));
         videoSinkHelper.SetAttribute("LocalPort", UintegerValue(dlVideoPort));
-        xrServerApps.Add(
-            videoSinkHelper.Install(wifiStaNodes.Get(i))
-        );
+        XrAppContainer vSink = videoSinkHelper.Install(wifiStaNodes.Get(i));
+        vSink.Get(0)->TraceConnectWithoutContext(
+            "Rx", MakeBoundCallback(&RxFlowTrace, staMac, (uint8_t)FLOW_VIDEO_DL, startLogTime));
+        xrServerApps.Add(vSink);
 
-        // DL AUDIO SINK
+        // DL AUDIO SINK (AC_VO)
         XrServerHelper audioSinkHelper;
         audioSinkHelper.SetAttribute("SinkFlag", BooleanValue(true));
         audioSinkHelper.SetAttribute("LocalPort", UintegerValue(dlAudioPort));
-        xrServerApps.Add(
-            audioSinkHelper.Install(wifiStaNodes.Get(i))
-        );
+        XrAppContainer aSink = audioSinkHelper.Install(wifiStaNodes.Get(i));
+        aSink.Get(0)->TraceConnectWithoutContext(
+            "Rx", MakeBoundCallback(&RxFlowTrace, staMac, (uint8_t)FLOW_AUDIO_DL, startLogTime));
+        xrServerApps.Add(aSink);
 
         // UPLINK
         InetSocketAddress trackingAddr(apNodeInterface.GetAddress(0), ulTrackingPort);
@@ -598,57 +654,60 @@ int main(int argc, char *argv[]) {
     xrClientApps.Stop(Seconds(simulationTime + startLogTime));
 
     Simulator::Schedule(Seconds(0), &Ipv4GlobalRoutingHelper::PopulateRoutingTables);
-    for (uint32_t i = 0; i < nStations; i++) {
-        Ptr<WifiNetDevice> dev = DynamicCast<WifiNetDevice>(staNetDevices.Get(i));
-        dev->GetMac()->GetQosTxop(AC_VO)->SetTxopLimit(MicroSeconds(txOpLimits));
-    }
-    Ptr<WifiNetDevice> apDev = DynamicCast<WifiNetDevice>(apNetDevice.Get(0));
-    apDev->GetMac()->GetQosTxop(AC_VO)->SetTxopLimit(MicroSeconds(txOpLimits));
-
-    Config::ConnectWithoutContext(
-      "/NodeList/*/ApplicationList/*/$ns3::XrServerUdpApp/Rx",
-      MakeBoundCallback(&RxTraceWithAddressParam, startLogTime)
-    );
+    // TXOP limits left at the ns-3 standard EDCA defaults (AC_VO=2080 us,
+    // AC_VI=4096 us; IEEE 802.11-2020 Table 9-155).
 
     ProgressBar pg(Seconds(simulationTime + startLogTime));
     Simulator::Stop(Seconds(simulationTime + startLogTime));
     Simulator::Run();
 
-    uint64_t totalRxBytes = 0;
+    double effectiveSimTime = simulationTime; // logging window (excludes warm-up)
 
-    for (uint32_t i = 0; i < xrServerApps.GetN(); ++i) {
-        Ptr<XrServerUdpApp> app =
-            DynamicCast<XrServerUdpApp>(xrServerApps.Get(i));
-        if (app) {
-            totalRxBytes += app->GetTotalRx();
-        }
+    // Per-flow aggregate bytes across all stations.
+    uint64_t vidBytes = 0, audBytes = 0, poseBytes = 0;
+    for (auto &kv : g_statsMap) {
+        vidBytes  += kv.second.vidBytes;
+        audBytes  += kv.second.audBytes;
+        poseBytes += kv.second.poseBytes;
     }
-
-    double effectiveSimTime = simulationTime;
-    double throughput = (totalRxBytes * 8) / (effectiveSimTime * 1000000.0); // Mbit/s
+    auto mbps = [&](uint64_t bytes) { return (bytes * 8.0) / (effectiveSimTime * 1e6); };
 
     std::ofstream totalStatsOutStream;
     totalStatsOutStream.open("throughput.out", std::ios::out);
-    totalStatsOutStream << "MCS\tBandwidth_MHz\tGuard_interval_ns\tTotal_Throughput_Mbps" << std::endl;
-    totalStatsOutStream << mcs << "\t" << channelWidth << "\t" << guardInterval << "\t" << throughput << std::endl;
+    totalStatsOutStream << "MCS\tBandwidth_MHz\tGuard_interval_ns\t"
+                        << "DL_Video_Mbps\tDL_Audio_Mbps\tUL_Pose_Mbps\tTotal_Mbps" << std::endl;
+    totalStatsOutStream << mcs << "\t" << channelWidth << "\t" << guardInterval << "\t"
+                        << mbps(vidBytes) << "\t" << mbps(audBytes) << "\t" << mbps(poseBytes) << "\t"
+                        << mbps(vidBytes + audBytes + poseBytes) << std::endl;
     totalStatsOutStream.close();
+
+    // mean and 99th-percentile of a delay vector, in ms (empty -> 0).
+    auto delayStats = [](std::vector<double> v, double &mean, double &p99) {
+        if (v.empty()) { mean = 0.; p99 = 0.; return; }
+        double s = 0.; for (double x : v) s += x * 1000.; mean = s / v.size();
+        std::sort(v.begin(), v.end());
+        p99 = v[std::min(v.size() - 1, (size_t)(0.99 * v.size()))] * 1000.;
+    };
 
     std::ofstream perStaOutStream;
     perStaOutStream.open("per_sta_stats.out", std::ios::out);
-    perStaOutStream << "MAC-addr\tAvg_SINR_dB\tRX_bytes\tAvg_delay_ms" << std::endl;
+    perStaOutStream << "MAC-addr\tAvg_SINR_dB\t"
+                    << "Vid_RXbytes\tVid_mean_ms\tVid_p99_ms\t"
+                    << "Aud_RXbytes\tAud_mean_ms\tAud_p99_ms\t"
+                    << "Pose_RXbytes\tPose_mean_ms\tPose_p99_ms" << std::endl;
 
-    for (auto &staStats: g_statsMap) {
-        double avgSinr = (staStats.second.totalBeacons > 0) ? (staStats.second.sinr / staStats.second.totalBeacons) : 0;
+    for (auto &staStats : g_statsMap) {
+        stats_t &s = staStats.second;
+        double avgSinr = (s.totalBeacons > 0) ? (s.sinr / s.totalBeacons) : 0;
+        double vMean, vP99, aMean, aP99, pMean, pP99;
+        delayStats(s.vidDelays, vMean, vP99);
+        delayStats(s.audDelays, aMean, aP99);
+        delayStats(s.poseDelays, pMean, pP99);
 
-        double sumDelay = 0.;
-        for (auto &delay: staStats.second.pktDelays) {
-            sumDelay += delay * 1000.;
-        }
-
-        double avgDelay = (staStats.second.pktDelays.size() > 0) ? (sumDelay / staStats.second.pktDelays.size()) : 0;
-
-        perStaOutStream << staStats.first << "\t" << avgSinr << "\t" << staStats.second.rxBytes
-                << "\t" << avgDelay << std::endl;
+        perStaOutStream << staStats.first << "\t" << avgSinr << "\t"
+                        << s.vidBytes  << "\t" << vMean << "\t" << vP99 << "\t"
+                        << s.audBytes  << "\t" << aMean << "\t" << aP99 << "\t"
+                        << s.poseBytes << "\t" << pMean << "\t" << pP99 << std::endl;
     }
     perStaOutStream.close();
     Simulator::Destroy();

@@ -63,6 +63,16 @@ CmabMultiUserScheduler::GetTypeId()
                           BooleanValue(false),
                           MakeBooleanAccessor(&CmabMultiUserScheduler::m_forceDlOfdma),
                           MakeBooleanChecker())
+            .AddAttribute("DownlinkAware",
+                          "If enabled, SelectTxFormat becomes downlink-first: whenever the AP "
+                          "has buffered downlink traffic it sends a DL-MU PPDU, instead of "
+                          "interleaving the uplink trigger cycle (BSRP/Basic-TF) every access. "
+                          "The uplink phases are served only when the DL queue is empty. Suits "
+                          "downlink-dominated workloads (e.g. XR video); the default (off) keeps "
+                          "the uplink-aware behaviour.",
+                          BooleanValue(false),
+                          MakeBooleanAccessor(&CmabMultiUserScheduler::m_downlinkAware),
+                          MakeBooleanChecker())
             .AddAttribute("EnableUlOfdma",
                           "If enabled, return UL_MU_TX if DL_MU_TX was returned the previous time.",
                           BooleanValue(true),
@@ -222,7 +232,10 @@ CmabMultiUserScheduler::SelectTxFormat()
         m_ulIdleState = m_enableBsrp ? UlIdleState::SEND_BSRP : UlIdleState::SEND_BASIC;
     };
 
-    if ((mpdu && m_ulIdleState != UlIdleState::SEND_BSRP) || !m_enableUlOfdma)
+    // Downlink-aware: if there is DL backlog, send a DL-MU PPDU now (DL-first),
+    // never interleaving the UL trigger cycle. Uplink-aware (default) only takes
+    // the DL shortcut when the UL state is not at the BSRP poll step.
+    if ((mpdu && (m_downlinkAware || m_ulIdleState != UlIdleState::SEND_BSRP)) || !m_enableUlOfdma)
     {
         ResetUlState();
         return TrySendingDlMuPpdu();

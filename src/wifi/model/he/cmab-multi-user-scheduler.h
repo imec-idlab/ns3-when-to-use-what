@@ -200,6 +200,7 @@ class CmabMultiUserScheduler : public MultiUserScheduler
     uint8_t m_nStations;
     bool m_enableTxopSharing;
     bool m_forceDlOfdma;
+    bool m_downlinkAware;        //!< SelectTxFormat: serve DL-MU whenever DL backlog exists (DL-first)
     bool m_enableUlOfdma;
     bool m_enableBsrp;
     bool m_useCentral26TonesRus;

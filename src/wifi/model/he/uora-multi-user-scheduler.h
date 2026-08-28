@@ -180,6 +180,7 @@ class UoraMultiUserScheduler : public MultiUserScheduler
     bool m_useCentral26TonesRus; //!< whether to allocate central 26-tone RUs
     bool m_prioritizeByAc;       //!< Basic-TF: allocate scheduled RUs to higher-AC STAs first
     bool m_bsrpPrioritizeEmpty;  //!< BSRP-TF: give scheduled RUs to empty/unknown-BSR STAs first
+    bool m_downlinkAware;        //!< SelectTxFormat: serve DL-MU whenever DL backlog exists (DL-first)
     uint32_t m_ulPsduSize;       //!< the size in byte of the solicited PSDU
     std::map<AcIndex, std::list<MasterInfo>>
         m_staListDl;                       //!< Per-AC list of stations (next to serve for DL first)

@@ -102,6 +102,16 @@ UoraMultiUserScheduler::GetTypeId()
                           BooleanValue(false),
                           MakeBooleanAccessor(&UoraMultiUserScheduler::m_bsrpPrioritizeEmpty),
                           MakeBooleanChecker())
+            .AddAttribute("DownlinkAware",
+                          "If enabled, SelectTxFormat becomes downlink-first: whenever the AP "
+                          "has buffered downlink traffic it sends a DL-MU PPDU, instead of "
+                          "interleaving the uplink trigger cycle (BSRP/Basic-TF) every access. "
+                          "The uplink phases are served only when the DL queue is empty. Suits "
+                          "downlink-dominated workloads (e.g. XR video); the default (off) keeps "
+                          "the uplink-aware behaviour.",
+                          BooleanValue(false),
+                          MakeBooleanAccessor(&UoraMultiUserScheduler::m_downlinkAware),
+                          MakeBooleanChecker())
             .AddAttribute("MaxCredits",
                           "Maximum amount of credits a station can have. When transmitting a DL MU PPDU, "
                           "the amount of credits received by each station equals the TX duration (in "
@@ -202,8 +212,11 @@ UoraMultiUserScheduler::SelectTxFormat()
                                     : UlIdleState::SEND_BASIC;
     };
 
-    if ( (mpdu && m_ulIdleState != UlIdleState::SEND_BSRP 
-               &&  m_ulIdleState != UlIdleState::SEND_BASIC)  || !m_enableUlOfdma)
+    // Downlink-aware: if there is DL backlog, send a DL-MU PPDU now (DL-first),
+    // never interleaving the UL trigger cycle. Uplink-aware (default) only takes
+    // the DL shortcut when the UL state is past the BSRP/Basic trigger steps.
+    if ( (mpdu && (m_downlinkAware || (m_ulIdleState != UlIdleState::SEND_BSRP
+               &&  m_ulIdleState != UlIdleState::SEND_BASIC)))  || !m_enableUlOfdma)
     {
       ResetUlState();
       return TrySendingDlMuPpdu();
