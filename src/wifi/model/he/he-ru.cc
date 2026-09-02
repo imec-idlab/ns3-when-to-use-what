@@ -831,6 +831,14 @@ HeRu::GetEqualSizedRusForStations(uint16_t bandwidth,
     }
     if (nRusAssigned == 0)
     {
+        if (nStations == 0)
+        {
+            // Nothing to allocate (empty candidate list): return gracefully so the
+            // caller's assignment loop simply serves no station, matching the
+            // fixed-RU path. Avoids aborting on a count-0 call from the scheduler.
+            nCentral26TonesRus = 0;
+            return RU_26_TONE;
+        }
         NS_ABORT_IF(bandwidth != 160 || nStations != 1);
         nRusAssigned = 1;
         ruType = RU_2x996_TONE;

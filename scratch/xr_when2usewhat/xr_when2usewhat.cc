@@ -4,6 +4,7 @@
 
 #include <cerrno>
 #include <cstdint>
+#include <algorithm>
 #include <cstring>
 #include <sstream>
 #include <string>
@@ -49,6 +50,7 @@ struct stats_t {
     // per-direction / per-AC accounting (delays in seconds)
     uint64_t vidBytes{0}, audBytes{0}, poseBytes{0};   // DL video (AC_VI), DL audio (AC_VO), UL pose (AC_VO)
     std::vector<double> vidDelays, audDelays, poseDelays;
+    std::vector<uint32_t> vidSeq;                       // per received video packet, its app seq (for frame grouping)
 };
 
 // XR traffic flows: DL video is AC_VI; DL audio and UL pose are AC_VO.
@@ -85,7 +87,7 @@ void RxFlowTrace(Mac48Address staMac, uint8_t flow, double logTime,
     }
     stats_t &st = g_statsMap[key];
 
-    if (flow == FLOW_VIDEO_DL)      { st.vidBytes  += sz; st.vidDelays.push_back(delay); }
+    if (flow == FLOW_VIDEO_DL)      { st.vidBytes  += sz; st.vidDelays.push_back(delay); st.vidSeq.push_back(seqTs.GetSeq()); }
     else if (flow == FLOW_AUDIO_DL) { st.audBytes  += sz; st.audDelays.push_back(delay); }
     else                            { st.poseBytes += sz; st.poseDelays.push_back(delay); }
 }
@@ -96,6 +98,7 @@ int main(int argc, char *argv[]) {
     double simulationTime = 10.0;
     uint32_t nStations = 10;
     uint32_t channelWidth = 80; // 20, 40, 80, 160, 320 MHz
+    uint32_t nss = 1;           // spatial streams (MIMO); XR DL video needs >1 for multi-headset capacity
     int mcs = 11; // 4096-QAM for Wi-Fi 7
     std::string Scheduler = "ns3::RrMultiUserScheduler";
     uint32_t nRaRus = 0; // 0 = EDCA, >0 = UORA
@@ -118,11 +121,9 @@ int main(int argc, char *argv[]) {
     uint32_t guardInterval{800}; //in ns
     std::string phyModel{"Yans"}; //Spectrum or Yans
     bool enableShadowing = false;
-    uint32_t nMsdus = 1;
+    uint32_t nMsdus = 8;   // A-MSDU count per AC (8*1448=11584 -> clamped to HE max 11398)
     HeRu::RuType ruAllocType{HeRu::RU_UNDEFINED};
-    bool enableAggregation{true}; // todo : should this be true or false?
-    // Arbitrary UL PSDU size the scheduler allocates per STA when a device's
-    // buffer status (BSR) is unknown; not tied to the XR tracking packet size.
+    bool enableAggregation{true};
     uint32_t ulPayloadSize = 1500;
 
 
@@ -132,8 +133,8 @@ int main(int argc, char *argv[]) {
     double accessReqInterval = {0}; //microseconds
     bool useExtendedBlockAck{true};
     bool useMuEdca{true};
-    uint32_t nMpdus = 1;
-    bool UseCentral26TonesRus = {true};
+    uint32_t nMpdus = 256; // A-MPDU count per AC (256*1448=370KB; PPDU duration binds first)
+    bool UseCentral26TonesRus = {false};
     bool DelayAccessReqUponAccess = {true};
     std::string ruAllocationType{"ru-undefined"};
     uint32_t OCwMin{7};
@@ -142,7 +143,12 @@ int main(int argc, char *argv[]) {
     bool edcaPrime{true};        // warm-up: STAs send tiny UL packets so the AP triggers
     double edcaPrimeStart{0.15}; // them and their MU-EDCA timer arms (EDCA off) before XR
     double edcaPrimeInterval{0.001};
-    double poseDeadline{11.11};  // UL pose latency target (ms); one 90 Hz pose period
+    // Wi-Fi XR QoS targets. Video is frame-level: a frame (all its packets) must
+    // arrive within videoFrameBound (Carrascosa/Bellalta VR-over-Wi-Fi: 33 ms,
+    // NFR >= 99%). Pose/audio are per-packet (802.11 RTA low-latency class).
+    double poseDeadline{10.0};    // UL pose per-packet latency target (ms)
+    double videoFrameBound{33.0}; // DL video per-frame delivery bound (ms)
+    double audioDeadline{30.0};   // DL audio per-packet latency target (ms)
     // double muEdcaTimer{8192 * 5};
     //double maxCredit{1000000}; //amount credit a stations can have when using // todo : check this
     //RrMultiUserScheduler, and how long to disable edca for
@@ -169,6 +175,7 @@ int main(int argc, char *argv[]) {
     //PHY params
     cmd.AddValue("frequency", "Whether working in the 2.4, 5 or 6 GHz band (other values gets rejected)", frequency);
     cmd.AddValue("channelWidth", "Channel width used for transmissions (20, 40, 80, 80+80, 160 MHz)", channelWidth);
+    cmd.AddValue("nss", "Number of spatial streams (MIMO) at AP and STAs", nss);
     cmd.AddValue("guardInterval", "The value of the guard interval (800, 1600, 3200 ns)", guardInterval);
     cmd.AddValue("mcs", "if set, limit testing to a specific MCS (0-11)", mcs);
     cmd.AddValue("enableShadowing", "Enable/disable gaussian shadowing", enableShadowing);
@@ -218,7 +225,9 @@ int main(int argc, char *argv[]) {
     cmd.AddValue("edcaPrime", "warm-up: STAs send tiny UL packets before XR so their MU-EDCA arms (EDCA off)", edcaPrime);
     cmd.AddValue("edcaPrimeStart", "time (s) to start the UL priming flow (after association)", edcaPrimeStart);
     cmd.AddValue("edcaPrimeInterval", "inter-packet interval (s) of the UL priming flow", edcaPrimeInterval);
-    cmd.AddValue("poseDeadline", "UL pose latency target in ms (packets later than this miss the deadline)", poseDeadline);
+    cmd.AddValue("poseDeadline", "UL pose per-packet latency target in ms", poseDeadline);
+    cmd.AddValue("videoFrameBound", "DL video per-frame delivery bound in ms (frame on-time if all its packets arrive within this)", videoFrameBound);
+    cmd.AddValue("audioDeadline", "DL audio per-packet latency target in ms", audioDeadline);
     cmd.AddValue("muEdcaTimer",
                  "How long to disable EDCA for and for VlceMultiUserScheduler, how long to stay in polling list without transmission (in Seconds)",
                  muEdcaTimer);
@@ -273,6 +282,14 @@ int main(int argc, char *argv[]) {
         ruAllocType = HeRu::RU_26_TONE;
     else if (ruAllocationType == "ru-52-tone")
         ruAllocType = HeRu::RU_52_TONE;
+    else if (ruAllocationType == "ru-106-tone")
+        ruAllocType = HeRu::RU_106_TONE;
+    else if (ruAllocationType == "ru-242-tone")
+        ruAllocType = HeRu::RU_242_TONE;
+    else if (ruAllocationType == "ru-484-tone")
+        ruAllocType = HeRu::RU_484_TONE;
+    else if (ruAllocationType == "ru-996-tone")
+        ruAllocType = HeRu::RU_996_TONE;
 
 
     /*
@@ -390,14 +407,17 @@ int main(int argc, char *argv[]) {
 
     if (enableAggregation) {
         Config::SetDefault("ns3::WifiRemoteStationManager::FragmentationThreshold", StringValue("990000"));
-        // Video (AC_VI) is the dominant DL flow. t
-        Config::SetDefault("ns3::WifiMac::VI_MaxAmpduSize", UintegerValue(6500631)); //HE max
-        Config::SetDefault("ns3::WifiMac::VI_MaxAmsduSize", UintegerValue(11398)); //11398
-        // Audio + UL tracking (AC_VO): keep A-MPDU off (latency-critical, small)
-        Config::SetDefault("ns3::WifiMac::VO_MaxAmpduSize", UintegerValue(0)); //6500631
-        Config::SetDefault("ns3::WifiMac::VO_MaxAmsduSize", UintegerValue(11398)); //11398
-        Config::SetDefault("ns3::WifiMac::BE_MaxAmpduSize", UintegerValue(0)); //6500631
-        Config::SetDefault("ns3::WifiMac::BE_MaxAmsduSize", UintegerValue(11398)); //11398
+        // Aggregation limits are driven by nMsdus/nMpdus (counts of the 1448 B XR
+        // MSDU) and applied uniformly to every AC, clamped to the 802.11ax maxima
+        // (A-MSDU 11398 B, A-MPDU 6500631 B). A-MPDU is enabled for AC_VO (audio +
+        // UL pose) as well, not only AC_VI.
+        const uint32_t xrMsdu = 1448;
+        const uint32_t amsduLimit = std::min<uint32_t>(nMsdus * xrMsdu, 11398);
+        const uint32_t ampduLimit = std::min<uint32_t>(nMpdus * xrMsdu, 6500631);
+        for (const std::string& ac : {std::string("VI"), std::string("VO"), std::string("BE")}) {
+            Config::SetDefault("ns3::WifiMac::" + ac + "_MaxAmpduSize", UintegerValue(ampduLimit));
+            Config::SetDefault("ns3::WifiMac::" + ac + "_MaxAmsduSize", UintegerValue(amsduLimit));
+        }
     }
 
     /*
@@ -452,6 +472,9 @@ int main(int argc, char *argv[]) {
         phy.Set("TxPowerStart", DoubleValue(txPower));
         phy.Set("TxPowerEnd", DoubleValue(txPower));
         phy.Set("RxNoiseFigure", DoubleValue(7));
+        phy.Set("Antennas", UintegerValue(nss));
+        phy.Set("MaxSupportedTxSpatialStreams", UintegerValue(nss));
+        phy.Set("MaxSupportedRxSpatialStreams", UintegerValue(nss));
 
         wifimac.SetType("ns3::StaWifiMac", "Ssid", SsidValue(ssid),
                         "VO_BlockAckThreshold", UintegerValue(0));
@@ -575,6 +598,7 @@ int main(int argc, char *argv[]) {
     uint16_t dlAudioPort = 10;
     uint16_t ulTrackingPort = 11;
     uint16_t ulPrimePort = 12;
+    const uint32_t VIDEO_PKTS_PER_FRAME = 96;   // DL video packets per frame (for frame-level QoS)
 
     uint8_t tosVo = 0xc0; // Voice
     uint8_t tosVi = 0xb8; // Video
@@ -583,6 +607,7 @@ int main(int argc, char *argv[]) {
     XrAppContainer xrClientApps;
     XrAppContainer primeApps;   // warm-up UL priming (own start/stop window; not logged)
     std::map<Mac48Address, Ptr<XrPacketGenerationUdpApp>> poseSender; // per-STA UL pose generator (for generated count)
+    std::map<Mac48Address, Ptr<XrServerUdpApp>> videoSender, audioSender; // per-STA DL generators (for generated count)
 
     // AP-side sink for the priming flow (deliberately NOT connected to RxFlowTrace,
     // so priming traffic is never counted in the XR metrics).
@@ -612,6 +637,7 @@ int main(int argc, char *argv[]) {
 
     for (uint32_t i = 0; i < nStations; ++i) {
         double staggeredStart = startLogTime + (i * 0.00108);
+        Mac48Address staMac = Mac48Address::ConvertFrom(staNetDevices.Get(i)->GetAddress());
 
         // DOWNLINK
         InetSocketAddress videoAddr(staNodeInterfaces.GetAddress(i), dlVideoPort);
@@ -619,11 +645,12 @@ int main(int argc, char *argv[]) {
         videoHelper.SetAttribute("RemoteAddress", AddressValue(videoAddr));
         videoHelper.SetAttribute("RemotePort", UintegerValue(dlVideoPort));
         videoHelper.SetAttribute("Interval", TimeValue(Seconds(0.01111)));
-        videoHelper.SetAttribute("PacketsPerBatch", UintegerValue(96));
+        videoHelper.SetAttribute("PacketsPerBatch", UintegerValue(VIDEO_PKTS_PER_FRAME));
         videoHelper.SetAttribute("PacketSize", UintegerValue(1448));
 
         XrAppContainer vApp = videoHelper.Install(wifiApNode.Get(0));
         vApp.Start(Seconds(staggeredStart));
+        videoSender[staMac] = DynamicCast<XrServerUdpApp>(vApp.Get(0));
         xrServerApps.Add(vApp);
 
         InetSocketAddress audioAddr(staNodeInterfaces.GetAddress(i), dlAudioPort);
@@ -636,9 +663,8 @@ int main(int argc, char *argv[]) {
 
         XrAppContainer aApp = audioHelper.Install(wifiApNode.Get(0));
         aApp.Start(Seconds(staggeredStart));
+        audioSender[staMac] = DynamicCast<XrServerUdpApp>(aApp.Get(0));
         xrServerApps.Add(aApp);
-
-        Mac48Address staMac = Mac48Address::ConvertFrom(staNetDevices.Get(i)->GetAddress());
 
         // DL VIDEO SINK (AC_VI)
         XrServerHelper videoSinkHelper;
@@ -726,47 +752,77 @@ int main(int argc, char *argv[]) {
                         << mbps(vidBytes + audBytes + poseBytes) << std::endl;
     totalStatsOutStream.close();
 
-    // mean and 99th-percentile of a delay vector, in ms (empty -> 0).
-    auto delayStats = [](std::vector<double> v, double &mean, double &p99) {
-        if (v.empty()) { mean = 0.; p99 = 0.; return; }
+    // mean + p75/p95/p99/p99.9 of a delay vector, in ms (empty -> 0). Percentiles
+    // over DELIVERED packets; pair with the gen/rx counts below to see drops too.
+    auto delayStats = [](std::vector<double> v, double &mean,
+                         double &p75, double &p95, double &p99, double &p999) {
+        if (v.empty()) { mean = p75 = p95 = p99 = p999 = 0.; return; }
         double s = 0.; for (double x : v) s += x * 1000.; mean = s / v.size();
         std::sort(v.begin(), v.end());
-        p99 = v[std::min(v.size() - 1, (size_t)(0.99 * v.size()))] * 1000.;
+        auto pct = [&](double q) { return v[std::min(v.size() - 1, (size_t)(q * v.size()))] * 1000.; };
+        p75 = pct(0.75); p95 = pct(0.95); p99 = pct(0.99); p999 = pct(0.999);
     };
+
+    // Per-flow QoS (survivorship-proof: generated = the sender's exact TX count).
+    // Audio/pose are per-packet; video is per-FRAME (Wi-Fi VR KPI): a frame is
+    // on-time only if ALL its packets arrive within the frame bound.
+    auto genOf = [](auto &m, const Mac48Address &k) -> uint32_t {
+        auto it = m.find(k); return (it != m.end() && it->second) ? it->second->GetSent() : 0;
+    };
+    auto pktCompliance = [](const std::vector<double> &delays, uint32_t gen, double dlS,
+                            uint32_t &rx, uint32_t &ontime, double &loss) {
+        rx = delays.size(); ontime = 0;
+        for (double d : delays) { if (d <= dlS) ++ontime; }
+        loss = (gen > 0) ? (1.0 - static_cast<double>(ontime) / gen) : 0.0;
+        if (loss < 0.0) loss = 0.0;
+    };
+    // Video frame-level: group received packets by frame (seq / pktsPerFrame); a
+    // frame is on-time iff all pktsPerFrame packets arrived and the last within bound.
+    auto frameCompliance = [](const std::vector<uint32_t> &seq, const std::vector<double> &delays,
+                              uint32_t genPkts, uint32_t pktsPerFrame, double boundS,
+                              uint32_t &genFrames, uint32_t &ontimeFrames, double &frameLoss) {
+        genFrames = genPkts / pktsPerFrame;
+        std::map<uint32_t, std::pair<uint32_t,double>> fr; // frame -> (count, maxDelay)
+        for (size_t i = 0; i < seq.size(); ++i) {
+            auto &e = fr[seq[i] / pktsPerFrame];
+            e.first += 1; e.second = std::max(e.second, delays[i]);
+        }
+        ontimeFrames = 0;
+        for (auto &kv : fr)
+            if (kv.second.first >= pktsPerFrame && kv.second.second <= boundS) ++ontimeFrames;
+        frameLoss = (genFrames > 0) ? (1.0 - static_cast<double>(ontimeFrames) / genFrames) : 0.0;
+        if (frameLoss < 0.0) frameLoss = 0.0;
+    };
+    double aDlS = audioDeadline / 1000.0, pDlS = poseDeadline / 1000.0, vFrS = videoFrameBound / 1000.0;
 
     std::ofstream perStaOutStream;
     perStaOutStream.open("per_sta_stats.out", std::ios::out);
     perStaOutStream << "MAC-addr\tAvg_SINR_dB\t"
-                    << "Vid_RXbytes\tVid_mean_ms\tVid_p99_ms\t"
-                    << "Aud_RXbytes\tAud_mean_ms\tAud_p99_ms\t"
-                    << "Pose_RXbytes\tPose_mean_ms\tPose_p99_ms\t"
-                    << "Pose_gen\tPose_rx\tPose_ontime\tPose_deadline_loss" << std::endl;
-
-    double poseDeadlineS = poseDeadline / 1000.0; // ms -> s (delays are in seconds)
+                    << "Vid_RXbytes\tVid_rx\tVid_mean_ms\tVid_p75_ms\tVid_p95_ms\tVid_p99_ms\tVid_p999_ms\tVid_frames_gen\tVid_frames_ontime\tVid_frame_loss\t"
+                    << "Aud_RXbytes\tAud_mean_ms\tAud_p75_ms\tAud_p95_ms\tAud_p99_ms\tAud_p999_ms\tAud_gen\tAud_rx\tAud_ontime\tAud_deadline_loss\t"
+                    << "Pose_RXbytes\tPose_mean_ms\tPose_p75_ms\tPose_p95_ms\tPose_p99_ms\tPose_p999_ms\tPose_gen\tPose_rx\tPose_ontime\tPose_deadline_loss"
+                    << std::endl;
 
     for (auto &staStats : g_statsMap) {
+        const Mac48Address &k = staStats.first;
         stats_t &s = staStats.second;
         double avgSinr = (s.totalBeacons > 0) ? (s.sinr / s.totalBeacons) : 0;
-        double vMean, vP99, aMean, aP99, pMean, pP99;
-        delayStats(s.vidDelays, vMean, vP99);
-        delayStats(s.audDelays, aMean, aP99);
-        delayStats(s.poseDelays, pMean, pP99);
+        double vMean, vP75, vP95, vP99, vP999, aMean, aP75, aP95, aP99, aP999, pMean, pP75, pP95, pP99, pP999;
+        delayStats(s.vidDelays,  vMean, vP75, vP95, vP99, vP999);
+        delayStats(s.audDelays,  aMean, aP75, aP95, aP99, aP999);
+        delayStats(s.poseDelays, pMean, pP75, pP95, pP99, pP999);
 
-        // Pose deadline compliance (survivorship-proof: generated from the sender's
-        // exact TX count, so dropped pose packets count against the deadline too).
-        uint32_t poseGen = (poseSender.count(staStats.first) && poseSender[staStats.first])
-                               ? poseSender[staStats.first]->GetSent() : 0;
-        uint32_t poseRx = s.poseDelays.size();
-        uint32_t poseOntime = 0;
-        for (double d : s.poseDelays) { if (d <= poseDeadlineS) ++poseOntime; }
-        double poseLoss = (poseGen > 0) ? (1.0 - static_cast<double>(poseOntime) / poseGen) : 0.0;
-        if (poseLoss < 0.0) poseLoss = 0.0; // guard: RX during warm-up tail vs gen count
+        uint32_t vGen = genOf(videoSender, k), aGen = genOf(audioSender, k), pGen = genOf(poseSender, k);
+        uint32_t vFrGen, vFrOn, aRx, aOn, pRx, pOn; double vFrLoss, aLoss, pLoss;
+        frameCompliance(s.vidSeq, s.vidDelays, vGen, VIDEO_PKTS_PER_FRAME, vFrS, vFrGen, vFrOn, vFrLoss);
+        pktCompliance(s.audDelays,  aGen, aDlS, aRx, aOn, aLoss);
+        pktCompliance(s.poseDelays, pGen, pDlS, pRx, pOn, pLoss);
 
-        perStaOutStream << staStats.first << "\t" << avgSinr << "\t"
-                        << s.vidBytes  << "\t" << vMean << "\t" << vP99 << "\t"
-                        << s.audBytes  << "\t" << aMean << "\t" << aP99 << "\t"
-                        << s.poseBytes << "\t" << pMean << "\t" << pP99 << "\t"
-                        << poseGen << "\t" << poseRx << "\t" << poseOntime << "\t" << poseLoss << std::endl;
+        perStaOutStream << k << "\t" << avgSinr << "\t"
+            << s.vidBytes  << "\t" << s.vidDelays.size() << "\t" << vMean << "\t" << vP75 << "\t" << vP95 << "\t" << vP99 << "\t" << vP999 << "\t" << vFrGen << "\t" << vFrOn << "\t" << vFrLoss << "\t"
+            << s.audBytes  << "\t" << aMean << "\t" << aP75 << "\t" << aP95 << "\t" << aP99 << "\t" << aP999 << "\t" << aGen << "\t" << aRx << "\t" << aOn << "\t" << aLoss << "\t"
+            << s.poseBytes << "\t" << pMean << "\t" << pP75 << "\t" << pP95 << "\t" << pP99 << "\t" << pP999 << "\t" << pGen << "\t" << pRx << "\t" << pOn << "\t" << pLoss
+            << std::endl;
     }
     perStaOutStream.close();
     Simulator::Destroy();

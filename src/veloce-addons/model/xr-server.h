@@ -25,6 +25,9 @@ namespace ns3 {
         uint64_t GetTotalTx () const;
         uint64_t GetTotalRx() const;
 
+        /** \brief Number of application-layer packets generated (sent) so far. */
+        uint32_t GetSent () const { return m_sent; }
+
     protected:
         void DoDispose () override;
 
