@@ -137,6 +137,7 @@ int main(int argc, char *argv[]) {
     bool UseCentral26TonesRus = {false};
     bool DelayAccessReqUponAccess = {true};
     std::string ruAllocationType{"ru-undefined"};
+    std::string dlRuAllocationType{"ru-undefined"}; // DL-only RU; ru-undefined -> use ruAllocationType
     uint32_t OCwMin{7};
     uint32_t OCwMax{127}; // Should this be lager? 1023?
     bool LongerEdcaDisable{true};
@@ -144,10 +145,11 @@ int main(int argc, char *argv[]) {
     double edcaPrimeStart{0.15}; // them and their MU-EDCA timer arms (EDCA off) before XR
     double edcaPrimeInterval{0.001};
     // Wi-Fi XR QoS targets. Video is frame-level: a frame (all its packets) must
-    // arrive within videoFrameBound (Carrascosa/Bellalta VR-over-Wi-Fi: 33 ms,
-    // NFR >= 99%). Pose/audio are per-packet (802.11 RTA low-latency class).
+    // arrive within videoFrameBound. 50 ms matches the Wi-Fi Alliance VR-gaming
+    // video tail bound (99.9th percentile) ["Wi-Fi delivers immersive VR gaming",
+    // 2023]. Pose/audio are per-packet (802.11 RTA low-latency class).
     double poseDeadline{10.0};    // UL pose per-packet latency target (ms)
-    double videoFrameBound{33.0}; // DL video per-frame delivery bound (ms)
+    double videoFrameBound{50.0}; // DL video per-frame delivery bound (ms)
     double audioDeadline{30.0};   // DL audio per-packet latency target (ms)
     // double muEdcaTimer{8192 * 5};
     //double maxCredit{1000000}; //amount credit a stations can have when using // todo : check this
@@ -183,6 +185,9 @@ int main(int argc, char *argv[]) {
     cmd.AddValue("ruAllocationType",
                  "The type of RUs allocated to STAs, if undefined - dynamically selected based on the number of STAs (ru-26-tone, ru-52-tone)",
                  ruAllocationType);
+    cmd.AddValue("dlRuAllocationType",
+                 "DL-only RU type (ru-26/52/106/242/484/996-tone). ru-undefined = use ruAllocationType for DL too. Lets the downlink use a larger RU than the uplink.",
+                 dlRuAllocationType);
     cmd.AddValue("nRaRus", "Number of RUs to reserve for Random Access", nRaRus);
     cmd.AddValue(
         "phyModel",
@@ -278,18 +283,20 @@ int main(int argc, char *argv[]) {
     /*
      * Type of resource unit tones
      */
-    if (ruAllocationType == "ru-26-tone")
-        ruAllocType = HeRu::RU_26_TONE;
-    else if (ruAllocationType == "ru-52-tone")
-        ruAllocType = HeRu::RU_52_TONE;
-    else if (ruAllocationType == "ru-106-tone")
-        ruAllocType = HeRu::RU_106_TONE;
-    else if (ruAllocationType == "ru-242-tone")
-        ruAllocType = HeRu::RU_242_TONE;
-    else if (ruAllocationType == "ru-484-tone")
-        ruAllocType = HeRu::RU_484_TONE;
-    else if (ruAllocationType == "ru-996-tone")
-        ruAllocType = HeRu::RU_996_TONE;
+    auto parseRuType = [](const std::string &s) -> HeRu::RuType {
+        if (s == "ru-26-tone")  return HeRu::RU_26_TONE;
+        if (s == "ru-52-tone")  return HeRu::RU_52_TONE;
+        if (s == "ru-106-tone") return HeRu::RU_106_TONE;
+        if (s == "ru-242-tone") return HeRu::RU_242_TONE;
+        if (s == "ru-484-tone") return HeRu::RU_484_TONE;
+        if (s == "ru-996-tone") return HeRu::RU_996_TONE;
+        return HeRu::RU_UNDEFINED; // ru-undefined -> dynamic selection
+    };
+    ruAllocType = parseRuType(ruAllocationType);
+    // DL-only RU type: when left as ru-undefined the scheduler uses ruAllocType for
+    // DL too; set it (e.g. to a larger RU) to give the downlink more of the band at
+    // low STA counts while the uplink keeps ruAllocType.
+    HeRu::RuType dlRuAllocType = parseRuType(dlRuAllocationType);
 
 
     /*
@@ -497,6 +504,7 @@ int main(int argc, char *argv[]) {
             wifimac.SetMultiUserSchedulerAttribute("NStations", UintegerValue(nStations));
             wifimac.SetMultiUserSchedulerAttribute("AccessReqAc", EnumValue(AcIndex::AC_VO));
             wifimac.SetMultiUserSchedulerAttribute("RuAllocationType", EnumValue(ruAllocType));
+            wifimac.SetMultiUserSchedulerAttribute("DlRuAllocationType", EnumValue(dlRuAllocType));
             wifimac.SetMultiUserSchedulerAttribute("UlPsduSize", UintegerValue(ulPayloadSize)); // fallback UL alloc when BSR unknown
 
             // Scheduler-specific attributes

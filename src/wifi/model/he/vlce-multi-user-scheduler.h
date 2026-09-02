@@ -195,6 +195,7 @@ class VlceMultiUserScheduler : public MultiUserScheduler
     WifiTxParameters m_txParams;           //!< TX parameters
 
     HeRu::RuType m_ruAllocationType; //!< The type of RUs allocated to STAs
+    HeRu::RuType m_dlRuAllocationType; //!< DL-only RU type; overrides m_ruAllocationType for downlink (RU_UNDEFINED = use m_ruAllocationType)
     UlIdleState m_ulIdleState = UlIdleState::SEND_BSRP;
 };
 

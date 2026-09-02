@@ -145,6 +145,26 @@ VlceMultiUserScheduler::GetTypeId()
                                            HeRu::RU_2x996_TONE,
                                            "Ru-2x996-Tone",
                                            HeRu::RU_UNDEFINED,
+                                           "Ru-Undefined"))
+            .AddAttribute("DlRuAllocationType",
+                          "DL-only RU type; overrides RuAllocationType for downlink so few STAs can use a larger RU on DL while UL keeps its own layout. Undefined = use RuAllocationType.",
+                          EnumValue (HeRu::RU_UNDEFINED),
+                          MakeEnumAccessor (&VlceMultiUserScheduler::m_dlRuAllocationType),
+                          MakeEnumChecker (HeRu::RU_26_TONE,
+                                           "Ru-26-Tone",
+                                           HeRu::RU_52_TONE,
+                                           "Ru-52-Tone",
+                                           HeRu::RU_106_TONE,
+                                           "Ru-106-Tone",
+                                           HeRu::RU_242_TONE,
+                                           "Ru-242-Tone",
+                                           HeRu::RU_484_TONE,
+                                           "Ru-484-Tone",
+                                           HeRu::RU_996_TONE,
+                                           "Ru-996-Tone",
+                                           HeRu::RU_2x996_TONE,
+                                           "Ru-2x996-Tone",
+                                           HeRu::RU_UNDEFINED,
                                            "Ru-Undefined"));
     return tid;
 }
@@ -865,16 +885,20 @@ VlceMultiUserScheduler::TrySendingDlMuPpdu()
         std::min(static_cast<std::size_t>(m_nStations), m_staListDl[primaryAc].size());
     std::size_t nCentral26TonesRus;
     HeRu::RuType ruType;
-    if (m_ruAllocationType == HeRu::RU_UNDEFINED)
+    // Downlink may use a larger RU than uplink: m_dlRuAllocationType overrides
+    // m_ruAllocationType for DL only (RU_UNDEFINED = fall back to m_ruAllocationType).
+    HeRu::RuType dlRu =
+        (m_dlRuAllocationType == HeRu::RU_UNDEFINED) ? m_ruAllocationType : m_dlRuAllocationType;
+    if (dlRu == HeRu::RU_UNDEFINED)
     {
         ruType =
         HeRu::GetEqualSizedRusForStations(m_allowedWidth, count, nCentral26TonesRus);
     }
     else
     {
-        ruType = m_ruAllocationType;
-        count = std::min(HeRu::GetRusOfType (m_allowedWidth, m_ruAllocationType).size (), count);
-        nCentral26TonesRus = HeRu::GetCentral26TonesRus (m_allowedWidth, m_ruAllocationType).size ();
+        ruType = dlRu;
+        count = std::min(HeRu::GetRusOfType (m_allowedWidth, dlRu).size (), count);
+        nCentral26TonesRus = HeRu::GetCentral26TonesRus (m_allowedWidth, dlRu).size ();
     }
 
     NS_ASSERT(count >= 1);

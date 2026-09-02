@@ -193,6 +193,7 @@ class UoraMultiUserScheduler : public MultiUserScheduler
 
     uint16_t m_numRaRus; //!< Number of RUs that are reserved for random access
     HeRu::RuType m_ruAllocationType; //!< The type of RUs allocated to STAs
+    HeRu::RuType m_dlRuAllocationType; //!< DL-only RU type; overrides m_ruAllocationType for downlink (RU_UNDEFINED = use m_ruAllocationType)
     UlIdleState m_ulIdleState = UlIdleState::SEND_BSRP;
 };
 

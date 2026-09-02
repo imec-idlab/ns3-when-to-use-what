@@ -37,16 +37,16 @@ else
 fi
 
 
-# Per-headset-count RU (low-load efficiency): at 160 MHz a 996-tone RU is 80 MHz
-# and there are 2 of them, so <=2 headsets each get 80 MHz instead of a 40 MHz
-# 484-tone. From 3 headsets up we keep the settled 484-tone (4 RUs, one per
-# headset up to 4, round-robin beyond), so the high-load capacity behavior is
-# unchanged. (ru-2x996-tone / full 160 MHz for a single headset is not wired in
-# the sim, so 1 headset uses one 996-tone = 80 MHz.)
+# DL-only per-headset-count RU (low-load efficiency). The UPLINK always keeps
+# 484-tone (4 RUs), so UORA random-access RUs and the UL pose flow are never
+# starved. The DOWNLINK uses a 996-tone RU (80 MHz, 2 RUs) for <=2 headsets so
+# few headsets get more of the band on DL, and 484-tone (4 RUs) from 3 headsets
+# up (settled high-load config, unchanged). (ru-2x996-tone / full 160 MHz for a
+# single headset is not wired in the sim, so 1 headset uses one 996-tone = 80 MHz.)
 if [ "$nSta" -le 2 ]; then
-    RU_ALLOC=ru-996-tone
+    DL_RU_ALLOC=ru-996-tone
 else
-    RU_ALLOC=ru-484-tone
+    DL_RU_ALLOC=ru-484-tone
 fi
 
 BASE_ARGS="
@@ -57,10 +57,11 @@ BASE_ARGS="
     --nMpdus=256
     --nMsdus=8
     --channelWidth=160
-    --ruAllocationType=${RU_ALLOC}
+    --ruAllocationType=ru-484-tone
+    --dlRuAllocationType=${DL_RU_ALLOC}
     --startLogTime=2.0
     --edcaPrime=true
-    --videoFrameBound=33
+    --videoFrameBound=50
     --audioDeadline=30
     --poseDeadline=10
     "

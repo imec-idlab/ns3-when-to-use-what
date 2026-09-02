@@ -213,6 +213,7 @@ class CmabMultiUserScheduler : public MultiUserScheduler
     WifiMacHeader m_triggerMacHdr;
     WifiTxParameters m_txParams;
     HeRu::RuType m_ruAllocationType;
+    HeRu::RuType m_dlRuAllocationType; //!< DL-only RU type; overrides m_ruAllocationType for downlink (RU_UNDEFINED = use m_ruAllocationType)
     UlIdleState m_ulIdleState = UlIdleState::SEND_BSRP;
 };
 
