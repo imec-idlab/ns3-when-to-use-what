@@ -154,7 +154,7 @@ class UoraMultiUserScheduler : public MultiUserScheduler
      *
      * \param txVector the given TXVECTOR
      */
-    void FinalizeTxVector(WifiTxVector& txVector, bool isBsrpTrigger);
+    void FinalizeTxVector(WifiTxVector& txVector, bool isBsrpTrigger, HeRu::RuType ruAllocType);
     /**
      * Update credits of the stations in the given list considering that a PPDU having
      * the given duration is being transmitted or solicited by using the given TXVECTOR.

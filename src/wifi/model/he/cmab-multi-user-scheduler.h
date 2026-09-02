@@ -125,7 +125,7 @@ class CmabMultiUserScheduler : public MultiUserScheduler
         SEND_DLMU
     };
 
-    void FinalizeTxVector(WifiTxVector& txVector, bool isBasicTrigger);
+    void FinalizeTxVector(WifiTxVector& txVector, bool isBasicTrigger, HeRu::RuType ruAllocType);
     void UpdateCredits(std::list<MasterInfo>& staList,
                        Time txDuration,
                        const WifiTxVector& txVector);

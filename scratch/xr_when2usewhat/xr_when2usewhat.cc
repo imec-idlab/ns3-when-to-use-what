@@ -144,6 +144,8 @@ int main(int argc, char *argv[]) {
     bool edcaPrime{true};        // warm-up: STAs send tiny UL packets so the AP triggers
     double edcaPrimeStart{0.15}; // them and their MU-EDCA timer arms (EDCA off) before XR
     double edcaPrimeInterval{0.001};
+    double edcaPrimeJitter{0.1};  // per-STA random start spread (s) so priming UL is not
+                                  // synchronized (lockstep contention stalls arming at small OCwMin)
     // Wi-Fi XR QoS targets. Video is frame-level: a frame (all its packets) must
     // arrive within videoFrameBound. 50 ms matches the Wi-Fi Alliance VR-gaming
     // video tail bound (99.9th percentile) ["Wi-Fi delivers immersive VR gaming",
@@ -617,6 +619,13 @@ int main(int argc, char *argv[]) {
     std::map<Mac48Address, Ptr<XrPacketGenerationUdpApp>> poseSender; // per-STA UL pose generator (for generated count)
     std::map<Mac48Address, Ptr<XrServerUdpApp>> videoSender, audioSender; // per-STA DL generators (for generated count)
 
+    // Warm-up priming ends 1 s before XR starts, so every STA's MU-EDCA is armed
+    // and the medium has settled before the measured traffic begins. Each STA's
+    // priming start is jittered (below) to avoid synchronized UL contention, which
+    // otherwise stalls arming at small OCwMin.
+    double primeStop = startLogTime - 1.0;
+    Ptr<UniformRandomVariable> primeJitterRv = CreateObject<UniformRandomVariable>();
+
     // AP-side sink for the priming flow (deliberately NOT connected to RxFlowTrace,
     // so priming traffic is never counted in the XR metrics).
     if (edcaPrime)
@@ -715,7 +724,12 @@ int main(int argc, char *argv[]) {
             primeHelper.SetAttribute("Interval", TimeValue(Seconds(edcaPrimeInterval)));
             primeHelper.SetAttribute("PacketsPerBatch", UintegerValue(1));
             primeHelper.SetAttribute("PacketSize", UintegerValue(60));
-            primeApps.Add(primeHelper.Install(wifiStaNodes.Get(i)));
+            primeHelper.SetAttribute("MaxPackets", UintegerValue(1)); // one packet: no queue residue
+            Ptr<Application> primeApp = primeHelper.Install(wifiStaNodes.Get(i)).Get(0);
+            // Jittered start desynchronizes the STAs' UL so all of them arm MU-EDCA.
+            primeApp->SetStartTime(Seconds(edcaPrimeStart + primeJitterRv->GetValue(0.0, edcaPrimeJitter)));
+            primeApp->SetStopTime(Seconds(primeStop));
+            primeApps.Add(primeApp);
         }
     }
 
@@ -725,11 +739,13 @@ int main(int argc, char *argv[]) {
     xrClientApps.Start(Seconds(startLogTime));
     xrClientApps.Stop(Seconds(simulationTime + startLogTime));
 
-    // Priming runs only during warm-up: from just after association until XR starts.
+    // The per-STA priming senders already have jittered start times and stop at
+    // primeStop (1 s before XR). Here we only span the AP-side sink across the whole
+    // warm-up window so it is up before the earliest STA starts.
     if (edcaPrime)
     {
-        primeApps.Start(Seconds(edcaPrimeStart));
-        primeApps.Stop(Seconds(startLogTime));
+        primeApps.Get(0)->SetStartTime(Seconds(edcaPrimeStart));
+        primeApps.Get(0)->SetStopTime(Seconds(primeStop));
     }
 
     Simulator::Schedule(Seconds(0), &Ipv4GlobalRoutingHelper::PopulateRoutingTables);

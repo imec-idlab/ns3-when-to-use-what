@@ -497,7 +497,7 @@ VlceMultiUserScheduler::GetTxVectorForUlMu(Func canbeSolicited, bool isBasicTrig
         return txVector;
     }
 
-    FinalizeTxVector(txVector, isBasicTrigger);
+    FinalizeTxVector(txVector, isBasicTrigger, m_ruAllocationType);
     return txVector;
 }
 
@@ -1055,27 +1055,29 @@ VlceMultiUserScheduler::TrySendingDlMuPpdu()
 }
 
 void
-VlceMultiUserScheduler::FinalizeTxVector(WifiTxVector& txVector, bool isBasicTrigger)
+VlceMultiUserScheduler::FinalizeTxVector(WifiTxVector& txVector, bool isBasicTrigger, HeRu::RuType ruAllocType)
 {
     // Do not log txVector because GetTxVectorForUlMu() left RUs undefined and
     // printing them will crash the simulation
     NS_LOG_FUNCTION(this);
     NS_ASSERT(txVector.GetHeMuUserInfoMap().size() == m_candidates.size());
 
-    // compute how many stations can be granted an RU and the RU size
+    // compute how many stations can be granted an RU and the RU size. ruAllocType
+    // is passed by the caller so the downlink can be finalized with its own RU type
+    // (m_dlRuAllocationType) while the uplink uses m_ruAllocationType.
     std::size_t nRusAssigned = m_candidates.size();
     std::size_t nCentral26TonesRus;
 
     HeRu::RuType ruType;
-    if (m_ruAllocationType == HeRu::RU_UNDEFINED)
+    if (ruAllocType == HeRu::RU_UNDEFINED)
     {
         ruType = HeRu::GetEqualSizedRusForStations(m_allowedWidth, nRusAssigned, nCentral26TonesRus);
     }
     else
     {
-        ruType = m_ruAllocationType;
-        nRusAssigned = std::min(HeRu::GetRusOfType (m_allowedWidth, m_ruAllocationType).size (), nRusAssigned);
-        nCentral26TonesRus = HeRu::GetCentral26TonesRus (m_allowedWidth, m_ruAllocationType).size ();
+        ruType = ruAllocType;
+        nRusAssigned = std::min(HeRu::GetRusOfType (m_allowedWidth, ruAllocType).size (), nRusAssigned);
+        nCentral26TonesRus = HeRu::GetCentral26TonesRus (m_allowedWidth, ruAllocType).size ();
     }
 
     NS_LOG_DEBUG(nRusAssigned << " stations are being assigned a " << ruType << " RU");
@@ -1181,7 +1183,10 @@ VlceMultiUserScheduler::ComputeDlMuInfo()
 
     DlMuInfo dlMuInfo;
     std::swap(dlMuInfo.txParams.m_txVector, m_txParams.m_txVector);
-    FinalizeTxVector(dlMuInfo.txParams.m_txVector, false);
+    // Finalize the DL PPDU with the downlink RU type (may differ from the UL type).
+    FinalizeTxVector(dlMuInfo.txParams.m_txVector, false,
+                     (m_dlRuAllocationType == HeRu::RU_UNDEFINED) ? m_ruAllocationType
+                                                                  : m_dlRuAllocationType);
 
     m_txParams.Clear();
     Ptr<WifiMpdu> mpdu;
