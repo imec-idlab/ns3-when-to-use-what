@@ -121,6 +121,10 @@ int main(int argc, char *argv[]) {
     uint32_t guardInterval{800}; //in ns
     std::string phyModel{"Yans"}; //Spectrum or Yans
     bool enableShadowing = false;
+    bool enablePcap = false; // write per-device .pcap for Wireshark inspection
+    bool enableLogging = false; // turn on NS_LOG components (needs a logging-enabled build)
+    std::string logLevel = "debug"; // error|warn|info|function|logic|debug|all
+    bool logAll = false;            // true = LogComponentEnableAll (every component); false = the wifi list below
     uint32_t nMsdus = 8;   // A-MSDU count per AC (8*1448=11584 -> clamped to HE max 11398)
     HeRu::RuType ruAllocType{HeRu::RU_UNDEFINED};
     bool enableAggregation{true};
@@ -142,7 +146,7 @@ int main(int argc, char *argv[]) {
     uint32_t OCwMax{127}; // Should this be lager? 1023?
     bool LongerEdcaDisable{true};
     bool edcaPrime{true};        // warm-up: STAs send tiny UL packets so the AP triggers
-    double edcaPrimeStart{0.15}; // them and their MU-EDCA timer arms (EDCA off) before XR
+    double edcaPrimeStart{1.0};  // start priming at 1 s: association + Block Ack setup complete first
     double edcaPrimeInterval{0.001};
     double edcaPrimeJitter{0.1};  // per-STA random start spread (s) so priming UL is not
                                   // synchronized (lockstep contention stalls arming at small OCwMin)
@@ -239,9 +243,46 @@ int main(int argc, char *argv[]) {
                  "How long to disable EDCA for and for VlceMultiUserScheduler, how long to stay in polling list without transmission (in Seconds)",
                  muEdcaTimer);
     cmd.AddValue("enableAggregation", "Enable/disable mpdu/msdu aggregation", enableAggregation);
+    cmd.AddValue("enablePcap", "Write per-device .pcap files (AP + STAs) for Wireshark", enablePcap);
+    cmd.AddValue("enableLogging", "Enable NS_LOG on the wifi MAC/FEM/BlockAck components (build must have NS3_LOG=ON)", enableLogging);
+    cmd.AddValue("logLevel", "Log level when enableLogging: error|warn|info|function|logic|debug|all", logLevel);
+    cmd.AddValue("logAll", "true = enable the chosen level on ALL components; false = only the wifi list", logAll);
 
 
     cmd.Parse(argc, argv);
+
+    if (enableLogging)
+    {
+        LogComponentEnableAll(LOG_PREFIX_TIME);
+        LogComponentEnableAll(LOG_PREFIX_NODE);
+        LogLevel lvl = LOG_LEVEL_DEBUG;
+        if      (logLevel == "error")    lvl = LOG_LEVEL_ERROR;
+        else if (logLevel == "warn")     lvl = LOG_LEVEL_WARN;
+        else if (logLevel == "info")     lvl = LOG_LEVEL_INFO;
+        else if (logLevel == "function") lvl = LOG_LEVEL_FUNCTION;
+        else if (logLevel == "logic")    lvl = LOG_LEVEL_LOGIC;
+        else if (logLevel == "debug")    lvl = LOG_LEVEL_DEBUG;
+        else if (logLevel == "all")      lvl = LOG_LEVEL_ALL;
+        if (logAll)
+        {
+            LogComponentEnableAll(lvl);
+        }
+        else
+        {
+            for (const std::string& comp : {
+                     std::string("QosFrameExchangeManager"), std::string("WifiPhyStateHelper"),
+                     std::string("WifiMac"), std::string("ApWifiMac"), std::string("PhyEntity"),
+                     std::string("WifiDefaultAckManager"), std::string("WifiRemoteStationManager"),
+                     std::string("HeFrameExchangeManager"), std::string("HtFrameExchangeManager"),
+                     std::string("BlockAckManager"), std::string("OriginatorBlockAckAgreement"),
+                     std::string("RecipientBlockAckAgreement"), std::string("ChannelAccessManager"),
+                     std::string("QosTxop"), std::string("MpduAggregator"), std::string("WifiMacQueue"),
+                     std::string("VlceMultiUserScheduler"), std::string("UoraMultiUserScheduler")})
+            {
+                LogComponentEnable(comp.c_str(), lvl);
+            }
+        }
+    }
 
 
     if (useA2Pv2) Scheduler = "ns3::VlceMultiUserSchedulerNoBsrp";
@@ -545,8 +586,10 @@ int main(int argc, char *argv[]) {
                         "BeaconInterval", TimeValue(MicroSeconds(102400)));
 
         apNetDevice = wifi.Install(phy, wifimac, wifiApNode);
-        //phy.EnablePcap("xr-ap", apNetDevice.Get(0), true);
-        //phy.EnablePcap("xr-sta", staNetDevices, true);
+        if (enablePcap) {
+            phy.EnablePcap("xr-ap", apNetDevice.Get(0), true);
+            phy.EnablePcap("xr-sta", staNetDevices, true);
+        }
     } else {
         Ptr<YansWifiChannel> channel = CreateObject<YansWifiChannel>();
         channel->SetPropagationLossModel(propModel);
@@ -568,8 +611,10 @@ int main(int argc, char *argv[]) {
                         "VO_BlockAckThreshold", UintegerValue(0),
                         "BE_BlockAckThreshold", UintegerValue(0));
         apNetDevice = wifi.Install(YansPhy, wifimac, wifiApNode);
-        //YansPhy.EnablePcap("xr-ap", apNetDevice.Get(0), true);
-        //YansPhy.EnablePcap("xr-sta", staNetDevices, true);
+        if (enablePcap) {
+            YansPhy.EnablePcap(logDir + "/xr-ap", apNetDevice.Get(0), true);
+            YansPhy.EnablePcap(logDir + "/xr-sta", staNetDevices, true);
+        }
     }
 
     /*
@@ -608,6 +653,7 @@ int main(int argc, char *argv[]) {
     uint16_t dlAudioPort = 10;
     uint16_t ulTrackingPort = 11;
     uint16_t ulPrimePort = 12;
+    uint16_t dlPrimePort = 13;   // DL warm-up priming (AP -> STA), establishes DL Block Ack agreements
     const uint32_t VIDEO_PKTS_PER_FRAME = 96;   // DL video packets per frame (for frame-level QoS)
 
     uint8_t tosVo = 0xc0; // Voice
@@ -706,7 +752,7 @@ int main(int argc, char *argv[]) {
         trackingHelper.SetAttribute("Tos", UintegerValue(tosVo));
         trackingHelper.SetAttribute("RemoteAddress", AddressValue(trackingAddr));
         trackingHelper.SetAttribute("RemotePort", UintegerValue(ulTrackingPort));
-        trackingHelper.SetAttribute("InitPacketSentDelay", TimeValue(Seconds(staggeredStart)));
+        trackingHelper.SetAttribute("InitPacketSentDelay", TimeValue(Seconds(i * 0.00108)));
         trackingHelper.SetAttribute("Interval", TimeValue(Seconds(0.01111)));
 
         XrAppContainer poseApp = trackingHelper.Install(wifiStaNodes.Get(i));
@@ -724,12 +770,31 @@ int main(int argc, char *argv[]) {
             primeHelper.SetAttribute("Interval", TimeValue(Seconds(edcaPrimeInterval)));
             primeHelper.SetAttribute("PacketsPerBatch", UintegerValue(1));
             primeHelper.SetAttribute("PacketSize", UintegerValue(60));
-            primeHelper.SetAttribute("MaxPackets", UintegerValue(1)); // one packet: no queue residue
+            primeHelper.SetAttribute("MaxPackets", UintegerValue(1));
             Ptr<Application> primeApp = primeHelper.Install(wifiStaNodes.Get(i)).Get(0);
-            // Jittered start desynchronizes the STAs' UL so all of them arm MU-EDCA.
             primeApp->SetStartTime(Seconds(edcaPrimeStart + primeJitterRv->GetValue(0.0, edcaPrimeJitter)));
             primeApp->SetStopTime(Seconds(primeStop));
             primeApps.Add(primeApp);
+
+            XrServerHelper dlPrimeSinkHelper;
+            dlPrimeSinkHelper.SetAttribute("SinkFlag", BooleanValue(true));
+            dlPrimeSinkHelper.SetAttribute("LocalPort", UintegerValue(dlPrimePort));
+            primeApps.Add(dlPrimeSinkHelper.Install(wifiStaNodes.Get(i))); // STA sink, not traced
+            for (uint8_t dlTos : {tosVi, tosVo})
+            {
+                XrServerHelper dlPrimeHelper;
+                dlPrimeHelper.SetAttribute("Tos", UintegerValue(dlTos));
+                dlPrimeHelper.SetAttribute("RemoteAddress", AddressValue(InetSocketAddress(staNodeInterfaces.GetAddress(i), dlPrimePort)));
+                dlPrimeHelper.SetAttribute("RemotePort", UintegerValue(dlPrimePort));
+                dlPrimeHelper.SetAttribute("Interval", TimeValue(Seconds(edcaPrimeInterval)));
+                dlPrimeHelper.SetAttribute("PacketsPerBatch", UintegerValue(1));
+                dlPrimeHelper.SetAttribute("PacketSize", UintegerValue(60));
+                dlPrimeHelper.SetAttribute("MaxPackets", UintegerValue(1)); // one packet per AC
+                Ptr<Application> dlPrimeApp = dlPrimeHelper.Install(wifiApNode.Get(0)).Get(0);
+                dlPrimeApp->SetStartTime(Seconds(edcaPrimeStart + primeJitterRv->GetValue(0.0, edcaPrimeJitter)));
+                dlPrimeApp->SetStopTime(Seconds(primeStop));
+                primeApps.Add(dlPrimeApp);
+            }
         }
     }
 

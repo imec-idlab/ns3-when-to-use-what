@@ -371,7 +371,18 @@ HePhy::StartReceivePreamble(Ptr<const WifiPpdu> ppdu,
                         << GetDuration(WIFI_PPDU_FIELD_TRAINING, txVector).As(Time::NS));
             Ptr<Event> event =
                 CreateInterferenceEvent(ppdu, txVector, rxDuration, rxPowersW, !ofdmaStarted);
-            if (!txVector.IsUlMu () || !m_busyRuIndexes.count (txVector.GetRu(GetStaId(ppdu)).GetIndex ()))
+            // Key the busy-RU set on the channel-unique physical RU index, not GetIndex()
+            // which is only unique within an 80 MHz sub-block. At 160 MHz the 484-tone RUs
+            // of the primary and secondary 80 MHz share GetIndex() {1,2}, so the second RU
+            // of each index was wrongly discarded as a duplicate, dropping half the STAs'
+            // TB-PPDU BlockAcks and causing a runaway DL retransmission cascade.
+            const auto ruPhyIndex =
+                txVector.IsUlMu()
+                    ? txVector.GetRu(GetStaId(ppdu))
+                          .GetPhyIndex(txVector.GetChannelWidth(),
+                                       m_wifiPhy->GetOperatingChannel().GetPrimaryChannelIndex(20))
+                    : 0;
+            if (!txVector.IsUlMu () || !m_busyRuIndexes.count (ruPhyIndex))
             {
                 uint16_t staId = GetStaId(ppdu);
                 NS_ASSERT(m_beginOfdmaPayloadRxEvents.find(staId) == m_beginOfdmaPayloadRxEvents.end());
@@ -380,7 +391,7 @@ HePhy::StartReceivePreamble(Ptr<const WifiPpdu> ppdu,
                                         &HePhy::StartReceiveOfdmaPayload,
                                         this,
                                         event);
-                m_busyRuIndexes.insert (txVector.GetRu(GetStaId(ppdu)).GetIndex ());
+                m_busyRuIndexes.insert (ruPhyIndex);
             }
         }
         else
