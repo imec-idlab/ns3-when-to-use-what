@@ -13,11 +13,27 @@ export NS_LOG=""
 : "${run:?Missing run}"
 : "${nSta:?Missing nSta}"   # total number of XR stations
 
-if [ "$MODE" = "uora" ]; then
+# ARI (Access Request Interval) sweep: MODE=<scheme>_ari (e.g. a2p_ari) reuses
+# the <scheme> function below but reads --muSchedAccessReqInterval from the CSV
+# column "ari" instead of the scheme's fixed default, and writes to a SEPARATE
+# data root (xr_data_ari/) so it never collides with the baseline xr_data/
+# sweep, which already fixed ARI per scheme. EDCA has no OFDMA scheduler and is
+# therefore not swept over ari.
+BASE_MODE="${MODE%_ari}"
+if [[ "$MODE" == *_ari ]]; then
+    : "${ari:?Missing ari}"
+    DATA_ROOT=/data/antwerpen/208/vsc20879/xr_data_ari
+    ARI_SEG="ari_${ari}/"
+else
+    DATA_ROOT=/data/antwerpen/208/vsc20879/xr_data
+    ARI_SEG=""
+fi
+
+if [ "$BASE_MODE" = "uora" ]; then
     : "${nRaRus:?Missing nRaRus}"
     : "${OCwMin:?Missing OCwMin}"
-    logDir=/data/antwerpen/208/vsc20879/xr_data/${MODE}/ocwMin_${OCwMin}/${run}_run-${nSta}_sta-${nRaRus}_rarus
-elif [ "$MODE" = "cmab" ]; then
+    logDir=${DATA_ROOT}/${BASE_MODE}/${ARI_SEG}ocwMin_${OCwMin}/${run}_run-${nSta}_sta-${nRaRus}_rarus
+elif [ "$BASE_MODE" = "cmab" ]; then
     : "${algorithm:?Missing algorithm (CUCB|ThompsonSampling|EpsilonGreedy|EXP3M)}"
     : "${rewardType:?Missing rewardType (Binary|FairnessWeighted)}"
     : "${ucbConstant:=1.41421}"   # sqrt(2), used only by CUCB
@@ -31,9 +47,9 @@ elif [ "$MODE" = "cmab" ]; then
         EXP3M)         hpTag="_g${exp3Gamma}"   ;;
         *)             hpTag=""                 ;;
     esac
-    logDir=/data/antwerpen/208/vsc20879/xr_data/${MODE}/${algorithm}_${rewardType}${hpTag}/${run}_run-${nSta}_sta
+    logDir=${DATA_ROOT}/${BASE_MODE}/${ARI_SEG}${algorithm}_${rewardType}${hpTag}/${run}_run-${nSta}_sta
 else
-    logDir=/data/antwerpen/208/vsc20879/xr_data/${MODE}/${run}_run-${nSta}_sta
+    logDir=${DATA_ROOT}/${BASE_MODE}/${ARI_SEG}${run}_run-${nSta}_sta
 fi
 
 
@@ -97,7 +113,7 @@ edca() {
 a2p() {
     run_simulation "
         ${BASE_A2P}
-        --muSchedAccessReqInterval=128
+        --muSchedAccessReqInterval=${ari:-128}
         --ns3::VlceMultiUserScheduler::BsrpPrioritizeEmpty=true
         --ns3::VlceMultiUserScheduler::PrioritizeByAc=true
         --ns3::VlceMultiUserScheduler::DownlinkAware=true
@@ -109,7 +125,7 @@ a2pv2() {
     run_simulation "
          ${BASE_A2P}
          --enableBsrp=false
-         --muSchedAccessReqInterval=256
+         --muSchedAccessReqInterval=${ari:-256}
          --ns3::VlceMultiUserScheduler::FilterByBsr=false
          --ns3::VlceMultiUserScheduler::PrioritizeByAc=false
          --ns3::VlceMultiUserScheduler::DownlinkAware=true
@@ -119,7 +135,7 @@ a2pv2() {
 uora() {
     run_simulation "
         ${BASE_OFDMA}
-        --muSchedAccessReqInterval=16 \
+        --muSchedAccessReqInterval=${ari:-16} \
         --Scheduler=ns3::UoraMultiUserScheduler \
         --OCwMin=${OCwMin} \
         --nRaRus=${nRaRus} \
@@ -138,7 +154,7 @@ uora() {
 cmab() {
     run_simulation "
         ${BASE_OFDMA}
-        --muSchedAccessReqInterval=16 \
+        --muSchedAccessReqInterval=${ari:-16} \
         --Scheduler=ns3::CmabMultiUserScheduler \
         --cmabAlgorithm=${algorithm} \
         --cmabRewardType=${rewardType} \
@@ -152,14 +168,14 @@ cmab() {
 # -
 #
 usage() {
-    echo "Usage: {edca|a2p|a2pv2|uora|cmab} | Unknown mode: ${MODE}"
+    echo "Usage: {edca|a2p|a2pv2|uora|cmab}[_ari] | Unknown mode: ${MODE}"
     exit 1
 }
 
 
-case "${MODE}" in
+case "${BASE_MODE}" in
     edca|a2p|a2pv2|uora|cmab)
-        "${MODE}"
+        "${BASE_MODE}"
         ;;
     *)
         usage
