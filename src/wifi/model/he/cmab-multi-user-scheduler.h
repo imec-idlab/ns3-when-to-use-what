@@ -201,6 +201,9 @@ class CmabMultiUserScheduler : public MultiUserScheduler
     bool m_enableTxopSharing;
     bool m_forceDlOfdma;
     bool m_downlinkAware;        //!< SelectTxFormat: serve DL-MU whenever DL backlog exists (DL-first)
+    bool m_dlFirstAcrossAcs;     //!< build the DL-MU for the highest-priority DL AC with backlog
+    bool m_dlBeforeUl;           //!< skip the UL trigger cycle when another DL AC has backlog
+    AcIndex m_dlPrimaryAc{AC_BE};         //!< AC the current DL-MU candidates were drawn from
     bool m_enableUlOfdma;
     bool m_enableBsrp;
     bool m_useCentral26TonesRus;

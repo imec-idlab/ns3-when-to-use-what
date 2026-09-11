@@ -19,14 +19,51 @@ export NS_LOG=""
 # data root (xr_data_ari/) so it never collides with the baseline xr_data/
 # sweep, which already fixed ARI per scheme. EDCA has no OFDMA scheduler and is
 # therefore not swept over ari.
-BASE_MODE="${MODE%_ari}"
-if [[ "$MODE" == *_ari ]]; then
+# A further "_dlfirst" suffix (e.g. uora_dlfirst, cmab_ari_dlfirst) turns on the
+# DlFirstAcrossAcs scheduler attribute and writes to its own data root again, so
+# the flag-on and flag-off runs never collide. The suffixes compose:
+#   uora            -> xr_data/uora
+#   uora_ari        -> xr_data_ari/uora/ari_<us>
+#   uora_dlfirst    -> xr_data_dlfirst/uora
+#   uora_ari_dlfirst-> xr_data_ari_dlfirst/uora/ari_<us>
+# Only UORA and CMAB implement the attribute; A2P/A2PV2 use a different
+# scheduler and EDCA has none, so _dlfirst is rejected for them.
+BASE_MODE="$MODE"
+DLFIRST=false
+if [[ "$BASE_MODE" == *_dlfirst ]]; then
+    DLFIRST=true
+    BASE_MODE="${BASE_MODE%_dlfirst}"
+fi
+ARI_SWEEP=false
+if [[ "$BASE_MODE" == *_ari ]]; then
+    ARI_SWEEP=true
+    BASE_MODE="${BASE_MODE%_ari}"
+fi
+
+if $DLFIRST && [[ "$BASE_MODE" != "uora" && "$BASE_MODE" != "cmab" ]]; then
+    echo "DlFirstAcrossAcs exists only in UORA and CMAB; _dlfirst invalid for ${BASE_MODE}" >&2
+    exit 1
+fi
+
+DATA_ROOT=/data/antwerpen/208/vsc20879/xr_data
+ARI_SEG=""
+if $ARI_SWEEP; then
     : "${ari:?Missing ari}"
-    DATA_ROOT=/data/antwerpen/208/vsc20879/xr_data_ari
+    DATA_ROOT="${DATA_ROOT}_ari"
     ARI_SEG="ari_${ari}/"
-else
-    DATA_ROOT=/data/antwerpen/208/vsc20879/xr_data
-    ARI_SEG=""
+fi
+if $DLFIRST; then
+    DATA_ROOT="${DATA_ROOT}_dlfirst"
+fi
+
+# Scheduler attribute for the _dlfirst arm: build the DL MU PPDU for the
+# highest-priority DL AC that has backlog, instead of only the AC that won
+# channel access. Empty string for the baseline arm.
+DLFIRST_UORA=""
+DLFIRST_CMAB=""
+if $DLFIRST; then
+    DLFIRST_UORA="--ns3::UoraMultiUserScheduler::DlFirstAcrossAcs=true"
+    DLFIRST_CMAB="--ns3::CmabMultiUserScheduler::DlFirstAcrossAcs=true"
 fi
 
 if [ "$BASE_MODE" = "uora" ]; then
@@ -142,7 +179,8 @@ uora() {
         --ns3::UoraMultiUserScheduler::BsrpPrioritizeEmpty=true \
         --ns3::UoraMultiUserScheduler::PrioritizeByAc=true \
         --ns3::UoraMultiUserScheduler::DownlinkAware=true \
-        --ns3::QosFrameExchangeManager::TrackBufferDrain=true
+        --ns3::QosFrameExchangeManager::TrackBufferDrain=true \
+        ${DLFIRST_UORA}
     "
     # DownlinkAware is safe for UORA here because BASE_ARGS enables --edcaPrime:
     # STAs arm MU-EDCA during warm-up (EDCA off before XR), which removes the
@@ -161,14 +199,15 @@ cmab() {
         --cmabUcbConstant=${ucbConstant} \
         --cmabEpsilon=${epsilon} \
         --cmabExp3Gamma=${exp3Gamma} \
-        --ns3::CmabMultiUserScheduler::DownlinkAware=true
+        --ns3::CmabMultiUserScheduler::DownlinkAware=true \
+        ${DLFIRST_CMAB}
     "
 }
 
 # -
 #
 usage() {
-    echo "Usage: {edca|a2p|a2pv2|uora|cmab}[_ari] | Unknown mode: ${MODE}"
+    echo "Usage: {edca|a2p|a2pv2|uora|cmab}[_ari][_dlfirst] | Unknown mode: ${MODE}"
     exit 1
 }
 

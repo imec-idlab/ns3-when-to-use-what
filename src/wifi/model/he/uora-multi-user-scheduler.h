@@ -181,6 +181,9 @@ class UoraMultiUserScheduler : public MultiUserScheduler
     bool m_prioritizeByAc;       //!< Basic-TF: allocate scheduled RUs to higher-AC STAs first
     bool m_bsrpPrioritizeEmpty;  //!< BSRP-TF: give scheduled RUs to empty/unknown-BSR STAs first
     bool m_downlinkAware;        //!< SelectTxFormat: serve DL-MU whenever DL backlog exists (DL-first)
+    bool m_dlFirstAcrossAcs;     //!< build the DL-MU for the highest-priority DL AC with backlog
+    bool m_dlBeforeUl;           //!< skip the UL trigger cycle when another DL AC has backlog
+    AcIndex m_dlPrimaryAc{AC_BE};         //!< AC the current DL-MU candidates were drawn from
     uint32_t m_ulPsduSize;       //!< the size in byte of the solicited PSDU
     std::map<AcIndex, std::list<MasterInfo>>
         m_staListDl;                       //!< Per-AC list of stations (next to serve for DL first)

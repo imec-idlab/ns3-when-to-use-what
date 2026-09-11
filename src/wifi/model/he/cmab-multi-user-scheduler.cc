@@ -73,6 +73,31 @@ CmabMultiUserScheduler::GetTypeId()
                           BooleanValue(false),
                           MakeBooleanAccessor(&CmabMultiUserScheduler::m_downlinkAware),
                           MakeBooleanChecker())
+            .AddAttribute("DlFirstAcrossAcs",
+                          "If enabled, a DL MU PPDU is built for the highest-priority downlink "
+                          "AC that has backlog (voice, then video), not only for the AC that won "
+                          "channel access. Without it an access won on AC_VO with no voice "
+                          "queued can never carry video: the TID list covers only ACs at or "
+                          "above the winning one, so the TXOP yields nothing while the video "
+                          "queue is left untouched. This applies on every downlink opportunity, "
+                          "including the fall-through taken when the uplink trigger cycle finds "
+                          "nothing to solicit. Default off preserves the original behaviour.",
+                          BooleanValue(false),
+                          MakeBooleanAccessor(&CmabMultiUserScheduler::m_dlFirstAcrossAcs),
+                          MakeBooleanChecker())
+            .AddAttribute("DlBeforeUl",
+                          "Effective together with DlFirstAcrossAcs. If enabled, an access won "
+                          "by an AC with an empty queue counts as having downlink backlog "
+                          "whenever any other downlink AC has traffic, so the uplink trigger "
+                          "cycle is skipped entirely and the downlink is served at once. "
+                          "Default off leaves the uplink with first refusal: the BSRP/Basic "
+                          "cycle runs first and the downlink is served on the accesses where no "
+                          "station reports buffered uplink data, in which case the Basic Trigger "
+                          "Frame is not transmitted at all and that airtime goes to the "
+                          "downlink.",
+                          BooleanValue(false),
+                          MakeBooleanAccessor(&CmabMultiUserScheduler::m_dlBeforeUl),
+                          MakeBooleanChecker())
             .AddAttribute("EnableUlOfdma",
                           "If enabled, return UL_MU_TX if DL_MU_TX was returned the previous time.",
                           BooleanValue(true),
@@ -244,10 +269,32 @@ CmabMultiUserScheduler::SelectTxFormat()
         m_ulIdleState = m_enableBsrp ? UlIdleState::SEND_BSRP : UlIdleState::SEND_BASIC;
     };
 
+    // [DlFirstAcrossAcs] The winning AC's queue may be empty while another DL AC
+    // has backlog (typically: access won on AC_VO by the periodic access request,
+    // voice idle, video waiting). Look for DL backlog in the other DL ACs, voice
+    // before video, before falling to the UL trigger cycle. Requires DlBeforeUl:
+    // with that off the uplink keeps first refusal and dlBacklog is exactly the
+    // original (mpdu != nullptr) test, so the DL is reached only through the
+    // fall-through taken when the trigger cycle finds nothing to solicit.
+    bool dlBacklog = (mpdu != nullptr);
+    if (m_dlBeforeUl && m_dlFirstAcrossAcs && !dlBacklog)
+    {
+        for (AcIndex ac : {AC_VO, AC_VI})
+        {
+            if (ac != m_edca->GetAccessCategory() &&
+                m_apMac->GetQosTxop(ac)->PeekNextMpdu(m_linkId))
+            {
+                dlBacklog = true;
+                break;
+            }
+        }
+    }
+
     // Downlink-aware: if there is DL backlog, send a DL-MU PPDU now (DL-first),
     // never interleaving the UL trigger cycle. Uplink-aware (default) only takes
     // the DL shortcut when the UL state is not at the BSRP poll step.
-    if ((mpdu && (m_downlinkAware || m_ulIdleState != UlIdleState::SEND_BSRP)) || !m_enableUlOfdma)
+    if ((dlBacklog && (m_downlinkAware || m_ulIdleState != UlIdleState::SEND_BSRP)) ||
+        !m_enableUlOfdma)
     {
         ResetUlState();
         return TrySendingDlMuPpdu();
@@ -654,6 +701,22 @@ CmabMultiUserScheduler::TrySendingDlMuPpdu()
     NS_LOG_FUNCTION(this);
 
     AcIndex primaryAc = m_edca->GetAccessCategory();
+    // [DlFirstAcrossAcs] If the winning AC has nothing queued, build the DL-MU for
+    // whichever of the two XR ACs does have backlog, voice before video. The TID
+    // list below covers ACs at or above primaryAc, so pointing primaryAc at that AC
+    // lets this TXOP carry it (and anything of higher index). Off: unchanged.
+    if (m_dlFirstAcrossAcs && !m_edca->PeekNextMpdu(m_linkId))
+    {
+        for (AcIndex ac : {AC_VO, AC_VI})
+        {
+            if (m_apMac->GetQosTxop(ac)->PeekNextMpdu(m_linkId))
+            {
+                primaryAc = ac;
+                break;
+            }
+        }
+    }
+    m_dlPrimaryAc = primaryAc;
 
     if (m_staListDl[primaryAc].empty())
     {
@@ -850,7 +913,6 @@ CmabMultiUserScheduler::UpdateCredits(std::list<MasterInfo>& /*staList*/,
 {
     // CMAB doesn't use credit-based fairness; the bandit reward shapes fairness.
 }
-
 
 MultiUserScheduler::DlMuInfo
 CmabMultiUserScheduler::ComputeDlMuInfo()
