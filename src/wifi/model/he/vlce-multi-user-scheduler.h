@@ -183,6 +183,9 @@ class VlceMultiUserScheduler : public MultiUserScheduler
     bool m_prioritizeByAc;       //!< Basic-TF: allocate RUs to higher-AC STAs first
     bool m_bsrpPrioritizeEmpty;  //!< BSRP-TF: poll empty/unknown-BSR STAs first (discovery)
     bool m_downlinkAware;        //!< SelectTxFormat: serve DL-MU whenever DL backlog exists (DL-first)
+    bool m_dlFirstAcrossAcs;     //!< build the DL-MU for the highest-priority DL AC with backlog
+    bool m_dlBeforeUl;           //!< skip the UL trigger cycle when another DL AC has backlog
+    AcIndex m_dlPrimaryAc{AC_BE};         //!< AC the current DL-MU candidates were drawn from
     bool m_useCentral26TonesRus; //!< whether to allocate central 26-tone RUs
     uint32_t m_ulPsduSize;       //!< the size in byte of the solicited PSDU
     std::map<AcIndex, std::list<MasterInfo>>

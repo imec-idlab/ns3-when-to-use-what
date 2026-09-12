@@ -26,8 +26,8 @@ export NS_LOG=""
 #   uora_ari        -> xr_data_ari/uora/ari_<us>
 #   uora_dlfirst    -> xr_data_dlfirst/uora
 #   uora_ari_dlfirst-> xr_data_ari_dlfirst/uora/ari_<us>
-# Only UORA and CMAB implement the attribute; A2P/A2PV2 use a different
-# scheduler and EDCA has none, so _dlfirst is rejected for them.
+# A2P, A2PV2, UORA and CMAB all implement the attribute; EDCA has no scheduler,
+# so _dlfirst is rejected for it.
 BASE_MODE="$MODE"
 DLFIRST=false
 if [[ "$BASE_MODE" == *_dlfirst ]]; then
@@ -40,8 +40,8 @@ if [[ "$BASE_MODE" == *_ari ]]; then
     BASE_MODE="${BASE_MODE%_ari}"
 fi
 
-if $DLFIRST && [[ "$BASE_MODE" != "uora" && "$BASE_MODE" != "cmab" ]]; then
-    echo "DlFirstAcrossAcs exists only in UORA and CMAB; _dlfirst invalid for ${BASE_MODE}" >&2
+if $DLFIRST && [[ "$BASE_MODE" == "edca" ]]; then
+    echo "EDCA has no multi-user scheduler; _dlfirst invalid for ${BASE_MODE}" >&2
     exit 1
 fi
 
@@ -61,9 +61,11 @@ fi
 # channel access. Empty string for the baseline arm.
 DLFIRST_UORA=""
 DLFIRST_CMAB=""
+DLFIRST_VLCE=""
 if $DLFIRST; then
     DLFIRST_UORA="--ns3::UoraMultiUserScheduler::DlFirstAcrossAcs=true"
     DLFIRST_CMAB="--ns3::CmabMultiUserScheduler::DlFirstAcrossAcs=true"
+    DLFIRST_VLCE="--ns3::VlceMultiUserScheduler::DlFirstAcrossAcs=true"
 fi
 
 if [ "$BASE_MODE" = "uora" ]; then
@@ -155,6 +157,7 @@ a2p() {
         --ns3::VlceMultiUserScheduler::PrioritizeByAc=true
         --ns3::VlceMultiUserScheduler::DownlinkAware=true
         --ns3::QosFrameExchangeManager::TrackBufferDrain=true
+        ${DLFIRST_VLCE}
     "
 }
 
@@ -166,6 +169,7 @@ a2pv2() {
          --ns3::VlceMultiUserScheduler::FilterByBsr=false
          --ns3::VlceMultiUserScheduler::PrioritizeByAc=false
          --ns3::VlceMultiUserScheduler::DownlinkAware=true
+         ${DLFIRST_VLCE}
     "
 }
 
