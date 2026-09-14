@@ -575,6 +575,14 @@ int main(int argc, char *argv[]) {
                 wifimac.SetMultiUserSchedulerAttribute("UcbConstant", DoubleValue(cmabUcbConstant));
                 wifimac.SetMultiUserSchedulerAttribute("Epsilon",     DoubleValue(cmabEpsilon));
                 wifimac.SetMultiUserSchedulerAttribute("Exp3Gamma",   DoubleValue(cmabExp3Gamma));
+                // Start the bandit's arm statistics at the same instant as the
+                // traffic statistics. During the warm-up there is no XR traffic,
+                // so every poll reports an empty buffer; carrying those thousands
+                // of zero rewards into the measured period leaves UCB confident
+                // that every station is worthless, and whichever arms lose the
+                // resulting tie are never explored again.
+                wifimac.SetMultiUserSchedulerAttribute("LearningStartTime",
+                                                       TimeValue(Seconds(startLogTime)));
             }
         }
         wifimac.SetType("ns3::ApWifiMac",
@@ -865,20 +873,34 @@ int main(int argc, char *argv[]) {
         loss = (gen > 0) ? (1.0 - static_cast<double>(ontime) / gen) : 0.0;
         if (loss < 0.0) loss = 0.0;
     };
-    // Video frame-level: group received packets by frame (seq / pktsPerFrame); a
-    // frame is on-time iff all pktsPerFrame packets arrived and the last within bound.
+    // Video frame-level: group received packets by frame (seq / pktsPerFrame) and
+    // count how many of that frame's packets arrived within the bound. The strict
+    // metric -- a frame is on-time iff all pktsPerFrame packets arrived in time --
+    // is the (onTime == pktsPerFrame) case, identical to the previous
+    // (allReceived && maxDelay <= bound) test. The full per-frame histogram is
+    // also returned so a decodability threshold (e.g. 95% of a frame's packets,
+    // as a slice-based decoder with concealment would tolerate) can be swept in
+    // post-processing without re-running the sweep.
     auto frameCompliance = [](const std::vector<uint32_t> &seq, const std::vector<double> &delays,
                               uint32_t genPkts, uint32_t pktsPerFrame, double boundS,
-                              uint32_t &genFrames, uint32_t &ontimeFrames, double &frameLoss) {
+                              uint32_t &genFrames, uint32_t &ontimeFrames, double &frameLoss,
+                              std::vector<uint32_t> &ontimeHist) {
         genFrames = genPkts / pktsPerFrame;
-        std::map<uint32_t, std::pair<uint32_t,double>> fr; // frame -> (count, maxDelay)
+        std::map<uint32_t, uint32_t> onTimePerFrame; // frame -> packets within bound
         for (size_t i = 0; i < seq.size(); ++i) {
-            auto &e = fr[seq[i] / pktsPerFrame];
-            e.first += 1; e.second = std::max(e.second, delays[i]);
+            auto &c = onTimePerFrame[seq[i] / pktsPerFrame];
+            if (delays[i] <= boundS) ++c;
         }
+        ontimeHist.assign(pktsPerFrame + 1, 0);
         ontimeFrames = 0;
-        for (auto &kv : fr)
-            if (kv.second.first >= pktsPerFrame && kv.second.second <= boundS) ++ontimeFrames;
+        for (auto &kv : onTimePerFrame) {
+            ontimeHist[std::min(kv.second, pktsPerFrame)] += 1;
+            if (kv.second >= pktsPerFrame) ++ontimeFrames;
+        }
+        // Frames from which nothing was received never appear in the map; charge
+        // them to the zero bin so the histogram sums to genFrames.
+        if (genFrames > onTimePerFrame.size())
+            ontimeHist[0] += (genFrames - static_cast<uint32_t>(onTimePerFrame.size()));
         frameLoss = (genFrames > 0) ? (1.0 - static_cast<double>(ontimeFrames) / genFrames) : 0.0;
         if (frameLoss < 0.0) frameLoss = 0.0;
     };
@@ -892,6 +914,15 @@ int main(int argc, char *argv[]) {
                     << "Pose_RXbytes\tPose_mean_ms\tPose_p75_ms\tPose_p95_ms\tPose_p99_ms\tPose_p999_ms\tPose_gen\tPose_rx\tPose_ontime\tPose_deadline_loss"
                     << std::endl;
 
+    // Per-frame count of DL video packets that arrived within the frame bound,
+    // as a histogram over frames (one row per non-empty bin). Lets the frame
+    // decodability threshold be varied in post-processing: a frame counts as
+    // decodable at threshold t iff Ontime_pkts >= ceil(t * VIDEO_PKTS_PER_FRAME).
+    // Bins summing to Vid_frames_gen; the strict metric is the top bin alone.
+    std::ofstream frameHistStream;
+    frameHistStream.open("video_frame_ontime_hist.out", std::ios::out);
+    frameHistStream << "MAC-addr\tOntime_pkts\tN_frames" << std::endl;
+
     for (auto &staStats : g_statsMap) {
         const Mac48Address &k = staStats.first;
         stats_t &s = staStats.second;
@@ -903,7 +934,10 @@ int main(int argc, char *argv[]) {
 
         uint32_t vGen = genOf(videoSender, k), aGen = genOf(audioSender, k), pGen = genOf(poseSender, k);
         uint32_t vFrGen, vFrOn, aRx, aOn, pRx, pOn; double vFrLoss, aLoss, pLoss;
-        frameCompliance(s.vidSeq, s.vidDelays, vGen, VIDEO_PKTS_PER_FRAME, vFrS, vFrGen, vFrOn, vFrLoss);
+        std::vector<uint32_t> vHist;
+        frameCompliance(s.vidSeq, s.vidDelays, vGen, VIDEO_PKTS_PER_FRAME, vFrS, vFrGen, vFrOn, vFrLoss, vHist);
+        for (uint32_t b = 0; b < vHist.size(); ++b)
+            if (vHist[b] > 0) frameHistStream << k << "\t" << b << "\t" << vHist[b] << std::endl;
         pktCompliance(s.audDelays,  aGen, aDlS, aRx, aOn, aLoss);
         pktCompliance(s.poseDelays, pGen, pDlS, pRx, pOn, pLoss);
 
@@ -914,6 +948,7 @@ int main(int argc, char *argv[]) {
             << std::endl;
     }
     perStaOutStream.close();
+    frameHistStream.close();
     Simulator::Destroy();
     return 0;
 }

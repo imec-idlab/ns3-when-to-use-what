@@ -179,6 +179,7 @@ class CmabMultiUserScheduler : public MultiUserScheduler
     double m_epsilon;          ///< probability of random selection for EpsilonGreedy
     double m_exp3Gamma;        ///< exploration mixing parameter for EXP3.M (in (0,1])
     bool m_acAwareReward;      ///< scale arm reward by the STA's highest-AC-with-data weight
+    Time m_learningStartTime;  ///< arm statistics only accumulate from this time on
 
     // CMAB state
     std::map<uint16_t, ArmState> m_arms;        ///< per-AID arm state

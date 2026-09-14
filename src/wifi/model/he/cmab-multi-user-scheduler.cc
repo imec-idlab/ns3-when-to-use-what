@@ -98,6 +98,19 @@ CmabMultiUserScheduler::GetTypeId()
                           BooleanValue(false),
                           MakeBooleanAccessor(&CmabMultiUserScheduler::m_dlBeforeUl),
                           MakeBooleanChecker())
+            .AddAttribute("LearningStartTime",
+                          "Simulation time from which the bandit accumulates arm statistics. "
+                          "Polls before it neither count as pulls nor contribute rewards, so "
+                          "every arm enters the measurement window with zero pulls and is "
+                          "explored from scratch. Set this to the same instant the traffic "
+                          "statistics start: during a warm-up there is no application traffic, "
+                          "so every poll reports an empty buffer, and thousands of zero rewards "
+                          "would otherwise be carried into the measured period as confident "
+                          "evidence that every station is worthless. Zero (default) accumulates "
+                          "from the start of the simulation.",
+                          TimeValue(Seconds(0)),
+                          MakeTimeAccessor(&CmabMultiUserScheduler::m_learningStartTime),
+                          MakeTimeChecker())
             .AddAttribute("EnableUlOfdma",
                           "If enabled, return UL_MU_TX if DL_MU_TX was returned the previous time.",
                           BooleanValue(true),
@@ -1051,6 +1064,16 @@ CmabMultiUserScheduler::NotifyBsrpResponse(Mac48Address senderAddr, uint8_t repo
 {
     NS_LOG_FUNCTION(this << senderAddr << +reportedQueueSize);
 
+    // [LearningStartTime] Discard observations made before the cut-off. With no
+    // application traffic during the warm-up every poll reports an empty buffer,
+    // and those zeros would otherwise leave each arm with thousands of samples
+    // all saying zero -- enough for UCB to treat a station as confidently
+    // worthless, after which its exploration bonus can never overcome the gap.
+    if (Simulator::Now() < m_learningStartTime)
+    {
+        return;
+    }
+
     // Resolve AID for this sender.
     auto staIt = std::find_if(m_staListUl.begin(), m_staListUl.end(),
                               [&senderAddr](const MasterInfo& mi) {
@@ -1214,9 +1237,15 @@ CmabMultiUserScheduler::SelectArmsByCmab(std::size_t k)
     const std::size_t poolSize = m_staListUl.size();
     k = std::min(k, poolSize);
 
-    // CUCB convention: t = number of rounds played, not total arm pulls.
-    // Increment once per selection, not per reward.
-    ++m_timeStep;
+    // [LearningStartTime] Rounds before the cut-off are not played as far as the
+    // bandit is concerned: t does not advance, so the warm-up cannot inflate the
+    // exploration term's numerator either.
+    if (Simulator::Now() >= m_learningStartTime)
+    {
+        // CUCB convention: t = number of rounds played, not total arm pulls.
+        // Increment once per selection, not per reward.
+        ++m_timeStep;
+    }
 
     switch (m_algorithm)
     {
