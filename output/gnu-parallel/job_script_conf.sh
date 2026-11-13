@@ -11,20 +11,14 @@ read $(echo "$HEADER" | tr ',' ' ') < <(echo "$ROW" | tr ',' ' ')
 export NS_LOG=""
 
 : "${run:?Missing run}"
-: "${typeTwoNStations:?Missing typeTwoNStations}"
+: "${nStationsToJoin:?Missing nStationsToJoin}"
 
-nSta=${typeTwoNStations}
-
-# Exponential mean (s) of the stochastic stations' packet generation. Default to
-# 0.1 when the CSV has no pMean column. Tag the output path only for non-default
-# values, so the nSta-sweep paths (pMean=0.1) stay stable.
-pMean="${pMean:-0.1}"
-if [ "${pMean}" = "0.1" ]; then pTag=""; else pTag="_pMean-${pMean}"; fi
+nSta=$((8 + nStationsToJoin))
 
 if [ "$MODE" = "uora" ]; then
     : "${nRaRus:?Missing nRaRus}"
     : "${OCwMin:?Missing OCwMin}"
-    logDir=/data/antwerpen/208/vsc20879/iiot_data/${MODE}/ocwMin_${OCwMin}/${run}_run-${nSta}_sta-${nRaRus}_rarus${pTag}
+    logDir=${DATA_ROOT:-/data/antwerpen/208/vsc20879}/${MODE}/ocwMin_${OCwMin}/${run}_run-${nSta}_sta-${nRaRus}_rarus
 elif [ "$MODE" = "cmab" ]; then
     : "${algorithm:?Missing algorithm (CUCB|ThompsonSampling|EpsilonGreedy|EXP3M)}"
     : "${rewardType:?Missing rewardType (Binary|FairnessWeighted)}"
@@ -39,9 +33,9 @@ elif [ "$MODE" = "cmab" ]; then
         EXP3M)         hpTag="_g${exp3Gamma}"   ;;
         *)             hpTag=""                 ;;
     esac
-    logDir=/data/antwerpen/208/vsc20879/iiot_data/${MODE}/${algorithm}_${rewardType}${hpTag}/${run}_run-${nSta}_sta${pTag}
+    logDir=${DATA_ROOT:-/data/antwerpen/208/vsc20879}/${MODE}/${algorithm}_${rewardType}${hpTag}/${run}_run-${nSta}_sta
 else
-    logDir=/data/antwerpen/208/vsc20879/iiot_data/${MODE}/${run}_run-${nSta}_sta${pTag}
+    logDir=${DATA_ROOT:-/data/antwerpen/208/vsc20879}/${MODE}/${run}_run-${nSta}_sta
 fi
 
 
@@ -50,11 +44,11 @@ BASE_ARGS="
     --simulationTime=30
     --RngRun=${run}
     --logDir=${logDir}
+    --enableAggregation=true
     --nMpdus=0
     --nMsdus=10
     --ruAllocationType=ru-26-tone
     --startLogTime=5
-    --pMean=${pMean}
     "
     
 BASE_OFDMA="
@@ -67,17 +61,16 @@ BASE_OFDMA="
 
 BASE_A2P="
     ${BASE_OFDMA}
-    --useMuEdca=true
+    --useMuEdca=true 
     --scheduler=ns3::VlceMultiUserScheduler
-    --maxTimeInList=204800
     "
 
 run_simulation() {
   local extra_args="$1"
 
-  $VSC_DATA/ns3-when2usewhat/ns3 run --no-build \
-                    "scratch/iiot_when2usewhat/iiot_when2usewhat \
-                    --typeTwoNStations=${typeTwoNStations} \
+  "${NS3_DIR:-$VSC_DATA/ns3-when2usewhat}"/ns3 run --no-build \
+                    "scratch/conference_when2usewhat/conference_when2usewhat \
+                    --nStationsToJoin=${nStationsToJoin} \
                     ${BASE_ARGS} \
                     ${extra_args}"
 }
@@ -88,7 +81,6 @@ edca() {
     --simType=EDCA
     --dlAckType=NO-OFDMA
     --useMuEdca=false
-    --enableAggregation=true
   "
 }
 
@@ -98,8 +90,6 @@ a2p() {
         ${BASE_A2P}
         --muSchedAccessReqInterval=128
         --simType=A2P
-        --ns3::VlceMultiUserScheduler::BsrpPrioritizeEmpty=true
-        --ns3::VlceMultiUserScheduler::PrioritizeByAc=true
     "
 }
 
@@ -107,10 +97,8 @@ a2pv2() {
     run_simulation "
          ${BASE_A2P}
          --enableBsrp=false
-         --muSchedAccessReqInterval=256
+         --muSchedAccessReqInterval=512
          --simType=A2PV2
-         --ns3::VlceMultiUserScheduler::FilterByBsr=false
-         --ns3::VlceMultiUserScheduler::PrioritizeByAc=false
     "
 }
 
@@ -119,23 +107,21 @@ uora() {
         ${BASE_OFDMA}
         --simType=UORA \
         --useMuEdca=true \
-        --muSchedAccessReqInterval=16 \
+        --muSchedAccessReqInterval=64 \
         --DelayAccessReqUponAccess=true \
         --muEdcaTimer=8192 \
         --scheduler=ns3::UoraMultiUserScheduler \
         --OCwMin=${OCwMin} \
-        --nRaRus=${nRaRus} \
-        --ns3::UoraMultiUserScheduler::BsrpPrioritizeEmpty=true \
-        --ns3::UoraMultiUserScheduler::PrioritizeByAc=true
+        --nRaRus=${nRaRus}
     "
 }
 
 cmab() {
     run_simulation "
         ${BASE_OFDMA}
-        --simType=CMAB \
+        --simType=UORA \
         --useMuEdca=true \
-        --muSchedAccessReqInterval=16 \
+        --muSchedAccessReqInterval=64 \
         --DelayAccessReqUponAccess=true \
         --muEdcaTimer=8192 \
         --scheduler=ns3::CmabMultiUserScheduler \

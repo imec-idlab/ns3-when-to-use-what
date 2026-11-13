@@ -45,7 +45,7 @@ if $DLFIRST && [[ "$BASE_MODE" == "edca" ]]; then
     exit 1
 fi
 
-DATA_ROOT=/data/antwerpen/208/vsc20879/xr_data
+DATA_ROOT="${DATA_ROOT:-/data/antwerpen/208/vsc20879/xr_data}"
 ARI_SEG=""
 if $ARI_SWEEP; then
     : "${ari:?Missing ari}"
@@ -136,7 +136,7 @@ BASE_A2P="
 run_simulation() {
   local extra_args="$1"
 
-  $VSC_DATA/ns3-when2usewhat/ns3 run --no-build \
+  "${NS3_DIR:-$VSC_DATA/ns3-when2usewhat}"/ns3 run --no-build \
                     "scratch/xr_when2usewhat/xr_when2usewhat \
                     ${BASE_ARGS} \
                     ${extra_args}"
