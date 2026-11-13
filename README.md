@@ -176,15 +176,6 @@ that produce the figures of the paper are
 The remaining sections cover the parameter selection (CMAB hyper-parameters
 and access request interval) and additional views of the same results.
 
-By default the script looks for the result directories next to itself and
-saves the figures without opening a window. `--data-dir <path>` selects
-another location, and `--show` also displays the figures. A section that fails,
-for example because its results are missing, is reported at the end and does
-not stop the others.
-
-`plotter.ipynb` is the notebook from which the script was derived.
-`xr_ari_uora_plots.py` and `xr_ari_cmab_plots.py` are standalone versions of
-the access request interval sections of the extended-reality scenario.
 
 ## Citation
 
